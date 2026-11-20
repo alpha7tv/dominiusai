@@ -23,6 +23,7 @@ public partial class KanbanView : UserControl
     private async void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if ((e.Source as Control)?.FindAncestorOfType<Button>(includeSelf: true) is not null) return; // botões dentro do card não iniciam arraste
         var card = (e.Source as Control)?.FindAncestorOfType<Border>(includeSelf: true);
         while (card is not null && card.Name != "Card") card = card.FindAncestorOfType<Border>();
         if (card?.Tag is not Guid id) return;
@@ -53,14 +54,28 @@ public partial class KanbanView : UserControl
         if (DataContext is not KanbanViewModel vm || ColumnOf(e.Source)?.Tag is not KanbanStage stage || e.Data.Get(Format) is not string raw) return;
 #pragma warning restore CS0618
         var id = Guid.Parse(raw);
-        var confirmed = false;
-        if (stage == KanbanStage.NegocioFechado)
-        {
-            confirmed = await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this) as Window,
-                "Confirmar fechamento",
-                "Confirma que a contratação foi validada comercialmente (pagamento confirmado ou aceite formal)?\n\nInteresse demonstrado não é suficiente para marcar 'Negócio fechado'.");
-            if (!confirmed) return;
-        }
+        if (await ConfirmClosingIfNeeded(this, stage == KanbanStage.NegocioFechado) is not { } confirmed) return;
         await vm.MoveAsync(id, stage, confirmed);
+    }
+
+    /// <summary>Retorna false se não precisa confirmar, true se confirmado, null se o usuário desistiu.</summary>
+    public static async Task<bool?> ConfirmClosingIfNeeded(Control owner, bool closing)
+    {
+        if (!closing) return false;
+        var ok = await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(owner) as Window, "Confirmar fechamento",
+            "Confirma que a contratação foi validada comercialmente (pagamento confirmado ou aceite formal)?\n\nInteresse demonstrado não é suficiente para marcar 'Negócio fechado'.");
+        return ok ? true : null;
+    }
+
+    private async void OnAcceptSuggestion(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not KanbanViewModel vm || (sender as Control)?.Tag is not LeadCardVm card) return;
+        if (await ConfirmClosingIfNeeded(this, card.Model.SuggestedStage == KanbanStage.NegocioFechado) is not { } confirmed) return;
+        await vm.AcceptSuggestionAsync(card.Id, confirmed);
+    }
+
+    private async void OnRejectSuggestion(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is KanbanViewModel vm && (sender as Control)?.Tag is LeadCardVm card) await vm.RejectSuggestionAsync(card.Id);
     }
 }

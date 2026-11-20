@@ -27,6 +27,8 @@ public class LeadCardVm(LeadCard c)
     public string Consent => Ui.Consent(Model.Consent);
     public string Stage => Ui.Stage(Model.Stage);
     public string Tags => Model.Tags;
+    public bool HasSuggestion => Model.SuggestedStage is not null;
+    public string SuggestionText => Model.SuggestedStage is { } st ? $"IA sugere: {Ui.Stage(st)}" + (Model.SuggestedStageReason is { Length: > 0 } r ? $" ({r})" : "") : "";
 }
 
 public record Stat(string Key, int Value);
@@ -96,6 +98,20 @@ public partial class KanbanViewModel : ViewModelBase
         await RefreshCore();
     });
 
+    public Task AcceptSuggestionAsync(Guid leadId, bool confirmed) => Run(async () =>
+    {
+        var r = await _s.Api.AcceptSuggestionAsync(leadId, confirmed);
+        if (r.Applied) Info = r.Message; else Error = r.Message;
+        await RefreshCore();
+    });
+
+    public Task RejectSuggestionAsync(Guid leadId) => Run(async () =>
+    {
+        var r = await _s.Api.RejectSuggestionAsync(leadId);
+        Info = r.Message;
+        await RefreshCore();
+    });
+
     private async Task RefreshCore()
     {
         var board = await _s.Api.KanbanAsync();
@@ -120,6 +136,31 @@ public partial class ConversationsViewModel : ViewModelBase
     [ObservableProperty] private string _draft = "";
     [ObservableProperty] private string _search = "";
 
+    // Fase 6: qualificação editável pelo atendente
+    public static string[] Experiences { get; } = ["Não informado", "Já trabalha com revenda", "Está começando"];
+    public static string[] Priorities { get; } = ["Baixa", "Normal", "Alta", "Urgente"];
+    public static PainCategory[] PainValues { get; } = Enum.GetValues<PainCategory>();
+    public static string[] Pains { get; } = PainValues.Select(p => p == PainCategory.Nenhuma ? "Nenhuma identificada" : Ui.Pain(p)).ToArray();
+    public ObservableCollection<string> PlanCodes { get; } = new() { "A definir" };
+    public ObservableCollection<FactDto> Facts { get; } = new();
+    public ObservableCollection<UserDto> Users { get; } = new();
+    [ObservableProperty] private int _qExperience;
+    [ObservableProperty] private string _qPanel = "";
+    [ObservableProperty] private decimal? _qClients;
+    [ObservableProperty] private int _qPain;
+    [ObservableProperty] private string? _qPlan = "A definir";
+    [ObservableProperty] private string _qInvestment = "";
+    [ObservableProperty] private int _qPriority = 1;
+    [ObservableProperty] private string _qNextAction = "";
+    [ObservableProperty] private string _qSummary = "";
+    [ObservableProperty] private string _newFactKey = "";
+    [ObservableProperty] private string _newFactValue = "";
+    [ObservableProperty] private UserDto? _assignee;
+    public bool IsSupervisor => _s.Api.Session?.Role is UserRole.Supervisor or UserRole.Administrador;
+    public bool HasSuggestion => Detail?.SuggestedStage is not null;
+    public string SuggestionText => Detail?.SuggestedStage is { } st ? $"IA sugere mover para: {Ui.Stage(st)}" + (Detail.SuggestedStageReason is { Length: > 0 } r ? $" ({r})" : "") : "";
+    public bool SuggestsClosing => Detail?.SuggestedStage == KanbanStage.NegocioFechado;
+
     public ConversationsViewModel(AppSession s)
     {
         _s = s;
@@ -140,7 +181,14 @@ public partial class ConversationsViewModel : ViewModelBase
     public string RecommendationText => Detail?.Recommendation is not { } r ? "" :
         (r.PlanNames.Count > 0 ? string.Join("\n", r.PlanNames) : "Nenhum plano ainda") + "\n" + r.Rationale + (r.MissingInfo is null ? "" : $"\nFalta saber: {r.MissingInfo}");
 
-    public override Task OnActivatedAsync() => Run(LoadContacts);
+    public override Task OnActivatedAsync() => Run(async () =>
+    {
+        if (PlanCodes.Count == 1)
+            foreach (var code in (await _s.Api.PlansAsync()).Where(p => p.Approval == ApprovalStatus.Aprovado).Select(p => p.Code).Distinct()) PlanCodes.Add(code);
+        if (IsSupervisor && Users.Count == 0)
+            foreach (var u in (await _s.Api.UsersAsync()).Where(u => u.Active)) Users.Add(u);
+        await LoadContacts();
+    });
 
     private async Task LoadContacts()
     {
@@ -162,7 +210,14 @@ public partial class ConversationsViewModel : ViewModelBase
         var msgs = await _s.Api.MessagesAsync(Selected.Id);
         Messages.Clear();
         foreach (var m in msgs) Messages.Add(new MessageVm(m));
-        foreach (var p in new[] { nameof(CanTakeOver), nameof(CanReturn), nameof(ModeText), nameof(ExperienceText), nameof(PainText), nameof(StageText), nameof(ConsentText), nameof(RecommendationText) })
+        var d = Detail;
+        QExperience = (int)d.Experience; QPanel = d.PanelUsed ?? ""; QClients = d.ActiveClients; QPain = Array.IndexOf(PainValues, d.MainPain);
+        if (d.InterestPlanCode is { } pc && !PlanCodes.Contains(pc)) PlanCodes.Add(pc);
+        QPlan = d.InterestPlanCode ?? "A definir"; QInvestment = d.InvestmentRange ?? ""; QPriority = (int)d.Priority;
+        QNextAction = d.NextAction ?? ""; QSummary = d.ConversationSummary ?? "";
+        Facts.Clear(); foreach (var f in d.Facts) Facts.Add(f);
+        Assignee = Users.FirstOrDefault(u => u.Id == d.AssignedUserId);
+        foreach (var p in new[] { nameof(HasSuggestion), nameof(SuggestionText), nameof(SuggestsClosing), nameof(CanTakeOver), nameof(CanReturn), nameof(ModeText), nameof(ExperienceText), nameof(PainText), nameof(StageText), nameof(ConsentText), nameof(RecommendationText) })
             OnPropertyChanged(p);
     }
 
@@ -187,6 +242,35 @@ public partial class ConversationsViewModel : ViewModelBase
         if (r.Ok) Info = r.Message; else Error = r.Message;
         await LoadSelected(); await LoadContacts();
     });
+
+    [RelayCommand]
+    private Task SaveQualification() => Run(async () =>
+    {
+        if (Selected is null) return;
+        var r = await _s.Api.SaveQualificationAsync(Selected.Id, new QualificationUpdate((IptvExperience)QExperience, QPanel, QClients is null ? null : (int)QClients.Value,
+            PainValues[Math.Max(0, QPain)], QPlan is null or "A definir" ? null : QPlan, QInvestment, (Priority)QPriority, QNextAction, QSummary));
+        Info = r.Message; await LoadSelected();
+    });
+
+    [RelayCommand]
+    private Task AddFact() => Run(async () =>
+    {
+        if (Selected is null) return;
+        var r = await _s.Api.AddFactAsync(Selected.Id, new FactCreate(NewFactKey, NewFactValue));
+        Info = r.Message; NewFactKey = ""; NewFactValue = ""; await LoadSelected();
+    });
+
+    /// <summary>Aceita a etapa sugerida pela IA. "Negócio fechado" chega aqui só depois da confirmação comercial na tela.</summary>
+    public Task AcceptSuggestionAsync(bool confirmed) => Run(async () =>
+    {
+        if (Selected is null) return;
+        var r = await _s.Api.AcceptSuggestionAsync(Selected.Id, confirmed);
+        if (r.Applied) Info = r.Message; else Error = r.Message;
+        await LoadSelected(); await LoadContacts();
+    });
+
+    [RelayCommand] private Task RejectSuggestion() => Act(id => _s.Api.RejectSuggestionAsync(id));
+    [RelayCommand] private Task Assign() => Act(id => _s.Api.AssignAsync(id, Assignee?.Id));
 
     [RelayCommand]
     private Task Send() => Run(async () =>
@@ -282,6 +366,19 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
         if (string.IsNullOrWhiteSpace(ConsentSource)) { Error = "Informe a origem verificável do consentimento (ex.: formulário do site, pedido do contato)."; return; }
         var r = await s.Api.ConsentAsync(Selected.Id, new ConsentRequest(ConsentSource, null, null));
         Info = r.Message; ConsentSource = "";
+        await RefreshCore();
+    });
+
+    public Task SaveExportAsync(Guid id, Func<byte[], Task> write, string fileName) => Run(async () =>
+    {
+        await write(await s.Api.DownloadAsync($"api/leads/{id}/export"));
+        Info = $"Dados exportados para {fileName}";
+    });
+
+    public Task DeleteSelectedAsync() => Run(async () =>
+    {
+        if (Selected is null) return;
+        Info = (await s.Api.DeleteLeadAsync(Selected.Id)).Message;
         await RefreshCore();
     });
 
@@ -444,12 +541,6 @@ public partial class AiSettingsViewModel(AppSession s) : ViewModelBase
             ? r.Reply + (r.Actions.Count > 0 ? "\n\nAções internas: " + string.Join("; ", r.Actions) : "") + $"\n({r.Tokens} tokens · simulação: nada foi enviado ou salvo)"
             : "Erro: " + r.Error;
     });
-}
-
-public partial class TemplatesViewModel(AppSession s) : ViewModelBase
-{
-    public ObservableCollection<TemplateDto> Templates { get; } = new();
-    public override Task OnActivatedAsync() => Run(async () => { Templates.Clear(); foreach (var t in await s.Api.TemplatesAsync()) Templates.Add(t); });
 }
 
 public partial class IntegrationsViewModel(AppSession s) : ViewModelBase

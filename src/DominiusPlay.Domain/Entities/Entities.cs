@@ -42,6 +42,9 @@ public class Lead : Entity
     public string? LastMessagePreview { get; set; }
     public string? ConversationSummary { get; set; }
     public string? LossReason { get; set; }
+    /// <summary>Mudança de etapa sugerida pela IA aguardando decisão do atendente.</summary>
+    public KanbanStage? SuggestedStage { get; set; }
+    public string? SuggestedStageReason { get; set; }
 
     // Consentimento (último estado consolidado; histórico em ConsentRecords)
     public ConsentStatus ConsentStatus { get; set; } = ConsentStatus.Pendente;
@@ -211,6 +214,9 @@ public class Campaign : Entity
     public int DailyLimit { get; set; } = 50;
     public string? Objective { get; set; }
     public Guid? TemplateId { get; set; }
+    /// <summary>Somente leads com estas tags (vírgula). Vazio = todos os autorizados.</summary>
+    public string TagFilter { get; set; } = "";
+    public DateTimeOffset? StartedAt { get; set; }
 }
 
 public class User : Entity

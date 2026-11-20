@@ -1,0 +1,72 @@
+# Compila, testa e gera o instalador do DOMINIUS PLAY AI CRM em uma máquina Windows real (runner do GitHub).
+# Resultado: artefato "DominiusPlayCRM-Setup" com o instalador .exe e os executáveis.
+name: build-windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Testes (inclui telas em modo headless)
+        run: dotnet test tests/DominiusPlay.Tests -c Release --logger "trx;LogFileName=testes.trx" --results-directory artifacts/testes
+
+      - name: Publicar executáveis win-x64
+        shell: pwsh
+        run: |
+          dotnet publish src/DominiusPlay.Desktop -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/publish/desktop
+          dotnet publish src/DominiusPlay.Server -c Release -r win-x64 --self-contained true -o artifacts/publish/server
+
+      - name: Instalar Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Gerar instalador
+        shell: pwsh
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\DominiusPlayCRM.iss'
+
+      - name: Testar instalação silenciosa e servidor instalado
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem artifacts/installer/*.exe | Select-Object -First 1
+          $dir = "$env:RUNNER_TEMP\DominiusPlayCRM"
+          $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=`"$dir`"","/TASKS=server" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Instalador retornou $($p.ExitCode)" }
+          if (-not (Test-Path "$dir\DominiusPlayCRM.exe")) { throw "Aplicativo não instalado" }
+          if (-not (Test-Path "$dir\server\DominiusPlay.Server.exe")) { throw "Servidor não instalado" }
+          # A tarefa "server" registra e inicia o Serviço do Windows na porta 5080
+          $svc = Get-Service DominiusPlayCRM -ErrorAction Stop
+          $ok = $false
+          for ($i = 0; $i -lt 45 -and -not $ok; $i++) {
+            Start-Sleep -Seconds 2
+            try { $h = Invoke-RestMethod http://127.0.0.1:5080/health; $ok = $h.status -eq "ok" } catch { }
+          }
+          if (-not $ok) { Get-Service DominiusPlayCRM | Format-List; throw "Serviço instalado não respondeu /health" }
+          $setupStatus = Invoke-RestMethod http://127.0.0.1:5080/api/auth/setup
+          if (-not $setupStatus.needsSetup) { throw "Banco novo deveria pedir configuração inicial" }
+          if (-not (Test-Path "$env:ProgramData\DominiusPlay\CRM\crm.db")) { throw "Banco não criado em ProgramData" }
+          # Desinstalação remove o serviço e preserva os dados
+          $p = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          Start-Sleep -Seconds 5
+          if (Get-Service DominiusPlayCRM -ErrorAction SilentlyContinue) { throw "Serviço continuou registrado após desinstalar" }
+          if (-not (Test-Path "$env:ProgramData\DominiusPlay\CRM\crm.db")) { throw "Dados deveriam ser preservados na desinstalação" }
+          Write-Host "Instalação e servidor verificados no Windows."
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DominiusPlayCRM-Setup
+          path: |
+            artifacts/installer/*.exe
+            artifacts/testes/*.trx
+          if-no-files-found: error

@@ -79,6 +79,8 @@ builder.Services.AddSingleton<AiDispatcher>();
 builder.Services.AddHttpClient<IAiProvider, OpenAiClient>(c => c.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddScoped<AiAgent>();
 builder.Services.AddScoped<AiResponder>();
+builder.Services.AddScoped<CampaignService>();
+builder.Services.AddSingleton(new DataPaths(dataDir));
 if (builder.Configuration.GetValue("Workers:Enabled", true))
 {
     builder.Services.AddHostedService<OutboundQueueWorker>();
@@ -92,6 +94,8 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
     await db.Database.EnsureCreatedAsync();
+    var upgraded = await SchemaUpgrader.UpgradeSqliteAsync(db); // banco de versão anterior: adiciona colunas/tabelas novas
+    if (upgraded.Count > 0) app.Logger.LogInformation("Banco atualizado: {Changes}", string.Join(", ", upgraded));
     await SeedData.EnsureSeededAsync(db);
 }
 
@@ -100,6 +104,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapCrmApi();
 app.MapAiApi();
+app.MapPhasesApi();
 app.MapHub<CrmHub>("/hubs/crm");
 app.Run();
 

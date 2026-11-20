@@ -40,7 +40,18 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             if (ct.IsCancellationRequested) break;
             if (await ProcessOneAsync(id, cfg, ct)) sent++;
         }
+        if (batch.Count > 0) await CompleteCampaignsAsync(ct);
         return sent;
+    }
+
+    /// <summary>Campanhas ativas sem itens pendentes passam a "Concluída".</summary>
+    private async Task CompleteCampaignsAsync(CancellationToken ct)
+    {
+        var active = await db.Campaigns.Where(c => c.Status == CampaignStatus.Ativa).ToListAsync(ct);
+        foreach (var c in active)
+            if (!await db.OutboundQueue.AnyAsync(q => q.CampaignId == c.Id && (q.Status == MessageStatus.NaFila || q.Status == MessageStatus.Enviando), ct))
+            { c.Status = CampaignStatus.Concluida; c.UpdatedAt = clock.GetUtcNow(); }
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<bool> ProcessOneAsync(Guid itemId, EvolutionConfig cfg, CancellationToken ct)
@@ -81,6 +92,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             };
             db.Messages.Add(msg);
             item.MessageId = msg.Id;
+            if (item.TemplateVersionId is { } tvId && await db.MessageTemplateVersions.FindAsync([tvId], ct) is { } tv) tv.TimesUsed++;
             Finish(item, MessageStatus.EnviadaServidor, null, now);
             item.Lead.LastInteractionAt = now;
             item.Lead.LastMessagePreview = item.Text.Length > 120 ? item.Text[..120] + "…" : item.Text;

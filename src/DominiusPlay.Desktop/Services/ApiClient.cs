@@ -54,6 +54,7 @@ public class ApiClient
     public Task<LeadCard> CreateLeadAsync(LeadUpsert l) => Post<LeadCard>("api/leads", l);
     public Task<OperationResult> UpdateLeadAsync(Guid id, LeadUpsert l) => Send<OperationResult>(HttpMethod.Put, $"api/leads/{id}", l);
     public Task<OperationResult> ConsentAsync(Guid id, ConsentRequest r) => Post<OperationResult>($"api/leads/{id}/consent", r);
+    public Task<OperationResult> DeleteLeadAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/leads/{id}", null);
     public Task<OperationResult> OptOutAsync(Guid id) => Post<OperationResult>($"api/leads/{id}/optout", null);
     public Task<List<LeadCard>> ConversationsAsync(string? q = null) => Get<List<LeadCard>>("api/conversations" + (string.IsNullOrWhiteSpace(q) ? "" : "?q=" + Uri.EscapeDataString(q)));
     public Task<List<MessageDto>> MessagesAsync(Guid id) => Get<List<MessageDto>>($"api/conversations/{id}/messages");
@@ -92,6 +93,41 @@ public class ApiClient
     public Task<OperationResult> RegisterWebhookAsync() => Post<OperationResult>("api/integrations/evolution/webhook", null);
     public Task<OperationResult> TestMessageAsync(string phone, string text) => Post<OperationResult>("api/integrations/evolution/test-message", new TestMessageRequest(phone, text));
     public Task<List<WebhookEventDto>> WebhookEventsAsync() => Get<List<WebhookEventDto>>("api/integrations/evolution/events");
+
+    // Fase 6
+    public Task<OperationResult> SaveQualificationAsync(Guid id, QualificationUpdate q) => Send<OperationResult>(HttpMethod.Put, $"api/leads/{id}/qualification", q);
+    public Task<OperationResult> AddFactAsync(Guid id, FactCreate f) => Post<OperationResult>($"api/leads/{id}/facts", f);
+    public Task<MoveCardResponse> AcceptSuggestionAsync(Guid id, bool confirm) => Post<MoveCardResponse>($"api/leads/{id}/suggestion/accept?confirm={confirm}", null);
+    public Task<OperationResult> RejectSuggestionAsync(Guid id) => Post<OperationResult>($"api/leads/{id}/suggestion/reject", null);
+    // Fase 7
+    public Task<UserDto> MeAsync() => Get<UserDto>("api/me");
+    public Task<OperationResult> ChangePasswordAsync(string current, string next) => Post<OperationResult>("api/me/password", new ChangePasswordRequest(current, next));
+    public Task<List<UserDto>> UsersAsync() => Get<List<UserDto>>("api/users");
+    public Task<UserDto> CreateUserAsync(UserCreate u) => Post<UserDto>("api/users", u);
+    public Task<OperationResult> UpdateUserAsync(Guid id, UserUpdate u) => Send<OperationResult>(HttpMethod.Put, $"api/users/{id}", u);
+    public Task<OperationResult> AssignAsync(Guid leadId, Guid? userId) => Post<OperationResult>($"api/conversations/{leadId}/assign", new AssignRequest(userId));
+    // Fase 8
+    public Task<OperationResult> CreateTemplateAsync(TemplateCreate t) => Post<OperationResult>("api/templates", t);
+    public Task<OperationResult> NewTemplateVersionAsync(Guid templateId, string body) => Post<OperationResult>($"api/templates/{templateId}/versions", new TemplateVersionCreate(body));
+    public Task<OperationResult> ApproveTemplateAsync(Guid versionId, string? channelName) => Post<OperationResult>($"api/templates/versions/{versionId}/approve", new TemplateApprove(channelName));
+    public Task<OperationResult> ArchiveTemplateAsync(Guid versionId) => Post<OperationResult>($"api/templates/versions/{versionId}/archive", null);
+    public Task<TemplatePreview> PreviewTemplateAsync(string body) => Post<TemplatePreview>("api/templates/preview", new TemplatePreviewRequest(body, null));
+    public Task<List<CampaignDto>> CampaignsAsync() => Get<List<CampaignDto>>("api/campaigns");
+    public Task<CampaignDto> CreateCampaignAsync(CampaignUpsert c) => Post<CampaignDto>("api/campaigns", c);
+    public Task<CampaignDto> UpdateCampaignAsync(Guid id, CampaignUpsert c) => Send<CampaignDto>(HttpMethod.Put, $"api/campaigns/{id}", c);
+    public Task<OperationResult> CampaignActionAsync(Guid id, string action) => Post<OperationResult>($"api/campaigns/{id}/{action}", null);
+    // Fase 9
+    public Task<ReportDto> ReportAsync(DateTimeOffset from, DateTimeOffset to) =>
+        Get<ReportDto>($"api/reports?from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(to.ToString("o"))}");
+    public async Task<byte[]> DownloadAsync(string url)
+    {
+        var res = await Wrap(() => _http.GetAsync(url));
+        if (!res.IsSuccessStatusCode) await Read<OperationResult>(res);
+        return await res.Content.ReadAsByteArrayAsync();
+    }
+    public Task<OperationResult> BackupAsync() => Post<OperationResult>("api/maintenance/backup", null);
+    public Task<OperationResult> PurgeAsync(int days) => Post<OperationResult>($"api/maintenance/purge?days={days}", null);
+    public Task<List<ReportRow>> BackupsAsync() => Get<List<ReportRow>>("api/maintenance/backups");
 
     private async Task<T> Get<T>(string url) => await Read<T>(await Wrap(() => _http.GetAsync(url)));
     private Task<T> Post<T>(string url, object? body) => Send<T>(HttpMethod.Post, url, body);

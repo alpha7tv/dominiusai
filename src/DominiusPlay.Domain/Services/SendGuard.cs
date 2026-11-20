@@ -73,6 +73,7 @@ public static class SendGuard
                     return GuardResult.Block("Fora da janela de 24h: exige modelo de mensagem aprovado");
                 if (c.Campaign is { } camp)
                 {
+                    if (camp.Status == CampaignStatus.Pausada) return GuardResult.Defer("Campanha pausada", c.Now.AddMinutes(5));
                     if (camp.Status != CampaignStatus.Ativa) return GuardResult.Block($"Campanha não está ativa ({camp.Status})");
                     var next = CampaignWindow.NextAllowed(camp, c.Now, c.TimeZone);
                     if (next > c.Now) return GuardResult.Defer("Fora do horário/dia permitido da campanha", next);

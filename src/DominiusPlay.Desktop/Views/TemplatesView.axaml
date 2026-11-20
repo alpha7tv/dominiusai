@@ -1,24 +1,62 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
-             xmlns:c="using:DominiusPlay.Domain.Contracts"
              x:Class="DominiusPlay.Desktop.Views.TemplatesView" x:DataType="vm:TemplatesViewModel">
-  <DockPanel Margin="24">
-    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
-      <TextBlock Text="Biblioteca de mensagens" Classes="h1" />
-      <TextBlock Text="Modelos de abordagem inicial carregados em revisão. Edição, aprovação e versionamento pela tela chegam na Fase 8." Classes="muted" />
-      <TextBlock Text="{Binding Error}" Classes="error" />
-    </StackPanel>
-    <ItemsControl ItemsSource="{Binding Templates}">
-      <ItemsControl.ItemTemplate>
-        <DataTemplate x:DataType="c:TemplateDto">
-          <Border Classes="card" Margin="0,0,0,10">
-            <StackPanel Spacing="4">
-              <StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="{Binding Name}" Classes="h2" /><TextBlock Text="{Binding Version, StringFormat='v{0}'}" Classes="muted" /><TextBlock Text="{Binding Approval}" Classes="muted" /></StackPanel>
-              <TextBlock Text="{Binding Body}" TextWrapping="Wrap" />
-            </StackPanel>
-          </Border>
-        </DataTemplate>
-      </ItemsControl.ItemTemplate>
-    </ItemsControl>
-  </DockPanel>
+  <Grid ColumnDefinitions="*,440" Margin="24">
+    <DockPanel Margin="0,0,16,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+        <TextBlock Text="Biblioteca de mensagens" Classes="h1" />
+        <TextBlock Text="Campanhas só usam versões APROVADAS. Toda mensagem identifica a assistente virtual. Variáveis: {nome}, {, nome} e {assistente}." Classes="muted" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Info}" Classes="ok" TextWrapping="Wrap" /><TextBlock Text="{Binding Error}" Classes="error" TextWrapping="Wrap" />
+      </StackPanel>
+      <ListBox ItemsSource="{Binding Templates}" SelectedItem="{Binding Selected}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:TemplateRowVm">
+            <Border Classes="card">
+              <StackPanel Spacing="4">
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding Status}" Classes="muted" />
+                  <TextBlock Text="{Binding Title}" Classes="h2" />
+                </DockPanel>
+                <TextBlock Text="{Binding Model.Body}" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Usage}" Classes="muted" FontSize="11" />
+                <TextBlock Text="{Binding Warning}" Foreground="#F2B36B" FontSize="11" IsVisible="{Binding HasWarning}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+    <Border Grid.Column="1" Classes="panel" VerticalAlignment="Top">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Escrever modelo" Classes="h2" />
+        <Grid ColumnDefinitions="*,8,*">
+          <StackPanel><TextBlock Text="Nome" Classes="muted" /><TextBox Text="{Binding NewName}" /></StackPanel>
+          <StackPanel Grid.Column="2"><TextBlock Text="Finalidade" Classes="muted" /><TextBox Text="{Binding NewPurpose}" /></StackPanel>
+        </Grid>
+        <TextBlock Text="Texto" Classes="muted" />
+        <TextBox Text="{Binding Body}" AcceptsReturn="True" TextWrapping="Wrap" Height="120" />
+        <Button Content="Pré-visualizar" Command="{Binding PreviewNowCommand}" />
+        <Border Classes="card" IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Como o contato vai receber" Classes="muted" FontSize="11" />
+            <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+        <TextBlock Text="{Binding SimilarWarning}" Foreground="#F2B36B" TextWrapping="Wrap" IsVisible="{Binding SimilarWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <Grid ColumnDefinitions="*,8,*">
+          <Button Content="Criar novo modelo" Command="{Binding CreateTemplateCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <Button Grid.Column="2" Content="Nova versão do selecionado" Command="{Binding NewVersionCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        </Grid>
+        <StackPanel Spacing="8" IsVisible="{Binding IsAdmin}" Margin="0,8,0,0">
+          <TextBlock Text="Aprovação (administrador)" Classes="h2" />
+          <TextBlock Text="Nome do template no WhatsApp oficial (Cloud API), se houver" Classes="muted" TextWrapping="Wrap" />
+          <TextBox Text="{Binding ChannelName}" Watermark="ex.: dominius_abordagem_v1 (opcional no modo Baileys)" />
+          <Grid ColumnDefinitions="*,8,*">
+            <Button Classes="primary" Content="Aprovar versão" Command="{Binding ApproveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <Button Grid.Column="2" Content="Arquivar versão" Command="{Binding ArchiveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </Grid>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Grid>
 </UserControl>

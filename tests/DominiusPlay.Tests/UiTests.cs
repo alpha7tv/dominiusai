@@ -73,7 +73,7 @@ public class UiTests
         Shot(win, "02-kanban");
 
         // movimentação via o mesmo método usado pelo arrastar-e-soltar
-        var card = kanban.Columns[0].Cards.First();
+        var card = kanban.Columns[0].Cards.First(c => c.Name == "Contato 001");
         await kanban.MoveAsync(card.Id, KanbanStage.EmDuvidas);
         await Pump();
         Assert.Contains(kanban.Columns.Single(c => c.Stage == KanbanStage.EmDuvidas).Cards, c => c.Id == card.Id);
@@ -88,6 +88,12 @@ public class UiTests
         await Pump(500);
         Assert.Equal(7, conv.Messages.Count);
         Assert.Contains("Apontamento Sigma 600", conv.RecommendationText);
+        Assert.Equal(350m, conv.QClients);
+        conv.QClients = 400; conv.QNextAction = "Enviar requisitos e agendar teste";
+        await conv.SaveQualificationCommand.ExecuteAsync(null);
+        await Pump(400);
+        Assert.Null(conv.Error);
+        Assert.Equal(400, conv.Detail!.ActiveClients);
         Shot(win, "03-conversas");
 
         await conv.TakeOverCommand.ExecuteAsync(null);
@@ -142,6 +148,58 @@ public class UiTests
         await Pump();
         Assert.Contains("horários de pico", ai.TestReply);
         Shot(win, "09-configuracoes-ia");
+
+        // Fase 7: equipe
+        await main.NavigateCommand.ExecuteAsync("equipe");
+        await Pump();
+        var team = Assert.IsType<TeamViewModel>(main.Current);
+        team.NewUser = "maria"; team.NewDisplay = "Maria Atendente"; team.NewPassword = "SenhaMaria1"; team.NewRole = 0;
+        await team.CreateCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(team.Error);
+        Assert.Equal(2, team.Users.Count);
+        Shot(win, "10-equipe");
+
+        // Fase 8: modelos e campanhas
+        await main.NavigateCommand.ExecuteAsync("mensagens");
+        await Pump();
+        var tpl = Assert.IsType<TemplatesViewModel>(main.Current);
+        tpl.Selected = tpl.Templates.First();
+        await Pump(400);
+        Assert.True(tpl.Preview?.StartsWith("Olá, Carlos, tudo bem? Sou Lia") == true, $"Preview=[{tpl.Preview}] Err=[{tpl.Error}]");
+        Assert.Contains("Lia, assistente virtual", tpl.Preview);
+        await tpl.ApproveCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(tpl.Error);
+        Assert.Contains(tpl.Templates, t => t.IsApproved);
+        tpl.Selected = tpl.Templates.First(t => t.IsApproved);
+        await Pump(400);
+        Shot(win, "11-mensagens");
+
+        await main.NavigateCommand.ExecuteAsync("campanhas");
+        await Pump();
+        var camp = Assert.IsType<CampaignsViewModel>(main.Current);
+        camp.NewCommand.Execute(null);
+        camp.Name = "Revendedores novembro"; camp.StartTime = "00:00"; camp.EndTime = "23:59";
+        camp.Sat = camp.Sun = true; camp.Objective = "Apresentar planos de revenda";
+        await camp.SaveCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Equal(1, camp.Selected!.Model.Eligible);
+        await camp.StartCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(camp.Error);
+        Assert.Equal(CampaignStatus.Ativa, camp.Selected!.Model.Status);
+        Assert.Equal(1, camp.Selected.Model.Queued);
+        Shot(win, "12-campanhas");
+
+        // Fase 9: relatórios
+        await main.NavigateCommand.ExecuteAsync("relatorios");
+        await Pump();
+        var rep = Assert.IsType<ReportsViewModel>(main.Current);
+        Assert.Null(rep.Error);
+        Assert.Equal(8, rep.Sections.Count);
+        Assert.Equal(5, rep.Kpis.Count);
+        Shot(win, "13-relatorios");
         win.Close();
     }
 
@@ -168,10 +226,14 @@ public class UiTests
                         LastInteractionAt = now.AddMinutes(-minsAgo), Mode = mode, Priority = pr, ConsentStatus = ConsentStatus.Valido, ConsentSource = "Formulário do site" };
             var joao = L("João (exemplo)", "5514988159045", KanbanStage.EmNegociacao, "APONTAMENTO_SIGMA_600", 350, PainCategory.QuedasServidor, "Principalmente nos jogos.", 3, pr: Priority.Alta);
             joao.Experience = IptvExperience.JaTrabalha; joao.PanelUsed = "Painel Sigma"; joao.NextAction = "Enviar requisitos de apontamento";
+            var c2 = L("Contato 002", "5511987650002", KanbanStage.EmFaseDeTeste, "MENSALISTA_100", 40, PainCategory.SuporteInsuficiente, "Avaliando painel", 90);
+            c2.SuggestedStage = KanbanStage.EmNegociacao; c2.SuggestedStageReason = "pediu valores do Mensalista 100";
+            var fresh = L("Contato 007", "5511987650007", KanbanStage.PrimeiroContato, null, null, PainCategory.Nenhuma, "", 0, ConversationMode.AguardandoContato);
+            fresh.LastInteractionAt = null; fresh.LastMessagePreview = null; fresh.Tags = "revenda";
             db.Leads.AddRange(
-                joao,
+                joao, fresh,
                 L("Contato 001", "5511987650001", KanbanStage.PrimeiroContato, null, null, PainCategory.Nenhuma, "Aguardando diagnóstico", 40),
-                L("Contato 002", "5511987650002", KanbanStage.EmFaseDeTeste, "MENSALISTA_100", 40, PainCategory.SuporteInsuficiente, "Avaliando painel", 90),
+                c2,
                 L("Contato 004", "5511987650004", KanbanStage.NegocioFechado, "MENSALISTA_100", 80, PainCategory.PrecosElevados, "Pagamento confirmado", 300, ConversationMode.Encerrado),
                 L("Contato 005", "5511987650005", KanbanStage.EmDuvidas, "FRANQUIA_COMPLETA", 1200, PainCategory.FaltaMarcaPropria, "Como funciona o app personalizado?", 15, ConversationMode.AtendimentoHumano),
                 L("Contato 006", "5511987650006", KanbanStage.NaoTemInteresse, null, null, PainCategory.Nenhuma, "Contato encerrado", 2000, ConversationMode.Encerrado));

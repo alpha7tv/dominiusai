@@ -8,7 +8,7 @@ public static class Mapping
 {
     public static LeadCard ToCard(this Lead l) => new(l.Id, string.IsNullOrWhiteSpace(l.Name) ? PhoneNormalizer.Format(l.Phone) : l.Name,
         l.Phone, PhoneNormalizer.Format(l.Phone), l.Stage, l.Mode, l.Priority, l.InterestPlanCode, l.ActiveClients, l.MainPain,
-        l.LastMessagePreview, l.LastInteractionAt, l.AssignedUser?.DisplayName, l.NextAction, l.ConsentStatus, l.Tags);
+        l.LastMessagePreview, l.LastInteractionAt, l.AssignedUser?.DisplayName, l.NextAction, l.ConsentStatus, l.Tags, l.SuggestedStage, l.SuggestedStageReason);
 
     public static MessageDto ToDto(this Message m, string? sentBy = null) =>
         new(m.Id, m.Direction, m.Author, m.Text, m.Status, m.Timestamp, m.Error, sentBy);

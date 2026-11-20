@@ -46,6 +46,15 @@
                             <TextBlock Text="{Binding Pain}" FontSize="12" TextWrapping="Wrap" Foreground="#F2B36B" IsVisible="{Binding Pain, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             <TextBlock Text="{Binding LastMessage}" Classes="muted" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding NextAction}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding NextAction, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <Border Classes="badge" Background="#33E0B341" IsVisible="{Binding HasSuggestion}" Margin="0,4,0,0">
+                              <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding SuggestionText}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource AccentBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                  <Button Content="Aceitar" FontSize="11" Padding="8,2" Tag="{Binding}" Click="OnAcceptSuggestion" />
+                                  <Button Content="Descartar" FontSize="11" Padding="8,2" Tag="{Binding}" Click="OnRejectSuggestion" />
+                                </StackPanel>
+                              </StackPanel>
+                            </Border>
                             <WrapPanel Margin="0,4,0,0">
                               <Border Classes="badge" Margin="0,0,4,4"><TextBlock Text="{Binding Mode}" FontSize="11" /></Border>
                               <Border Classes="badge" Margin="0,0,4,4" Background="#22FFFFFF"><TextBlock Text="{Binding Priority}" FontSize="11" /></Border>

@@ -100,7 +100,9 @@ public class SendGuardTests
         Assert.Equal(new DateTimeOffset(2026, 11, 18, 15, 0, 0, TimeSpan.Zero), r.RetryAt);
         camp.AllowedDays = "4"; // quinta
         Assert.Equal(new DateTimeOffset(2026, 11, 19, 15, 0, 0, TimeSpan.Zero), SendGuard.Evaluate(Ctx(Consented(), campaign: camp)).RetryAt);
-        camp.Status = CampaignStatus.Pausada;
+        camp.Status = CampaignStatus.Pausada;   // pausa adia (mantém na fila)
+        Assert.NotNull(SendGuard.Evaluate(Ctx(Consented(), campaign: camp)).RetryAt);
+        camp.Status = CampaignStatus.Cancelada; // cancelamento bloqueia
         Assert.Null(SendGuard.Evaluate(Ctx(Consented(), campaign: camp)).RetryAt);
     }
 }

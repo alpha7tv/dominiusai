@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             x:Class="DominiusPlay.Desktop.Views.TeamView" x:DataType="vm:TeamViewModel">
+  <Grid ColumnDefinitions="*,400" Margin="24">
+    <DockPanel Margin="0,0,16,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+        <TextBlock Text="Equipe" Classes="h1" />
+        <TextBlock Text="Atendente: conversas, Kanban e leads. Supervisor: também campanhas, modelos, relatórios e distribuição de conversas. Administrador: tudo, inclusive usuários, planos e integrações." Classes="muted" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Info}" Classes="ok" TextWrapping="Wrap" /><TextBlock Text="{Binding Error}" Classes="error" TextWrapping="Wrap" />
+      </StackPanel>
+      <ListBox ItemsSource="{Binding Users}" SelectedItem="{Binding Selected}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:UserRowVm">
+            <Border Classes="card">
+              <DockPanel>
+                <Border DockPanel.Dock="Right" Classes="badge" VerticalAlignment="Center"><TextBlock Text="{Binding Role}" FontSize="11" /></Border>
+                <StackPanel Spacing="2">
+                  <StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="{Binding Name}" Classes="h2" /><TextBlock Text="{Binding Login}" Classes="muted" VerticalAlignment="Center" /></StackPanel>
+                  <TextBlock Text="{Binding Status}" Classes="muted" />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+    <ScrollViewer Grid.Column="1">
+      <StackPanel Spacing="12">
+        <Border Classes="panel" IsVisible="{Binding IsAdmin}">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Novo usuário" Classes="h2" />
+            <TextBlock Text="Login" Classes="muted" /><TextBox Text="{Binding NewUser}" />
+            <TextBlock Text="Nome de exibição" Classes="muted" /><TextBox Text="{Binding NewDisplay}" />
+            <TextBlock Text="Senha inicial (mín. 8 caracteres)" Classes="muted" /><TextBox Text="{Binding NewPassword}" PasswordChar="●" />
+            <TextBlock Text="Perfil" Classes="muted" /><ComboBox ItemsSource="{Binding Roles}" SelectedIndex="{Binding NewRole}" HorizontalAlignment="Stretch" />
+            <Button Classes="primary" Content="Criar usuário" Command="{Binding CreateCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+        <Border Classes="panel" IsVisible="{Binding IsAdmin}">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Editar usuário selecionado" Classes="h2" />
+            <TextBlock Text="Nome de exibição" Classes="muted" /><TextBox Text="{Binding EditDisplay}" />
+            <TextBlock Text="Perfil" Classes="muted" /><ComboBox ItemsSource="{Binding Roles}" SelectedIndex="{Binding EditRole}" HorizontalAlignment="Stretch" />
+            <CheckBox IsChecked="{Binding EditActive}" Content="Usuário ativo (pode entrar no sistema)" />
+            <TextBlock Text="Redefinir senha (deixe em branco para manter)" Classes="muted" /><TextBox Text="{Binding EditPassword}" PasswordChar="●" />
+            <Button Content="Salvar alterações" Command="{Binding UpdateCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+        <Border Classes="panel">
+          <StackPanel Spacing="6">
+            <TextBlock Text="Minha senha" Classes="h2" />
+            <TextBlock Text="Senha atual" Classes="muted" /><TextBox Text="{Binding MyCurrent}" PasswordChar="●" />
+            <TextBlock Text="Nova senha" Classes="muted" /><TextBox Text="{Binding MyNew}" PasswordChar="●" />
+            <Button Content="Alterar minha senha" Command="{Binding ChangeMyPasswordCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

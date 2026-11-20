@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
              x:Class="DominiusPlay.Desktop.Views.ConversationsView" x:DataType="vm:ConversationsViewModel">
   <UserControl.Styles>
     <Style Selector="Border.bubble">
@@ -83,26 +84,72 @@
       </ScrollViewer>
     </DockPanel>
 
-    <!-- Qualificação comercial -->
+    <!-- Qualificação comercial (editável) -->
     <Border Grid.Column="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0">
       <ScrollViewer>
-        <StackPanel Margin="16" Spacing="10" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <StackPanel Margin="16" Spacing="6" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <Border Classes="card" BorderBrush="{StaticResource AccentBrush}" BorderThickness="1" IsVisible="{Binding HasSuggestion}" Margin="0,0,0,6">
+            <StackPanel Spacing="6">
+              <TextBlock Text="{Binding SuggestionText}" TextWrapping="Wrap" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Classes="primary" Content="Aceitar" Click="OnAcceptSuggestion" />
+                <Button Content="Descartar" Command="{Binding RejectSuggestionCommand}" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
           <TextBlock Text="Qualificação comercial" Classes="h2" />
-          <TextBlock Text="Etapa" Classes="muted" /><TextBlock Text="{Binding StageText}" />
-          <TextBlock Text="Experiência com IPTV" Classes="muted" /><TextBlock Text="{Binding ExperienceText}" />
-          <TextBlock Text="Painel utilizado" Classes="muted" /><TextBlock Text="{Binding Detail.PanelUsed, FallbackValue='—', TargetNullValue='Não informado'}" />
-          <TextBlock Text="Clientes ativos" Classes="muted" /><TextBlock Text="{Binding Detail.ActiveClients, TargetNullValue='Não informado'}" />
-          <TextBlock Text="Dor principal" Classes="muted" /><TextBlock Text="{Binding PainText}" />
-          <TextBlock Text="Plano de interesse" Classes="muted" /><TextBlock Text="{Binding Detail.InterestPlanCode, TargetNullValue='A definir'}" />
-          <TextBlock Text="Próxima ação" Classes="muted" /><TextBlock Text="{Binding Detail.NextAction, TargetNullValue='—'}" TextWrapping="Wrap" />
-          <TextBlock Text="Autorização de mensagens" Classes="muted" /><TextBlock Text="{Binding ConsentText}" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding StageText, StringFormat='Etapa: {0}'}" />
+          <TextBlock Text="{Binding ConsentText, StringFormat='Autorização: {0}'}" Classes="muted" TextWrapping="Wrap" />
+          <TextBlock Text="Experiência com IPTV" Classes="muted" />
+          <ComboBox ItemsSource="{Binding Experiences}" SelectedIndex="{Binding QExperience}" HorizontalAlignment="Stretch" />
+          <Grid ColumnDefinitions="*,8,110">
+            <StackPanel><TextBlock Text="Painel utilizado" Classes="muted" /><TextBox Text="{Binding QPanel}" /></StackPanel>
+            <StackPanel Grid.Column="2"><TextBlock Text="Clientes ativos" Classes="muted" /><NumericUpDown Value="{Binding QClients}" Minimum="0" Maximum="1000000" FormatString="0" ShowButtonSpinner="False" /></StackPanel>
+          </Grid>
+          <TextBlock Text="Dor principal" Classes="muted" />
+          <ComboBox ItemsSource="{Binding Pains}" SelectedIndex="{Binding QPain}" HorizontalAlignment="Stretch" />
+          <Grid ColumnDefinitions="*,8,110">
+            <StackPanel><TextBlock Text="Plano de interesse" Classes="muted" /><ComboBox ItemsSource="{Binding PlanCodes}" SelectedItem="{Binding QPlan}" HorizontalAlignment="Stretch" /></StackPanel>
+            <StackPanel Grid.Column="2"><TextBlock Text="Prioridade" Classes="muted" /><ComboBox ItemsSource="{Binding Priorities}" SelectedIndex="{Binding QPriority}" HorizontalAlignment="Stretch" /></StackPanel>
+          </Grid>
+          <TextBlock Text="Faixa de investimento" Classes="muted" /><TextBox Text="{Binding QInvestment}" />
+          <TextBlock Text="Próxima ação" Classes="muted" /><TextBox Text="{Binding QNextAction}" />
+          <TextBlock Text="Resumo da conversa" Classes="muted" /><TextBox Text="{Binding QSummary}" AcceptsReturn="True" TextWrapping="Wrap" Height="70" />
+          <Button Classes="primary" Content="Salvar qualificação" Command="{Binding SaveQualificationCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+
           <Border Classes="card" Margin="0,8,0,0">
             <StackPanel Spacing="4">
               <TextBlock Text="Sugestão de plano (tabela aprovada)" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
               <TextBlock Text="{Binding RecommendationText}" TextWrapping="Wrap" FontSize="12" />
             </StackPanel>
           </Border>
-          <TextBlock Text="Resumo da conversa" Classes="muted" /><TextBlock Text="{Binding Detail.ConversationSummary, TargetNullValue='Gerado pela IA na Fase 5'}" TextWrapping="Wrap" />
+
+          <StackPanel Spacing="6" Margin="0,8,0,0" IsVisible="{Binding IsSupervisor}">
+            <TextBlock Text="Responsável" Classes="h2" />
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Atribuir" Command="{Binding AssignCommand}" Margin="6,0,0,0" />
+              <ComboBox ItemsSource="{Binding Users}" SelectedItem="{Binding Assignee}" PlaceholderText="Sem responsável" HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate><DataTemplate x:DataType="c:UserDto"><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate>
+              </ComboBox>
+            </DockPanel>
+          </StackPanel>
+
+          <TextBlock Text="Memória do lead (fatos)" Classes="h2" Margin="0,8,0,0" />
+          <ItemsControl ItemsSource="{Binding Facts}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="c:FactDto">
+                <StackPanel Margin="0,2">
+                  <TextBlock TextWrapping="Wrap" FontSize="12"><Run Text="{Binding Key}" FontWeight="SemiBold" /><Run Text=": " /><Run Text="{Binding Value}" /></TextBlock>
+                  <TextBlock Text="{Binding Source}" Classes="muted" FontSize="10" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Grid ColumnDefinitions="100,6,*">
+            <TextBox Text="{Binding NewFactKey}" Watermark="assunto" />
+            <TextBox Grid.Column="2" Text="{Binding NewFactValue}" Watermark="informação confirmada" />
+          </Grid>
+          <Button Content="Registrar informação" Command="{Binding AddFactCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
         </StackPanel>
       </ScrollViewer>
     </Border>

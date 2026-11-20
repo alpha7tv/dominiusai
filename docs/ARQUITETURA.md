@@ -1,4 +1,4 @@
-# DOMINIUS PLAY AI CRM — Arquitetura (Fase 1)
+# DOMINIUS PLAY AI CRM — Arquitetura
 
 ## 1. Decisões de stack
 
@@ -120,3 +120,11 @@ Contatos com endereçamento `@lid` usam `key.remoteJidAlt` para obter o número.
 - Se um humano assumir ou chegar nova mensagem enquanto o modelo gera a resposta, a resposta é descartada.
 - Falha do provedor ou limite diário de tokens atingido → conversa vai para **Atendimento humano** com aviso, nunca fica sem retorno silencioso.
 - Simulação (`/api/ai/simulate`) e "Sugerir resposta" para atendentes não enviam nem salvam nada.
+
+## 8. Fases 6 a 10
+
+- **Fase 6 — Kanban assistido:** a IA grava `SuggestedStage` (+ motivo) quando não pode mover sozinha. O card mostra "IA sugere…" com Aceitar/Descartar (Kanban e Conversas). Aceitar "Negócio fechado" continua exigindo confirmação comercial. O atendente edita a qualificação e registra fatos (`RegistradoPorAtendente`). Endpoints: `PUT /api/leads/{id}/qualification`, `POST /api/leads/{id}/facts`, `POST /api/leads/{id}/suggestion/accept|reject`.
+- **Fase 7 — Equipe:** `GET/POST/PUT /api/users` (admin), `POST /api/conversations/{id}/assign` (supervisor), `GET /api/me`, `POST /api/me/password`. Sempre fica ao menos um administrador ativo. Usuário desativado libera suas conversas (continuam em atendimento humano).
+- **Fase 8 — Modelos e campanhas:** modelos versionados (`EmRevisao` → `Aprovado` pelo admin, com nome do template do canal oficial quando houver). Validação: variáveis conhecidas (`{nome}`, `{, nome}`, `{assistente}`) e identificação como assistente virtual. Alerta de similaridade (Jaccard ≥ 80%). Campanha: rascunho → iniciar (enfileira leads elegíveis: consentimento válido, "Primeiro contato", nunca contatados, fora do bloqueio, filtro de tags; reveza as versões aprovadas; espaçamento ≥ 5 min) → pausar/retomar/cancelar → concluída automaticamente quando a fila esvazia. Cada envio continua passando pelo SendGuard.
+- **Fase 9 — Relatórios e LGPD:** `GET /api/reports?from&to` (funil, fechamentos por plano, perdas, dores, status das mensagens, desempenho por modelo, atendimento por pessoa/IA, origens), `GET /api/export/leads.csv` e `messages.csv` (`;`, UTF-8 com BOM, fórmulas neutralizadas), `GET /api/leads/{id}/export` (JSON do titular), `POST /api/maintenance/backup` (`VACUUM INTO`), `POST /api/maintenance/purge?days=`.
+- **Fase 10 — Instalador:** `.github/workflows/build-windows.yml` (build, testes, publish, Inno Setup, instalação silenciosa com serviço, `/health`, desinstalação).

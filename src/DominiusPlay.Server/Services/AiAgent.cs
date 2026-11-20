@@ -281,6 +281,7 @@ public class AiAgent(CrmDbContext db, SettingsStore settings, IAiProvider provid
                 if (dec.Applied) { KanbanRules.Apply(lead, st, "IA", S("motivo")); r.Actions.Add($"Kanban → {KanbanRules.Title(st)}"); }
                 else if (dec.IsSuggestion)
                 {
+                    lead.SuggestedStage = st; lead.SuggestedStageReason = S("motivo");
                     lead.Facts.Add(new LeadFact { LeadId = lead.Id, Key = "sugestao_etapa", Value = $"{KanbanRules.Title(st)}: {S("motivo")}", Source = FactSource.InferidoPelaIa, CreatedAt = now });
                     r.Actions.Add($"Sugeriu etapa {KanbanRules.Title(st)}");
                 }

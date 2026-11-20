@@ -12,7 +12,7 @@ public sealed record SetupStatus(bool NeedsSetup);
 public sealed record LeadCard(
     Guid Id, string Name, string Phone, string PhoneFormatted, KanbanStage Stage, ConversationMode Mode, Priority Priority,
     string? InterestPlanCode, int? ActiveClients, PainCategory MainPain, string? LastMessagePreview, DateTimeOffset? LastInteractionAt,
-    string? AssignedTo, string? NextAction, ConsentStatus Consent, string Tags);
+    string? AssignedTo, string? NextAction, ConsentStatus Consent, string Tags, KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null);
 
 public sealed record LeadDetail(
     Guid Id, string Name, string Phone, string PhoneFormatted, string? City, string? State, string? Source, string? Notes, string Tags,
@@ -20,7 +20,8 @@ public sealed record LeadDetail(
     string? InterestPlanCode, string? InvestmentRange, KanbanStage Stage, ConversationMode Mode, Priority Priority,
     Guid? AssignedUserId, string? AssignedTo, string? NextAction, DateTimeOffset? LastInteractionAt, string? ConversationSummary,
     ConsentStatus Consent, DateTimeOffset? ConsentAt, string? ConsentSource, DateTimeOffset CreatedAt,
-    IReadOnlyList<FactDto> Facts, IReadOnlyList<StageChangeDto> StageHistory, RecommendationDto? Recommendation);
+    IReadOnlyList<FactDto> Facts, IReadOnlyList<StageChangeDto> StageHistory, RecommendationDto? Recommendation,
+    KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null);
 
 public sealed record FactDto(string Key, string Value, FactSource Source, DateTimeOffset At);
 public sealed record StageChangeDto(KanbanStage? From, KanbanStage To, string ChangedBy, string? Reason, DateTimeOffset At);
@@ -73,7 +74,34 @@ public sealed record DashboardDto(
     IReadOnlyDictionary<string, int> LossReasons);
 
 public sealed record KnowledgeDto(Guid Id, string Category, string Title, string Content, string? SourceUrl, ApprovalStatus Approval, int Version);
-public sealed record TemplateDto(Guid Id, string Name, string Purpose, int Version, string Body, ApprovalStatus Approval, int TimesUsed);
+public sealed record TemplateDto(Guid Id, string Name, string Purpose, int Version, string Body, ApprovalStatus Approval, int TimesUsed,
+    Guid VersionId = default, string? ChannelTemplateName = null, string? SimilarTo = null);
+public sealed record TemplateCreate(string Name, string Purpose, string Body);
+public sealed record TemplateVersionCreate(string Body);
+public sealed record TemplateApprove(string? ChannelTemplateName);
+public sealed record TemplatePreviewRequest(string Body, Guid? LeadId);
+public sealed record TemplatePreview(string Text, string? SimilarTo);
+
+public sealed record QualificationUpdate(IptvExperience Experience, string? PanelUsed, int? ActiveClients, PainCategory MainPain,
+    string? InterestPlanCode, string? InvestmentRange, Priority Priority, string? NextAction, string? Summary);
+public sealed record FactCreate(string Key, string Value);
+
+public sealed record UserDto(Guid Id, string UserName, string DisplayName, UserRole Role, bool Active, int OpenConversations);
+public sealed record UserCreate(string UserName, string DisplayName, string Password, UserRole Role);
+public sealed record UserUpdate(string DisplayName, UserRole Role, bool Active, string? NewPassword);
+public sealed record AssignRequest(Guid? UserId);
+public sealed record ChangePasswordRequest(string Current, string NewPassword);
+
+public sealed record CampaignDto(Guid Id, string Name, CampaignStatus Status, string InstanceName, string StartTime, string EndTime, string AllowedDays,
+    int MaxContacts, int MinIntervalSeconds, int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter, DateTimeOffset? StartedAt,
+    int Queued, int Sent, int Delivered, int Replied, int Failed, int Cancelled, int Eligible);
+public sealed record CampaignUpsert(string Name, string StartTime, string EndTime, string AllowedDays, int MaxContacts, int MinIntervalSeconds,
+    int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter);
+
+public sealed record ReportDto(DateTimeOffset From, DateTimeOffset To, int NewLeads, int Contacted, int Replied, int Closed, int Lost,
+    IReadOnlyList<ReportRow> Funnel, IReadOnlyList<ReportRow> ClosedByPlan, IReadOnlyList<ReportRow> LossReasons, IReadOnlyList<ReportRow> Pains,
+    IReadOnlyList<ReportRow> MessagesByStatus, IReadOnlyList<ReportRow> Templates, IReadOnlyList<ReportRow> ByAttendant, IReadOnlyList<ReportRow> Sources);
+public sealed record ReportRow(string Label, int Value, string? Detail = null);
 
 public sealed record AiSettingsDto(bool Enabled, string Model, bool HasApiKey, double Temperature, int MaxTokens, string AssistantName,
     string Instructions, int DailyTokenLimit, int TokensUsedToday, bool TypingIndicator, int DebounceSeconds);

@@ -75,7 +75,7 @@ public static class Api
                 l.ConsentStatus, l.ConsentAt, l.ConsentSource, l.CreatedAt,
                 l.Facts.OrderByDescending(f => f.CreatedAt).Select(f => new FactDto(f.Key, f.Value, f.Source, f.CreatedAt)).ToList(),
                 l.StageChanges.OrderByDescending(s => s.CreatedAt).Select(s => new StageChangeDto(s.From, s.To, s.ChangedBy, s.Reason, s.CreatedAt)).ToList(),
-                new RecommendationDto(rec.Profile.ToString(), rec.Plans.Select(p => $"{p.Name} — R$ {p.MonthlyPrice.ToString("N2", PtBr)}/mês").ToList(), rec.Rationale, rec.MissingInfo)));
+                new RecommendationDto(rec.Profile.ToString(), rec.Plans.Select(p => $"{p.Name} — R$ {p.MonthlyPrice.ToString("N2", PtBr)}/mês").ToList(), rec.Rationale, rec.MissingInfo), l.SuggestedStage, l.SuggestedStageReason));
         });
 
         api.MapPost("/leads", async (LeadUpsert r, CrmDbContext db, ClaimsPrincipal user) =>
@@ -196,6 +196,7 @@ public static class Api
             var d = KanbanRules.Evaluate(l, r.To, MoveActor.Atendente, r.CommercialConfirmation);
             if (!d.Applied) return Results.Ok(new MoveCardResponse(false, d.IsSuggestion, d.Reason));
             var change = KanbanRules.Apply(l, r.To, user.Identity?.Name ?? "", r.Reason);
+            l.SuggestedStage = null; l.SuggestedStageReason = null;
             db.StageChanges.Add(change);
             if (r.To == KanbanStage.NaoTemInteresse && !string.IsNullOrWhiteSpace(r.Reason)) l.LossReason = r.Reason;
             l.ConcurrencyStamp = Guid.NewGuid();
@@ -264,11 +265,6 @@ public static class Api
         // ---------- Base de conhecimento e modelos ----------
         api.MapGet("/knowledge", async (CrmDbContext db) =>
             (await db.KnowledgeArticles.AsNoTracking().ToListAsync()).OrderBy(k => k.Category).Select(k => new KnowledgeDto(k.Id, k.Category, k.Title, k.Content, k.SourceUrl, k.Approval, k.Version)));
-        api.MapGet("/templates", async (CrmDbContext db) =>
-        {
-            var ts = await db.MessageTemplates.Include(t => t.Versions).AsNoTracking().ToListAsync();
-            return ts.SelectMany(t => t.Versions.Select(v => new TemplateDto(t.Id, t.Name, t.Purpose, v.Version, v.Body, v.Approval, v.TimesUsed)));
-        });
 
         // ---------- Dashboard ----------
         api.MapGet("/dashboard", async (CrmDbContext db) =>

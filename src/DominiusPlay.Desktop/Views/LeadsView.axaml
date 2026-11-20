@@ -84,6 +84,8 @@
             <TextBox Text="{Binding ConsentSource}" Watermark="Origem verificável (ex.: formulário do site em 10/11)" />
             <Button Content="Registrar consentimento" Command="{Binding RegisterConsentCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
             <Button Classes="danger" Content="Descadastrar (não enviar mais)" Command="{Binding OptOutSelectedCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <Button Content="Exportar dados do titular (LGPD)" Click="OnExportLgpd" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <Button Classes="danger" Content="Excluir lead e todos os dados (LGPD)" Click="OnDeleteLead" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
           </StackPanel>
         </Border>
         <Border Classes="panel">

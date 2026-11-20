@@ -1,0 +1,75 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.CampaignsView" x:DataType="vm:CampaignsViewModel">
+  <Grid ColumnDefinitions="*,420" Margin="24">
+    <DockPanel Margin="0,0,16,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+            <Button Content="Atualizar" Command="{Binding RefreshCommand}" />
+            <Button Classes="primary" Content="+ Nova campanha" Command="{Binding NewCommand}" />
+          </StackPanel>
+          <TextBlock Text="Campanhas" Classes="h1" />
+        </DockPanel>
+        <TextBlock Text="Só recebem a abordagem leads com autorização válida, na etapa 'Primeiro contato', nunca contatados e fora da lista de bloqueio. Intervalo mínimo de 5 minutos entre abordagens, só no horário e dias escolhidos." Classes="muted" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Info}" Classes="ok" TextWrapping="Wrap" /><TextBlock Text="{Binding Error}" Classes="error" TextWrapping="Wrap" />
+      </StackPanel>
+      <ListBox ItemsSource="{Binding Campaigns}" SelectedItem="{Binding Selected}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:CampaignRowVm">
+            <Border Classes="card">
+              <StackPanel Spacing="3">
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding Status}" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+                  <TextBlock Text="{Binding Name}" Classes="h2" />
+                </DockPanel>
+                <TextBlock Text="{Binding Schedule}" Classes="muted" />
+                <TextBlock Text="{Binding Template}" Classes="muted" />
+                <TextBlock Text="{Binding Numbers}" FontSize="12" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+    <ScrollViewer Grid.Column="1">
+      <Border Classes="panel" VerticalAlignment="Top">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding FormTitle}" Classes="h2" />
+          <StackPanel Spacing="6" IsEnabled="{Binding CanEdit}">
+            <TextBlock Text="Nome" Classes="muted" /><TextBox Text="{Binding Name}" />
+            <TextBlock Text="Modelo de mensagem (somente aprovados)" Classes="muted" />
+            <ComboBox ItemsSource="{Binding ApprovedTemplates}" SelectedItem="{Binding Template}" PlaceholderText="Aprove um modelo em Mensagens" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate><DataTemplate x:DataType="c:TemplateDto"><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Text="Somente leads com estas tags (vírgula; vazio = todos autorizados)" Classes="muted" TextWrapping="Wrap" /><TextBox Text="{Binding TagFilter}" />
+            <Grid ColumnDefinitions="*,8,*">
+              <StackPanel><TextBlock Text="Início (HH:mm)" Classes="muted" /><TextBox Text="{Binding StartTime}" /></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="Fim (HH:mm)" Classes="muted" /><TextBox Text="{Binding EndTime}" /></StackPanel>
+            </Grid>
+            <TextBlock Text="Dias permitidos" Classes="muted" />
+            <WrapPanel>
+              <CheckBox Content="Seg" IsChecked="{Binding Mon}" Margin="0,0,8,0" /><CheckBox Content="Ter" IsChecked="{Binding Tue}" Margin="0,0,8,0" />
+              <CheckBox Content="Qua" IsChecked="{Binding Wed}" Margin="0,0,8,0" /><CheckBox Content="Qui" IsChecked="{Binding Thu}" Margin="0,0,8,0" />
+              <CheckBox Content="Sex" IsChecked="{Binding Fri}" Margin="0,0,8,0" /><CheckBox Content="Sáb" IsChecked="{Binding Sat}" Margin="0,0,8,0" />
+              <CheckBox Content="Dom" IsChecked="{Binding Sun}" />
+            </WrapPanel>
+            <Grid ColumnDefinitions="*,8,*,8,*">
+              <StackPanel><TextBlock Text="Máx. contatos" Classes="muted" /><NumericUpDown Value="{Binding MaxContacts}" Minimum="1" Maximum="10000" FormatString="0" /></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="Limite/dia" Classes="muted" /><NumericUpDown Value="{Binding DailyLimit}" Minimum="1" Maximum="1000" FormatString="0" /></StackPanel>
+              <StackPanel Grid.Column="4"><TextBlock Text="Intervalo (min)" Classes="muted" /><NumericUpDown Value="{Binding IntervalMinutes}" Minimum="5" Maximum="240" FormatString="0" /></StackPanel>
+            </Grid>
+            <TextBlock Text="Objetivo (interno)" Classes="muted" /><TextBox Text="{Binding Objective}" />
+            <Button Content="Salvar campanha" Command="{Binding SaveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+          <TextBlock Text="Controle" Classes="h2" Margin="0,8,0,0" />
+          <Button Classes="primary" Content="▶ Iniciar envio" Click="OnStart" IsVisible="{Binding CanStart}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <Button Content="❚❚ Pausar" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <Button Content="▶ Retomar" Command="{Binding ResumeCommand}" IsVisible="{Binding CanResume}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <Button Classes="danger" Content="Cancelar campanha" Click="OnCancel" IsVisible="{Binding CanCancel}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </ScrollViewer>
+  </Grid>
+</UserControl>
