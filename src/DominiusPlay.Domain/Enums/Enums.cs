@@ -103,3 +103,38 @@ public enum FactSource
     /// <summary>Registrado por atendente humano.</summary>
     RegistradoPorAtendente = 2,
 }
+
+/// <summary>Tipo do agente de IA: atendimento (conversa com o cliente) ou disparo (prospecção em campanhas).</summary>
+public enum AgentKind { Atendimento = 0, Disparo = 1 }
+
+public enum AgentStatus { Ativo = 0, Pausado = 1, Inativo = 2 }
+
+/// <summary>Intenção identificada na mensagem do contato. Cada intenção pode acionar um fluxo (ver IntentDetector / AgentProfile.IntentActions).</summary>
+public enum IntentCategory
+{
+    Nenhuma = 0,
+    PrimeiroContato = 1,
+    InteresseComercial = 2,
+    SolicitacaoPreco = 3,
+    DuvidaTecnica = 4,
+    Objecao = 5,
+    Negociacao = 6,
+    PedidoHumano = 7,
+    SemInteresse = 8,
+    Reclamacao = 9,
+    Descadastro = 10,
+    IntencaoCompra = 11,
+}
+
+/// <summary>Ação automática configurável para uma intenção.</summary>
+public enum IntentAction
+{
+    /// <summary>A IA continua a conversa normalmente.</summary>
+    Continuar = 0,
+    /// <summary>Transfere para atendente humano (com ficha da conversa).</summary>
+    TransferirHumano = 1,
+    /// <summary>Marca prioridade alta e continua com a IA.</summary>
+    PriorizarEContinuar = 2,
+    /// <summary>Encerra a conversa (sem novos contatos automáticos).</summary>
+    Encerrar = 3,
+}

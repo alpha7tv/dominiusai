@@ -75,7 +75,8 @@ public static class Api
                 l.ConsentStatus, l.ConsentAt, l.ConsentSource, l.CreatedAt,
                 l.Facts.OrderByDescending(f => f.CreatedAt).Select(f => new FactDto(f.Key, f.Value, f.Source, f.CreatedAt)).ToList(),
                 l.StageChanges.OrderByDescending(s => s.CreatedAt).Select(s => new StageChangeDto(s.From, s.To, s.ChangedBy, s.Reason, s.CreatedAt)).ToList(),
-                new RecommendationDto(rec.Profile.ToString(), rec.Plans.Select(p => $"{p.Name} — R$ {p.MonthlyPrice.ToString("N2", PtBr)}/mês").ToList(), rec.Rationale, rec.MissingInfo), l.SuggestedStage, l.SuggestedStageReason));
+                new RecommendationDto(rec.Profile.ToString(), rec.Plans.Select(p => $"{p.Name} — R$ {p.MonthlyPrice.ToString("N2", PtBr)}/mês").ToList(), rec.Rationale, rec.MissingInfo), l.SuggestedStage, l.SuggestedStageReason,
+                l.Company, l.Segment, l.QualificationScore, l.QualificationExplanation, l.LastIntent, l.HandoffAt, l.HandoffSummary, l.AttendanceAgentId));
         });
 
         api.MapPost("/leads", async (LeadUpsert r, CrmDbContext db, ClaimsPrincipal user) =>

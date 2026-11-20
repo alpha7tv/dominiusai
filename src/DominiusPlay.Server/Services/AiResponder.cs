@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using DominiusPlay.Domain.Contracts;
 using DominiusPlay.Domain.Entities;
 using DominiusPlay.Domain.Enums;
+using DominiusPlay.Domain.Services;
 using DominiusPlay.Infrastructure.Data;
 using DominiusPlay.Infrastructure.Evolution;
 using DominiusPlay.Server.Hubs;
@@ -31,7 +32,7 @@ public enum AiReplyOutcome { Replied, Skipped, Disabled, Failed, Superseded }
 
 /// <summary>Executa o atendimento real: gera a resposta, aplica as ações e coloca a mensagem na fila (tipo Resposta).</summary>
 public class AiResponder(CrmDbContext db, AiAgent agent, ConversationLocks locks, EvolutionGateway gateway, IEvolutionApi evolution,
-    IHubContext<CrmHub> hub, TimeProvider clock, ILogger<AiResponder> log)
+    IHubContext<CrmHub> hub, AgentResolver agents, HandoffService handoff, AiDispatcher dispatcher, TimeProvider clock, ILogger<AiResponder> log)
 {
     public async Task<AiReplyOutcome> RespondAsync(Guid leadId, CancellationToken ct = default)
     {
@@ -48,10 +49,25 @@ public class AiResponder(CrmDbContext db, AiAgent agent, ConversationLocks locks
         // já existe resposta pendente na fila?
         if (await db.OutboundQueue.AnyAsync(q => q.LeadId == leadId && q.Kind == OutboundKind.Resposta && q.Status == MessageStatus.NaFila, ct)) return AiReplyOutcome.Skipped;
 
+        // Agente de atendimento da conversa (sem agente cadastrado = configuração global)
+        var profile = await agents.ResolveAttendanceAsync(lead, ct);
+        if (profile is { Status: not AgentStatus.Ativo })
+        {
+            log.LogInformation("Agente {Agent} {Status}: conversa {Lead} vai para humano", profile.Name, profile.Status, leadId);
+            using var l0 = await locks.AcquireAsync(leadId, ct);
+            var assigned0 = await handoff.ApplyAsync(lead, $"Agente de IA \"{profile.Name}\" está {profile.Status.ToString().ToLowerInvariant()}", "Sistema", noticeToCustomer: false, ct);
+            await db.SaveChangesAsync(ct);
+            await handoff.NotifyAsync(leadId, assigned0, ct);
+            await hub.Clients.All.SendAsync(HubEvents.LeadChanged, leadId, ct);
+            return AiReplyOutcome.Skipped;
+        }
+        var questions = await agents.QuestionsAsync(profile?.Id, ct);
+        var context = new AgentContext(profile, questions, last.Intent, AgentHours.OutOfHoursNote(profile, clock.GetUtcNow()));
+
         var evo = await gateway.GetConfigAsync(ct);
         if (cfg.Typing && evo is not null) _ = evolution.SendPresenceAsync(evo, lead.Phone, "composing", 4000, CancellationToken.None);
 
-        var result = await agent.RunAsync(lead, history, cfg, trackUsage: true, ct);
+        var result = await agent.RunAsync(lead, history, cfg, trackUsage: true, ct, context);
 
         using var convLock = await locks.AcquireAsync(leadId, ct);
         // Estado mudou enquanto a IA pensava? (humano assumiu, nova mensagem, pausa)
@@ -85,12 +101,33 @@ public class AiResponder(CrmDbContext db, AiAgent agent, ConversationLocks locks
                 Kind = result.Transferred || result.Closed ? OutboundKind.Transicao : OutboundKind.Resposta, Text = reply, InstanceName = evo.InstanceName, NotBefore = clock.GetUtcNow() });
         lead.UpdatedAt = clock.GetUtcNow();
         lead.ConcurrencyStamp = Guid.NewGuid();
+        if (profile is not null && lead.AttendanceAgentId is null) lead.AttendanceAgentId = profile.Id;
+        string? assigned = null;
+        if (result.Transferred)
+            assigned = await handoff.ApplyAsync(lead, result.HandoffReason ?? "Solicitado pela IA", "IA", noticeToCustomer: result.Reply is null, ct);
         if (result.Actions.Count > 0)
             db.AuditLogs.Add(new AuditLog { Actor = "IA", Action = "ai.actions", EntityType = "Lead", EntityId = leadId.ToString(), Details = string.Join(" | ", result.Actions) });
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateConcurrencyException) { log.LogInformation("IA descartou resposta {Lead}: conflito de concorrência", leadId); db.ChangeTracker.Clear(); return AiReplyOutcome.Superseded; }
+        if (result.Transferred) await handoff.NotifyAsync(leadId, assigned, ct);
         await hub.Clients.All.SendAsync(HubEvents.LeadChanged, leadId, ct);
         return result.Reply is null ? AiReplyOutcome.Failed : AiReplyOutcome.Replied;
+    }
+}
+
+public static class AgentHours
+{
+    /// <summary>Texto "o time volta seg 09:00" quando o momento está fora do horário do agente; null dentro do horário ou sem agente.</summary>
+    public static string? OutOfHoursNote(AgentProfile? a, DateTimeOffset now)
+    {
+        if (a is null) return null;
+        var tz = BusinessHours.Zone(a.TimeZoneId);
+        var next = BusinessHours.NextAllowed(now, a.StartTime, a.EndTime, a.AllowedDays, tz);
+        if (next <= now || next == DateTimeOffset.MaxValue) return null;
+        var local = TimeZoneInfo.ConvertTime(next, tz);
+        var day = local.Date == TimeZoneInfo.ConvertTime(now, tz).Date ? "hoje" : local.Date == TimeZoneInfo.ConvertTime(now, tz).Date.AddDays(1) ? "amanhã"
+            : System.Globalization.CultureInfo.GetCultureInfo("pt-BR").DateTimeFormat.GetDayName(local.DayOfWeek);
+        return $"o time humano volta {day} às {local:HH\\:mm}.";
     }
 }
 

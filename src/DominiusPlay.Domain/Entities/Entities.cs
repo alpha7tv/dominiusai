@@ -50,6 +50,23 @@ public class Lead : Entity
     public ConsentStatus ConsentStatus { get; set; } = ConsentStatus.Pendente;
     public DateTimeOffset? ConsentAt { get; set; }
     public string? ConsentSource { get; set; }
+    /// <summary>Finalidade do consentimento (ex.: "Ofertas de revenda IPTV").</summary>
+    public string? ConsentPurpose { get; set; }
+
+    // Agentes (v0.4)
+    public string? Company { get; set; }
+    public string? Segment { get; set; }
+    /// <summary>Agente de atendimento responsável por esta conversa (nulo = agente padrão / configuração global).</summary>
+    public Guid? AttendanceAgentId { get; set; }
+    /// <summary>Campanha que originou o contato.</summary>
+    public Guid? OriginCampaignId { get; set; }
+    /// <summary>Pontuação de qualificação 0–100 (explicável em QualificationExplanation).</summary>
+    public int? QualificationScore { get; set; }
+    public string? QualificationExplanation { get; set; }
+    public IntentCategory LastIntent { get; set; }
+    /// <summary>Transferência para humano: quando aconteceu e a ficha entregue ao atendente.</summary>
+    public DateTimeOffset? HandoffAt { get; set; }
+    public string? HandoffSummary { get; set; }
 
     public List<ConsentRecord> ConsentRecords { get; set; } = new();
     public List<Message> Messages { get; set; } = new();
@@ -94,6 +111,8 @@ public class Message : Entity
     public Guid? CampaignId { get; set; }
     public Guid? TemplateVersionId { get; set; }
     public string? Error { get; set; }
+    /// <summary>Intenção detectada (mensagens recebidas).</summary>
+    public IntentCategory Intent { get; set; }
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
 }
 
@@ -217,6 +236,8 @@ public class Campaign : Entity
     /// <summary>Somente leads com estas tags (vírgula). Vazio = todos os autorizados.</summary>
     public string TagFilter { get; set; } = "";
     public DateTimeOffset? StartedAt { get; set; }
+    /// <summary>Agente de disparo responsável (v0.4). Nulo = configuração global.</summary>
+    public Guid? DispatchAgentId { get; set; }
 }
 
 public class User : Entity
@@ -257,4 +278,67 @@ public class ImportBatch : Entity
     public int Invalid { get; set; }
     public int Blocked { get; set; }
     public string ImportedBy { get; set; } = "";
+}
+
+/// <summary>
+/// Agente de IA configurável (v0.4). Cada agente funciona de forma independente: prompt, personalidade, empresa,
+/// produtos, restrições, critérios de transferência, horário e modelo próprios. Sem agente cadastrado, o sistema usa
+/// a configuração global de IA (comportamento das versões anteriores).
+/// </summary>
+public class AgentProfile : Entity
+{
+    public AgentKind Kind { get; set; }
+    /// <summary>Nome do agente no CRM (ex.: "Atendimento IPTV").</summary>
+    public string Name { get; set; } = "";
+    /// <summary>Nome com que a IA se apresenta ao cliente (vazio = nome do assistente da configuração global).</summary>
+    public string AssistantName { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Objective { get; set; } = "";
+    public string Company { get; set; } = "";
+    public string Personality { get; set; } = "";
+    public string Tone { get; set; } = "";
+    /// <summary>Prompt principal do agente (vazio = prompt de sistema global).</summary>
+    public string Prompt { get; set; } = "";
+    public string ProductsAndServices { get; set; } = "";
+    public string AllowedAnswers { get; set; } = "";
+    public string NegotiationRestrictions { get; set; } = "";
+    public string HandoffCriteria { get; set; } = "";
+    /// <summary>Modelo Claude (vazio = o da configuração global).</summary>
+    public string Model { get; set; } = "";
+    public string AdvancedModel { get; set; } = "";
+    public AgentStatus Status { get; set; } = AgentStatus.Ativo;
+    public bool IsDefault { get; set; }
+
+    // Horário de funcionamento
+    // Horário de atendimento humano/comercial. Fora dele a IA continua respondendo, avisando quando o time volta.
+    public TimeOnly StartTime { get; set; } = new(9, 0);
+    public TimeOnly EndTime { get; set; } = new(21, 0);
+    public string AllowedDays { get; set; } = "1,2,3,4,5,6";
+    public string TimeZoneId { get; set; } = "America/Sao_Paulo";
+
+    /// <summary>Ação por intenção: "PedidoHumano=TransferirHumano;IntencaoCompra=TransferirHumano;...". Vazio = padrão do sistema.</summary>
+    public string IntentActions { get; set; } = "";
+
+    // Disparo
+    /// <summary>Instância da Evolution usada por este agente (vazio = instância global).</summary>
+    public string InstanceName { get; set; } = "";
+    public int DailyLimit { get; set; } = 50;
+    public int MinIntervalSeconds { get; set; } = 300;
+    /// <summary>Agente de atendimento que assume quando o contato responde a uma abordagem deste agente de disparo.</summary>
+    public Guid? AttendanceAgentId { get; set; }
+}
+
+/// <summary>Pergunta de qualificação editável sem alterar o código. AgentId nulo = vale para todos os agentes de atendimento.</summary>
+public class QualificationQuestion : Entity
+{
+    public Guid? AgentId { get; set; }
+    public int Order { get; set; }
+    /// <summary>Identificador curto da resposta (ex.: ja_usa_servico, tem_clientes, prazo_contratacao).</summary>
+    public string Key { get; set; } = "";
+    public string Question { get; set; } = "";
+    /// <summary>Peso na pontuação (0–40). A resposta conta o peso cheio se atender ao critério.</summary>
+    public int Weight { get; set; } = 10;
+    /// <summary>Critério em linguagem simples usado pela IA para decidir se a resposta pontua (ex.: "sim, já tem clientes").</summary>
+    public string ScoringHint { get; set; } = "";
+    public bool Active { get; set; } = true;
 }

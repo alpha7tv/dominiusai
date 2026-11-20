@@ -106,7 +106,7 @@ public class ConversationService(CrmDbContext db, ConversationLocks locks, IHubC
         return new(true, null, item.Id);
     }
 
-    private async Task<int> CancelAutomatedAsync(Guid leadId, string reason, CancellationToken ct)
+    public async Task<int> CancelAutomatedAsync(Guid leadId, string reason, CancellationToken ct)
     {
         var pending = await db.OutboundQueue
             .Where(q => q.LeadId == leadId && (q.Status == MessageStatus.NaFila) && AutomatedKinds.Contains(q.Kind)).ToListAsync(ct);

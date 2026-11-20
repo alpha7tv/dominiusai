@@ -21,7 +21,9 @@ public sealed record LeadDetail(
     Guid? AssignedUserId, string? AssignedTo, string? NextAction, DateTimeOffset? LastInteractionAt, string? ConversationSummary,
     ConsentStatus Consent, DateTimeOffset? ConsentAt, string? ConsentSource, DateTimeOffset CreatedAt,
     IReadOnlyList<FactDto> Facts, IReadOnlyList<StageChangeDto> StageHistory, RecommendationDto? Recommendation,
-    KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null)
+    KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null,
+    string? Company = null, string? Segment = null, int? QualificationScore = null, string? QualificationExplanation = null,
+    IntentCategory LastIntent = IntentCategory.Nenhuma, DateTimeOffset? HandoffAt = null, string? HandoffSummary = null, Guid? AttendanceAgentId = null)
 {
     /// <summary>Nome para exibir: o número formatado quando o lead não tem nome.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -138,9 +140,35 @@ public sealed record AiSimulateRequest(IReadOnlyList<SimTurn> Turns);
 public sealed record AiSimulateResponse(bool Ok, string? Reply, IReadOnlyList<string> Actions, bool Transferred, string? Error, int Tokens);
 public sealed record ModelsResponse(bool Ok, IReadOnlyList<string> Models, string? Error);
 
+// ---------- Agentes de IA (v0.4) ----------
+
+public sealed record AgentDto(Guid Id, AgentKind Kind, string Name, string AssistantName, string Description, string Objective, string Company, string Personality, string Tone,
+    string Prompt, string ProductsAndServices, string AllowedAnswers, string NegotiationRestrictions, string HandoffCriteria, string Model, string AdvancedModel,
+    AgentStatus Status, bool IsDefault, string StartTime, string EndTime, string AllowedDays, string TimeZoneId, string IntentActions,
+    string InstanceName, int DailyLimit, int MinIntervalSeconds, Guid? AttendanceAgentId, int Conversations);
+
+public sealed record AgentUpsert(AgentKind Kind, string Name, string? AssistantName, string? Description, string? Objective, string? Company, string? Personality, string? Tone,
+    string? Prompt, string? ProductsAndServices, string? AllowedAnswers, string? NegotiationRestrictions, string? HandoffCriteria, string? Model, string? AdvancedModel,
+    AgentStatus Status, bool IsDefault, string StartTime, string EndTime, string AllowedDays, string? TimeZoneId, string? IntentActions,
+    string? InstanceName = null, int DailyLimit = 50, int MinIntervalSeconds = 300, Guid? AttendanceAgentId = null);
+
+public sealed record QualificationQuestionDto(Guid Id, Guid? AgentId, int Order, string Key, string Question, int Weight, string ScoringHint, bool Active);
+public sealed record QualificationQuestionUpsert(Guid? AgentId, int Order, string Key, string Question, int Weight, string? ScoringHint, bool Active);
+
+public sealed record IntentInfo(IntentCategory Intent, string Title, IntentAction DefaultAction);
+
+/// <summary>Testar Agente: conversa simulada de vários turnos. SessionId mantém a memória (fatos, qualificação) entre os turnos; nada é salvo nem enviado.</summary>
+public sealed record AgentTestRequest(Guid? SessionId, string Message, bool Reset = false);
+public sealed record AgentTestResponse(Guid SessionId, bool Ok, string? Reply, IReadOnlyList<string> Actions, bool Transferred, bool Closed, string? Error, int Tokens,
+    string DetectedIntent, string FinalIntent, int? Score, string? ScoreExplanation, string? HandoffSummary, IReadOnlyList<string> Memory, string Model);
+
+public sealed record HandoffRequest(string? Reason);
+
 public static class HubEvents
 {
     public const string LeadChanged = "leadChanged";
     public const string MessageAdded = "messageAdded";
     public const string ConnectionChanged = "connectionChanged";
+    /// <summary>Conversa transferida para humano (leadId, nome do atendente atribuído ou null).</summary>
+    public const string Handoff = "handoff";
 }
