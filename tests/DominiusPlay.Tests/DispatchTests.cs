@@ -186,6 +186,18 @@ public class DispatchTests
         var card = (await c.GetFromJsonAsync<List<KanbanColumn>>("/api/kanban"))!.Single(k => k.Stage == KanbanStage.EmAtendimento).Cards.Single();
         Assert.Equal("Revenda Sul", card.CampaignName);
         Assert.Equal("Fechamento revenda", card.AgentName);
+
+        // painel filtrado por campanha e por agente
+        var dash = (await c.GetFromJsonAsync<AgentsDashboardDto>($"/api/dashboard/agents?campaignId={camp.Id}"))!;
+        Assert.Equal(1, dash.Sent); // só o que saiu: a abordagem (a resposta da IA ainda está na fila)
+        Assert.Equal(1, dash.Replies);
+        var row = Assert.Single(dash.ByCampaign);
+        Assert.Equal(1, row.Sent); Assert.Equal(1, row.Replied); Assert.Equal(100, row.ResponseRate);
+        var byAgent = (await c.GetFromJsonAsync<AgentsDashboardDto>($"/api/dashboard/agents?agentId={att.Id}"))!;
+        Assert.Equal(1, byAgent.Replies);
+        var other = (await c.GetFromJsonAsync<AgentsDashboardDto>($"/api/dashboard/agents?agentId={Guid.NewGuid()}"))!;
+        Assert.Equal(0, other.Replies);
+        Assert.True(dash.AiTokens > 0);
     }
 
     [Fact]

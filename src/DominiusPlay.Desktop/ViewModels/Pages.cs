@@ -39,17 +39,55 @@ public partial class LeadCardVm(LeadCard c) : ObservableObject
 
 public record Stat(string Key, int Value);
 
+public record IdOption(Guid? Id, string Name);
+
 public partial class DashboardViewModel(AppSession s) : ViewModelBase
 {
     [ObservableProperty] private DashboardDto? _data;
+    [ObservableProperty] private AgentsDashboardDto? _agentsData;
     public ObservableCollection<Stat> Stages { get; } = new();
     public ObservableCollection<Stat> Pains { get; } = new();
+    public ObservableCollection<CampaignConversionDto> Conversions { get; } = new();
+
+    // filtros do painel dos agentes
+    public static string[] Periods { get; } = ["Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Todo o período"];
+    [ObservableProperty] private int _periodIndex = 1;
+    public ObservableCollection<IdOption> AgentOptions { get; } = new();
+    public ObservableCollection<IdOption> CampaignOptions { get; } = new();
+    [ObservableProperty] private IdOption? _agentFilter;
+    [ObservableProperty] private IdOption? _campaignFilter;
+    private bool _loadingFilters;
 
     public override Task OnActivatedAsync() => Refresh();
+
+    partial void OnPeriodIndexChanged(int value) { if (!_loadingFilters) _ = Run(LoadAgents); }
+    partial void OnAgentFilterChanged(IdOption? value) { if (!_loadingFilters) _ = Run(LoadAgents); }
+    partial void OnCampaignFilterChanged(IdOption? value) { if (!_loadingFilters) _ = Run(LoadAgents); }
+
+    private async Task LoadAgents()
+    {
+        DateTimeOffset? from = PeriodIndex switch { 0 => DateTimeOffset.UtcNow.AddDays(-7), 1 => DateTimeOffset.UtcNow.AddDays(-30), 2 => DateTimeOffset.UtcNow.AddDays(-90), _ => null };
+        AgentsData = await s.Api.AgentsDashboardAsync(from, AgentFilter?.Id, CampaignFilter?.Id);
+        Conversions.Clear(); foreach (var r in AgentsData.ByCampaign) Conversions.Add(r);
+    }
 
     [RelayCommand]
     private Task Refresh() => Run(async () =>
     {
+        _loadingFilters = true;
+        try
+        {
+            var keepA = AgentFilter?.Id; var keepC = CampaignFilter?.Id;
+            AgentOptions.Clear(); AgentOptions.Add(new(null, "Todos os agentes"));
+            foreach (var a in (await s.Api.AgentsAsync(AgentKind.Disparo)).Concat(await s.Api.AgentsAsync(AgentKind.Atendimento)))
+                AgentOptions.Add(new(a.Id, (a.Kind == AgentKind.Disparo ? "Disparo: " : "Atendimento: ") + a.Name));
+            CampaignOptions.Clear(); CampaignOptions.Add(new(null, "Todas as campanhas"));
+            foreach (var c in await s.Api.CampaignsAsync()) CampaignOptions.Add(new(c.Id, c.Name));
+            AgentFilter = AgentOptions.FirstOrDefault(o => o.Id == keepA) ?? AgentOptions[0];
+            CampaignFilter = CampaignOptions.FirstOrDefault(o => o.Id == keepC) ?? CampaignOptions[0];
+        }
+        finally { _loadingFilters = false; }
+        await LoadAgents();
         Data = await s.Api.DashboardAsync();
         Stages.Clear(); foreach (var kv in Data.ByStage) Stages.Add(new(kv.Key, kv.Value));
         Pains.Clear(); foreach (var kv in Data.TopPains) Pains.Add(new(kv.Key, kv.Value));

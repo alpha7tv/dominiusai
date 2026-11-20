@@ -57,6 +57,11 @@ public sealed record MoveCardRequest(KanbanStage To, string? Reason, bool Commer
 public sealed record MoveCardResponse(bool Applied, bool IsSuggestion, string? Message);
 
 public sealed record KanbanColumn(KanbanStage Stage, string Title, IReadOnlyList<LeadCard> Cards);
+/// <summary>Indicadores dos agentes (período, agente, campanha). Entrega só conta o que o provedor confirmou.</summary>
+public sealed record AgentsDashboardDto(int Imported, int Eligible, int ActiveCampaigns, int Sent, int Delivered, int Replies, double ResponseRate,
+    int Qualified, int Handoffs, int Proposals, int Sales, int OptOuts, int Errors, long AiTokens, IReadOnlyList<CampaignConversionDto> ByCampaign, string Note);
+public sealed record CampaignConversionDto(Guid Id, string Name, int Sent, int Replied, int Qualified, int Sales, double ResponseRate, double ConversionRate);
+
 public sealed record KanbanStageDto(KanbanStage Stage, string Title, int Order, bool Visible, string DefaultTitle);
 
 public sealed record MessageDto(Guid Id, MessageDirection Direction, MessageAuthor Author, string Text, MessageStatus Status,

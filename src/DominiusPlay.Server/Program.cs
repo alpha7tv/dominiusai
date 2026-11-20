@@ -120,6 +120,7 @@ app.MapCrmApi();
 app.MapAiApi();
 app.MapPhasesApi();
 app.MapAgentsApi();
+app.MapDashboardApi();
 app.MapHub<CrmHub>("/hubs/crm");
 app.Run();
 

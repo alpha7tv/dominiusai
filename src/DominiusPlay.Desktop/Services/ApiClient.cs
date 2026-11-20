@@ -46,6 +46,9 @@ public class ApiClient
         SetSession(await Read<LoginResponse>(await _http.PostAsJsonAsync("api/auth/setup", new SetupRequest(user, display, pass), Json)));
 
     public Task<DashboardDto> DashboardAsync() => Get<DashboardDto>("api/dashboard");
+    public Task<AgentsDashboardDto> AgentsDashboardAsync(DateTimeOffset? from, Guid? agentId, Guid? campaignId) =>
+        Get<AgentsDashboardDto>("api/dashboard/agents?" + string.Join("&", new[] {
+            from is { } f ? "from=" + Uri.EscapeDataString(f.ToString("O")) : null, agentId is { } a ? $"agentId={a}" : null, campaignId is { } c ? $"campaignId={c}" : null }.Where(x => x is not null)));
     public Task<List<KanbanColumn>> KanbanAsync() => Get<List<KanbanColumn>>("api/kanban");
     public Task<List<KanbanStageDto>> KanbanStagesAsync() => Get<List<KanbanStageDto>>("api/kanban/stages");
     public Task<OperationResult> SaveKanbanStagesAsync(List<KanbanStageDto> s) => Send<OperationResult>(HttpMethod.Put, "api/kanban/stages", s);
