@@ -1,0 +1,109 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             x:Class="DominiusPlay.Desktop.Views.ConversationsView" x:DataType="vm:ConversationsViewModel">
+  <UserControl.Styles>
+    <Style Selector="Border.bubble">
+      <Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="12,8" /><Setter Property="Margin" Value="0,4" />
+      <Setter Property="MaxWidth" Value="520" /><Setter Property="HorizontalAlignment" Value="Left" /><Setter Property="Background" Value="{StaticResource InboundBrush}" />
+    </Style>
+    <Style Selector="Border.bubble.out"><Setter Property="HorizontalAlignment" Value="Right" /><Setter Property="Background" Value="{StaticResource OutboundBrush}" /></Style>
+    <Style Selector="Border.bubble.sys"><Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="Background" Value="#22FFFFFF" /></Style>
+    <Style Selector="Border.bubble.fail"><Setter Property="HorizontalAlignment" Value="Right" /><Setter Property="Background" Value="#4A1E24" /></Style>
+  </UserControl.Styles>
+  <Grid ColumnDefinitions="320,*,340">
+    <!-- Contatos -->
+    <Border Grid.Column="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Margin="14" Spacing="8">
+          <TextBlock Text="Conversas" Classes="h1" />
+          <TextBox Text="{Binding Search}" Watermark="Pesquisar nome ou telefone" />
+        </StackPanel>
+        <ListBox ItemsSource="{Binding Contacts}" SelectedItem="{Binding Selected}" Background="Transparent">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:LeadCardVm">
+              <StackPanel Spacing="2" Margin="2,4">
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Right" Text="{Binding Ago}" Classes="muted" />
+                  <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+                <TextBlock Text="{Binding LastMessage}" Classes="muted" TextTrimming="CharacterEllipsis" />
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <Border Classes="badge"><TextBlock Text="{Binding Mode}" FontSize="11" /></Border>
+                  <Border Classes="badge" Background="#22FFFFFF"><TextBlock Text="{Binding Stage}" FontSize="11" /></Border>
+                </StackPanel>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+
+    <!-- Histórico -->
+    <DockPanel Grid.Column="1">
+      <Border DockPanel.Dock="Top" Padding="16,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+            <Button Classes="primary" Content="ASSUMIR ATENDIMENTO" Command="{Binding TakeOverCommand}" IsVisible="{Binding CanTakeOver}" />
+            <Button Content="DEVOLVER PARA IA" Command="{Binding ReturnToAiCommand}" IsVisible="{Binding CanReturn}" />
+            <Button Content="Pausar" Command="{Binding PauseCommand}" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </StackPanel>
+          <StackPanel>
+            <TextBlock Text="{Binding Detail.Name, FallbackValue='Selecione uma conversa'}" Classes="h2" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="{Binding Detail.PhoneFormatted}" Classes="muted" />
+              <TextBlock Text="{Binding ModeText}" Classes="muted" Foreground="{StaticResource AccentBrush}" />
+            </StackPanel>
+          </StackPanel>
+        </DockPanel>
+      </Border>
+      <Border DockPanel.Dock="Bottom" Padding="12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding Info}" Classes="ok" />
+          <TextBlock Text="{Binding Error}" Classes="error" />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Classes="primary" Content="Enviar" Command="{Binding SendCommand}" Margin="8,0,0,0" VerticalAlignment="Stretch" />
+            <TextBox Text="{Binding Draft}" Watermark="Para responder, assuma o atendimento (a IA é pausada nesta conversa)" AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="120" />
+          </DockPanel>
+        </StackPanel>
+      </Border>
+      <ScrollViewer Name="History" Padding="16">
+        <ItemsControl ItemsSource="{Binding Messages}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:MessageVm">
+              <Border Classes="bubble" Classes.out="{Binding IsOutbound}" Classes.sys="{Binding IsSystem}" Classes.fail="{Binding IsFailed}">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Meta}" Classes="muted" FontSize="10" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DockPanel>
+
+    <!-- Qualificação comercial -->
+    <Border Grid.Column="2" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0">
+      <ScrollViewer>
+        <StackPanel Margin="16" Spacing="10" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TextBlock Text="Qualificação comercial" Classes="h2" />
+          <TextBlock Text="Etapa" Classes="muted" /><TextBlock Text="{Binding StageText}" />
+          <TextBlock Text="Experiência com IPTV" Classes="muted" /><TextBlock Text="{Binding ExperienceText}" />
+          <TextBlock Text="Painel utilizado" Classes="muted" /><TextBlock Text="{Binding Detail.PanelUsed, FallbackValue='—', TargetNullValue='Não informado'}" />
+          <TextBlock Text="Clientes ativos" Classes="muted" /><TextBlock Text="{Binding Detail.ActiveClients, TargetNullValue='Não informado'}" />
+          <TextBlock Text="Dor principal" Classes="muted" /><TextBlock Text="{Binding PainText}" />
+          <TextBlock Text="Plano de interesse" Classes="muted" /><TextBlock Text="{Binding Detail.InterestPlanCode, TargetNullValue='A definir'}" />
+          <TextBlock Text="Próxima ação" Classes="muted" /><TextBlock Text="{Binding Detail.NextAction, TargetNullValue='—'}" TextWrapping="Wrap" />
+          <TextBlock Text="Autorização de mensagens" Classes="muted" /><TextBlock Text="{Binding ConsentText}" TextWrapping="Wrap" />
+          <Border Classes="card" Margin="0,8,0,0">
+            <StackPanel Spacing="4">
+              <TextBlock Text="Sugestão de plano (tabela aprovada)" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+              <TextBlock Text="{Binding RecommendationText}" TextWrapping="Wrap" FontSize="12" />
+            </StackPanel>
+          </Border>
+          <TextBlock Text="Resumo da conversa" Classes="muted" /><TextBlock Text="{Binding Detail.ConversationSummary, TargetNullValue='Gerado pela IA na Fase 5'}" TextWrapping="Wrap" />
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

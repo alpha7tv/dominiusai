@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.IntegrationsView" x:DataType="vm:IntegrationsViewModel">
+  <Grid ColumnDefinitions="460,*" Margin="24">
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="12">
+        <TextBlock Text="Integrações — Evolution API" Classes="h1" />
+        <TextBlock Text="{Binding Info}" Classes="ok" /><TextBlock Text="{Binding Error}" Classes="error" />
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Servidor (sua VPS)" Classes="h2" />
+            <TextBlock Text="URL do servidor" Classes="muted" /><TextBox Text="{Binding BaseUrl}" Watermark="https://evolution.seudominio.com" />
+            <TextBlock Text="Nome da instância" Classes="muted" /><TextBox Text="{Binding InstanceName}" />
+            <TextBlock Text="Chave de API (apikey)" Classes="muted" />
+            <TextBox Text="{Binding ApiKey}" PasswordChar="●" Watermark="Deixe em branco para manter a chave atual" />
+            <TextBlock Text="✓ Chave salva com criptografia no servidor" Classes="ok" FontSize="12" IsVisible="{Binding HasApiKey}" />
+            <TextBlock Text="Modo de integração" Classes="muted" />
+            <ComboBox ItemsSource="{x:Static vm:IntegrationsViewModel.Modes}" SelectedIndex="{Binding ModeIndex}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="Para prospecção comercial, a Cloud API oficial (WHATSAPP-BUSINESS) é a opção que segue as políticas do WhatsApp Business, com modelos aprovados." Classes="muted" TextWrapping="Wrap" />
+            <TextBlock Text="URL pública deste servidor CRM (para o webhook)" Classes="muted" /><TextBox Text="{Binding WebhookPublicUrl}" Watermark="https://crm.seudominio.com" />
+            <Button Classes="primary" Content="Salvar configuração" Command="{Binding SaveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Conexão e webhook" Classes="h2" />
+            <DockPanel><Button DockPanel.Dock="Right" Content="Testar conexão" Command="{Binding TestConnectionCommand}" /><TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" /></DockPanel>
+            <Button Content="Registrar webhook na Evolution API" Command="{Binding RegisterWebhookCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <TextBlock Text="{Binding WebhookDetail}" Classes="muted" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Mensagem de teste" Classes="h2" />
+            <TextBox Text="{Binding TestPhone}" Watermark="Seu próprio WhatsApp com DDD" />
+            <TextBox Text="{Binding TestText}" />
+            <Button Content="Enviar mensagem de teste" Command="{Binding SendTestCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+    <Border Grid.Column="1" Classes="panel">
+      <DockPanel>
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+          <Button DockPanel.Dock="Right" Content="Atualizar" Command="{Binding LoadEventsCommand}" />
+          <TextBlock Text="Histórico de eventos recebidos" Classes="h2" />
+        </DockPanel>
+        <ListBox ItemsSource="{Binding Events}" Background="Transparent">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="c:WebhookEventDto">
+              <Grid ColumnDefinitions="150,170,*">
+                <TextBlock Text="{Binding At, StringFormat='{}{0:dd/MM HH:mm:ss}'}" Classes="muted" />
+                <TextBlock Grid.Column="1" Text="{Binding Type}" />
+                <TextBlock Grid.Column="2" Text="{Binding Error, TargetNullValue='ok'}" Classes="muted" TextTrimming="CharacterEllipsis" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

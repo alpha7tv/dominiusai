@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             x:Class="DominiusPlay.Desktop.Views.KanbanView" x:DataType="vm:KanbanViewModel">
+  <DockPanel Margin="24">
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+        <TextBox Text="{Binding Filter}" Watermark="Filtrar por nome ou telefone" Width="260" />
+        <Button Content="Atualizar" Command="{Binding RefreshCommand}" />
+      </StackPanel>
+      <StackPanel>
+        <TextBlock Text="Dominius Play — CRM Comercial" Classes="h1" />
+        <TextBlock Text="Arraste os cards entre as colunas. 'Negócio fechado' exige confirmação comercial." Classes="muted" />
+      </StackPanel>
+    </DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="2">
+      <TextBlock Text="{Binding Info}" Classes="ok" />
+      <TextBlock Text="{Binding Error}" Classes="error" />
+    </StackPanel>
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled">
+      <ItemsControl ItemsSource="{Binding Columns}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><UniformGrid Rows="1" Columns="6" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:KanbanColumnVm">
+            <Border Classes="panel" Margin="0,0,10,0" Padding="8" DragDrop.AllowDrop="True" Tag="{Binding Stage}" Name="Column">
+              <DockPanel>
+                <DockPanel DockPanel.Dock="Top" Margin="2,0,2,10">
+                  <Border Width="4" Height="18" CornerRadius="2" Background="{Binding Color}" Margin="0,0,8,0" />
+                  <Border DockPanel.Dock="Right" Classes="badge"><TextBlock Text="{Binding Count}" FontSize="12" /></Border>
+                  <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                </DockPanel>
+                <ScrollViewer>
+                  <ItemsControl ItemsSource="{Binding Cards}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:LeadCardVm">
+                        <Border Classes="card" Margin="0,0,0,8" Cursor="Hand" Tag="{Binding Id}" Name="Card">
+                          <StackPanel Spacing="3">
+                            <DockPanel>
+                              <TextBlock DockPanel.Dock="Right" Text="{Binding Ago}" Classes="muted" />
+                              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            </DockPanel>
+                            <TextBlock Text="{Binding Phone}" Classes="muted" />
+                            <TextBlock Text="{Binding Plan}" FontSize="12" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding Clients}" FontSize="12" IsVisible="{Binding Clients, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <TextBlock Text="{Binding Pain}" FontSize="12" TextWrapping="Wrap" Foreground="#F2B36B" IsVisible="{Binding Pain, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <TextBlock Text="{Binding LastMessage}" Classes="muted" TextTrimming="CharacterEllipsis" MaxLines="2" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding NextAction}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding NextAction, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <WrapPanel Margin="0,4,0,0">
+                              <Border Classes="badge" Margin="0,0,4,4"><TextBlock Text="{Binding Mode}" FontSize="11" /></Border>
+                              <Border Classes="badge" Margin="0,0,4,4" Background="#22FFFFFF"><TextBlock Text="{Binding Priority}" FontSize="11" /></Border>
+                              <Border Classes="badge" Margin="0,0,4,4" Background="#22FFFFFF"><TextBlock Text="{Binding Owner}" FontSize="11" /></Border>
+                            </WrapPanel>
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+              </DockPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

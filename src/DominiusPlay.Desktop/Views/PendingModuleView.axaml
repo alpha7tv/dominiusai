@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             x:Class="DominiusPlay.Desktop.Views.PendingModuleView" x:DataType="vm:PendingModuleViewModel">
+  <Border Classes="panel" Margin="24" MaxWidth="640" HorizontalAlignment="Left" VerticalAlignment="Top">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{Binding Title}" Classes="h1" />
+      <Border Classes="badge" HorizontalAlignment="Left"><TextBlock Text="{Binding Phase, StringFormat='Em desenvolvimento — {0}'}" FontSize="12" /></Border>
+      <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
+      <TextBlock Text="Este módulo ainda não tem ações disponíveis nesta versão." Classes="muted" />
+    </StackPanel>
+  </Border>
+</UserControl>

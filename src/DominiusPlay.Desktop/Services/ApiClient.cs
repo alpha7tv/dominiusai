@@ -1,0 +1,117 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using DominiusPlay.Domain.Contracts;
+using DominiusPlay.Domain.Enums;
+
+namespace DominiusPlay.Desktop.Services;
+
+public class ApiException(string message) : Exception(message);
+
+/// <summary>Cliente HTTP do servidor central. O aplicativo Windows nunca fala direto com a Evolution API nem guarda chaves.</summary>
+public class ApiClient
+{
+    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web); // enums trafegam como números (padrão do servidor)
+    private readonly HttpClient _http;
+    public string BaseUrl { get; }
+    public string? Token { get; private set; }
+    public LoginResponse? Session { get; private set; }
+
+    public ApiClient(string baseUrl, HttpMessageHandler? handler = null)
+    {
+        BaseUrl = baseUrl.TrimEnd('/');
+        _http = handler is null ? new HttpClient() : new HttpClient(handler);
+        _http.BaseAddress = new Uri(BaseUrl + "/");
+        _http.Timeout = TimeSpan.FromSeconds(60);
+    }
+
+    private void SetSession(LoginResponse r)
+    {
+        Session = r; Token = r.Token;
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", r.Token);
+    }
+
+    public async Task<bool> NeedsSetupAsync() => (await Get<SetupStatus>("api/auth/setup")).NeedsSetup;
+
+    public async Task LoginAsync(string user, string pass)
+    {
+        var res = await _http.PostAsJsonAsync("api/auth/login", new LoginRequest(user, pass), Json);
+        if (res.StatusCode == HttpStatusCode.Unauthorized) throw new ApiException("Usuário ou senha inválidos.");
+        SetSession(await Read<LoginResponse>(res));
+    }
+
+    public async Task SetupAsync(string user, string display, string pass) =>
+        SetSession(await Read<LoginResponse>(await _http.PostAsJsonAsync("api/auth/setup", new SetupRequest(user, display, pass), Json)));
+
+    public Task<DashboardDto> DashboardAsync() => Get<DashboardDto>("api/dashboard");
+    public Task<List<KanbanColumn>> KanbanAsync() => Get<List<KanbanColumn>>("api/kanban");
+    public Task<MoveCardResponse> MoveAsync(Guid id, KanbanStage to, string? reason, bool confirm) => Post<MoveCardResponse>($"api/kanban/{id}/move", new MoveCardRequest(to, reason, confirm));
+    public Task<List<LeadCard>> LeadsAsync(string? q = null, ConsentStatus? consent = null) =>
+        Get<List<LeadCard>>($"api/leads?take=2000{(string.IsNullOrWhiteSpace(q) ? "" : "&q=" + Uri.EscapeDataString(q))}{(consent is null ? "" : "&consent=" + consent)}");
+    public Task<LeadDetail> LeadAsync(Guid id) => Get<LeadDetail>($"api/leads/{id}");
+    public Task<LeadCard> CreateLeadAsync(LeadUpsert l) => Post<LeadCard>("api/leads", l);
+    public Task<OperationResult> UpdateLeadAsync(Guid id, LeadUpsert l) => Send<OperationResult>(HttpMethod.Put, $"api/leads/{id}", l);
+    public Task<OperationResult> ConsentAsync(Guid id, ConsentRequest r) => Post<OperationResult>($"api/leads/{id}/consent", r);
+    public Task<OperationResult> OptOutAsync(Guid id) => Post<OperationResult>($"api/leads/{id}/optout", null);
+    public Task<List<LeadCard>> ConversationsAsync(string? q = null) => Get<List<LeadCard>>("api/conversations" + (string.IsNullOrWhiteSpace(q) ? "" : "?q=" + Uri.EscapeDataString(q)));
+    public Task<List<MessageDto>> MessagesAsync(Guid id) => Get<List<MessageDto>>($"api/conversations/{id}/messages");
+    public Task<OperationResult> TakeOverAsync(Guid id) => Post<OperationResult>($"api/conversations/{id}/takeover", null);
+    public Task<OperationResult> ReturnToAiAsync(Guid id) => Post<OperationResult>($"api/conversations/{id}/return-to-ai", null);
+    public Task<OperationResult> PauseAsync(Guid id, bool pause) => Post<OperationResult>($"api/conversations/{id}/pause?pause={pause}", null);
+    public Task<SendMessageResponse> SendAsync(Guid id, string text) => Post<SendMessageResponse>($"api/conversations/{id}/send", new SendMessageRequest(text));
+    public Task<ImportResponse> ImportPasteAsync(string text, string? source, string? tags) => Post<ImportResponse>("api/import/paste", new PasteImportRequest(text, source, tags));
+    public Task<OperationResult> ImportOptOutsAsync(string text, string reason) => Post<OperationResult>("api/import/optouts", new OptOutImportRequest(text, reason));
+
+    public async Task<ImportResponse> ImportFileAsync(string path, string? source, string? tags)
+    {
+        await using var fs = File.OpenRead(path);
+        using var form = new MultipartFormDataContent { { new StreamContent(fs), "file", Path.GetFileName(path) } };
+        if (source is not null) form.Add(new StringContent(source), "source");
+        if (tags is not null) form.Add(new StringContent(tags), "tags");
+        return await Read<ImportResponse>(await _http.PostAsync("api/import/file", form));
+    }
+
+    public Task<List<PlanDto>> PlansAsync() => Get<List<PlanDto>>("api/plans");
+    public Task<PlanDto> NewPlanVersionAsync(PlanUpsert p) => Post<PlanDto>("api/plans", p);
+    public Task<PlanDto> ApprovePlanAsync(Guid id) => Post<PlanDto>($"api/plans/{id}/approve", null);
+    public Task<List<KnowledgeDto>> KnowledgeAsync() => Get<List<KnowledgeDto>>("api/knowledge");
+    public Task<List<TemplateDto>> TemplatesAsync() => Get<List<TemplateDto>>("api/templates");
+
+    public Task<EvolutionSettingsDto> EvolutionSettingsAsync() => Get<EvolutionSettingsDto>("api/integrations/evolution");
+    public Task<OperationResult> SaveEvolutionAsync(EvolutionSettingsUpdate u) => Send<OperationResult>(HttpMethod.Put, "api/integrations/evolution", u);
+    public Task<EvolutionStatusDto> EvolutionStatusAsync() => Get<EvolutionStatusDto>("api/integrations/evolution/status");
+    public Task<OperationResult> RegisterWebhookAsync() => Post<OperationResult>("api/integrations/evolution/webhook", null);
+    public Task<OperationResult> TestMessageAsync(string phone, string text) => Post<OperationResult>("api/integrations/evolution/test-message", new TestMessageRequest(phone, text));
+    public Task<List<WebhookEventDto>> WebhookEventsAsync() => Get<List<WebhookEventDto>>("api/integrations/evolution/events");
+
+    private async Task<T> Get<T>(string url) => await Read<T>(await Wrap(() => _http.GetAsync(url)));
+    private Task<T> Post<T>(string url, object? body) => Send<T>(HttpMethod.Post, url, body);
+    private async Task<T> Send<T>(HttpMethod m, string url, object? body)
+    {
+        var res = await Wrap(() => _http.SendAsync(new HttpRequestMessage(m, url) { Content = body is null ? null : JsonContent.Create(body, options: Json) }));
+        return await Read<T>(res);
+    }
+
+    private static async Task<HttpResponseMessage> Wrap(Func<Task<HttpResponseMessage>> f)
+    {
+        try { return await f(); }
+        catch (HttpRequestException ex) { throw new ApiException("Servidor do CRM inacessível: " + ex.Message); }
+        catch (TaskCanceledException) { throw new ApiException("Tempo esgotado ao falar com o servidor do CRM."); }
+    }
+
+    private static async Task<T> Read<T>(HttpResponseMessage res)
+    {
+        if (res.StatusCode == HttpStatusCode.Unauthorized) throw new ApiException("Sessão expirada. Entre novamente.");
+        if (res.StatusCode == HttpStatusCode.Forbidden) throw new ApiException("Seu perfil não tem permissão para esta ação.");
+        if (!res.IsSuccessStatusCode)
+        {
+            var body = await res.Content.ReadAsStringAsync();
+            try { var op = JsonSerializer.Deserialize<OperationResult>(body, Json); if (op?.Message is { Length: > 0 }) throw new ApiException(op.Message + (op.Detail is null ? "" : $" ({op.Detail})")); }
+            catch (JsonException) { }
+            throw new ApiException($"Erro {(int)res.StatusCode} do servidor.");
+        }
+        return (await res.Content.ReadFromJsonAsync<T>(Json))!;
+    }
+}

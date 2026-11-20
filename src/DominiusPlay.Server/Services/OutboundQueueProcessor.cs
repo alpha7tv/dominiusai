@@ -1,0 +1,221 @@
+using DominiusPlay.Domain.Contracts;
+using DominiusPlay.Domain.Entities;
+using DominiusPlay.Domain.Enums;
+using DominiusPlay.Domain.Services;
+using DominiusPlay.Infrastructure.Data;
+using DominiusPlay.Infrastructure.Evolution;
+using DominiusPlay.Infrastructure.Security;
+using DominiusPlay.Server.Hubs;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+
+namespace DominiusPlay.Server.Services;
+
+/// <summary>
+/// Processa a fila persistente. Ordem de prioridade: mensagens humanas → respostas → acompanhamentos → abordagens iniciais.
+/// Cada item é reavaliado pelo SendGuard imediatamente antes do envio, dentro do bloqueio da conversa.
+/// </summary>
+public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, EvolutionGateway gateway, SettingsStore settings,
+    ConversationLocks locks, InstanceStatusCache status, IHubContext<CrmHub> hub, TimeProvider clock, ILogger<OutboundQueueProcessor> log)
+{
+    public const int MaxAttempts = 4;
+
+    /// <summary>Processa até <paramref name="max"/> itens prontos. Retorna quantos foram efetivamente enviados.</summary>
+    public async Task<int> ProcessDueAsync(int max = 10, CancellationToken ct = default)
+    {
+        var now = clock.GetUtcNow();
+        var cfg = await gateway.GetConfigAsync(ct);
+        if (cfg is null) return 0;
+
+        var due = await db.OutboundQueue
+            .Where(q => q.Status == MessageStatus.NaFila)
+            .ToListAsync(ct); // filtro de data em memória: compatível com SQLite e PostgreSQL
+        var batch = due.Where(q => q.NotBefore <= now)
+            .OrderBy(q => q.Kind switch { OutboundKind.Humana => 0, OutboundKind.Teste => 0, OutboundKind.Resposta => 1, OutboundKind.Acompanhamento => 2, _ => 3 })
+            .ThenBy(q => q.NotBefore).Take(max).Select(q => q.Id).ToList();
+
+        var sent = 0;
+        foreach (var id in batch)
+        {
+            if (ct.IsCancellationRequested) break;
+            if (await ProcessOneAsync(id, cfg, ct)) sent++;
+        }
+        return sent;
+    }
+
+    public async Task<bool> ProcessOneAsync(Guid itemId, EvolutionConfig cfg, CancellationToken ct)
+    {
+        var item = await db.OutboundQueue.Include(q => q.Lead).FirstOrDefaultAsync(q => q.Id == itemId, ct);
+        if (item?.Lead is null || item.Status != MessageStatus.NaFila) return false;
+        using var _ = await locks.AcquireAsync(item.LeadId, ct);
+        await db.Entry(item).ReloadAsync(ct);
+        await db.Entry(item.Lead).ReloadAsync(ct); // estado mais recente (ex.: humano assumiu há instantes)
+        if (item.Status != MessageStatus.NaFila) return false;
+
+        var now = clock.GetUtcNow();
+        if (item.ExpiresAt is { } exp && exp < now) { Finish(item, MessageStatus.Cancelada, "Item expirado", now); await db.SaveChangesAsync(ct); return false; }
+
+        var ctx = await BuildContextAsync(item, cfg, now, ct);
+        var decision = SendGuard.Evaluate(ctx);
+        if (!decision.Allowed)
+        {
+            if (decision.RetryAt is { } retry) { item.NotBefore = retry; item.LastError = decision.Reason; }
+            else Finish(item, MessageStatus.Cancelada, decision.Reason, now);
+            await db.SaveChangesAsync(ct);
+            return false;
+        }
+
+        item.Status = MessageStatus.Enviando;
+        item.Attempts++;
+        await db.SaveChangesAsync(ct);
+
+        var result = await evolution.SendTextAsync(cfg, item.Lead.Phone, item.Text, ct);
+        if (result.Success)
+        {
+            var msg = new Message
+            {
+                LeadId = item.LeadId, Direction = MessageDirection.Saida, Text = item.Text, ExternalId = result.MessageId, InstanceName = cfg.InstanceName,
+                Author = item.Kind switch { OutboundKind.Humana => MessageAuthor.Atendente, OutboundKind.Teste => MessageAuthor.Sistema, _ => MessageAuthor.Ia },
+                Status = EvolutionWebhookParser.MapStatus(result.Status) ?? MessageStatus.Pendente, SentByUserId = item.RequestedByUserId,
+                CampaignId = item.CampaignId, TemplateVersionId = item.TemplateVersionId, Timestamp = now,
+            };
+            db.Messages.Add(msg);
+            item.MessageId = msg.Id;
+            Finish(item, MessageStatus.EnviadaServidor, null, now);
+            item.Lead.LastInteractionAt = now;
+            item.Lead.LastMessagePreview = item.Text.Length > 120 ? item.Text[..120] + "…" : item.Text;
+            if (item.Lead.Mode == ConversationMode.AguardandoContato && item.Kind == OutboundKind.AbordagemInicial) item.Lead.Mode = ConversationMode.Ia;
+            await db.SaveChangesAsync(ct);
+            await hub.Clients.All.SendAsync(HubEvents.MessageAdded, item.LeadId, ct);
+            return true;
+        }
+
+        // Falha: erros 4xx (exceto 429) não são retentados — número inexistente, payload inválido etc.
+        var retryable = result.HttpStatus is 0 or 429 or >= 500;
+        log.LogWarning("Falha no envio {Item}: {Error}", item.Id, result.Error);
+        if (retryable && item.Attempts < MaxAttempts)
+        {
+            item.Status = MessageStatus.NaFila;
+            item.NotBefore = now.AddSeconds(30 * Math.Pow(2, item.Attempts)); // 60s, 120s, 240s
+            item.LastError = result.Error;
+        }
+        else
+        {
+            Finish(item, MessageStatus.Falhou, result.Error, now);
+            db.Messages.Add(new Message { LeadId = item.LeadId, Direction = MessageDirection.Saida, Author = MessageAuthor.Sistema, Text = item.Text,
+                Status = MessageStatus.Falhou, Error = result.Error, InstanceName = cfg.InstanceName, Timestamp = now, SentByUserId = item.RequestedByUserId });
+        }
+        await db.SaveChangesAsync(ct);
+        await hub.Clients.All.SendAsync(HubEvents.MessageAdded, item.LeadId, ct);
+        return false;
+    }
+
+    private async Task<SendContext> BuildContextAsync(OutboundQueueItem item, EvolutionConfig cfg, DateTimeOffset now, CancellationToken ct)
+    {
+        var lead = item.Lead!;
+        var leadMsgs = await db.Messages.Where(m => m.LeadId == lead.Id).Select(m => new { m.Direction, m.Timestamp, m.Status, m.Author, m.CampaignId }).ToListAsync(ct);
+        var lastInbound = leadMsgs.Where(m => m.Direction == MessageDirection.Entrada).Select(m => (DateTimeOffset?)m.Timestamp).Max();
+        var failures = 0;
+        foreach (var m in leadMsgs.Where(m => m.Direction == MessageDirection.Saida && m.Author != MessageAuthor.Sistema || m.Status == MessageStatus.Falhou).OrderByDescending(m => m.Timestamp))
+        { if (m.Status == MessageStatus.Falhou) failures++; else break; }
+
+        var tz = ResolveTz(await settings.GetAsync(SettingKeys.TimeZone, ct));
+        var localToday = TimeZoneInfo.ConvertTime(now, tz).Date;
+        var dayStart = new DateTimeOffset(localToday, tz.GetUtcOffset(localToday));
+
+        var initialSends = await db.OutboundQueue
+            .Where(q => q.InstanceName == cfg.InstanceName && q.Kind == OutboundKind.AbordagemInicial && q.Status == MessageStatus.EnviadaServidor)
+            .Select(q => q.UpdatedAt).ToListAsync(ct);
+        var automatedToday = await db.OutboundQueue
+            .Where(q => q.InstanceName == cfg.InstanceName && q.Status == MessageStatus.EnviadaServidor
+                        && (q.Kind == OutboundKind.AbordagemInicial || q.Kind == OutboundKind.Acompanhamento))
+            .Select(q => q.UpdatedAt).ToListAsync(ct);
+
+        Campaign? campaign = item.CampaignId is { } cid ? await db.Campaigns.FindAsync([cid], ct) : null;
+        var templateApproved = false;
+        if (item.TemplateVersionId is { } tv)
+            templateApproved = await db.MessageTemplateVersions.AnyAsync(v => v.Id == tv && v.Approval == ApprovalStatus.Aprovado, ct);
+        var alreadyInCampaign = item.CampaignId is not null && leadMsgs.Any(m => m.CampaignId == item.CampaignId && m.Status != MessageStatus.Falhou);
+
+        var minInterval = int.TryParse(await settings.GetAsync(SettingKeys.MinInitialIntervalSeconds, ct), out var s) ? s : 300;
+        if (campaign is not null) minInterval = Math.Max(minInterval, campaign.MinIntervalSeconds);
+        var dailyLimit = int.TryParse(await settings.GetAsync(SettingKeys.DailyLimit, ct), out var dl) ? dl : 50;
+        if (campaign is not null) dailyLimit = Math.Min(dailyLimit, campaign.DailyLimit);
+
+        return new SendContext(lead, item.Kind, now,
+            IsOptedOut: await db.OptOuts.AnyAsync(o => o.Phone == lead.Phone, ct),
+            InstanceConnected: status.State is null || status.IsOpen, // desconhecido → tenta; a API rejeita se desconectada
+            LastInboundAt: lastInbound,
+            LastInitialSendOnInstanceAt: initialSends.Count == 0 ? null : initialSends.Max(),
+            AlreadyContactedInCampaign: alreadyInCampaign,
+            SentTodayOnInstance: automatedToday.Count(t => t >= dayStart),
+            DailyLimit: dailyLimit,
+            MinInitialInterval: TimeSpan.FromSeconds(minInterval),
+            Campaign: campaign, TemplateApproved: templateApproved, ConsecutiveFailures: failures, TimeZone: tz);
+    }
+
+    public static TimeZoneInfo ResolveTz(string? id)
+    {
+        foreach (var candidate in new[] { id, "America/Sao_Paulo", "E. South America Standard Time" })
+        {
+            if (string.IsNullOrEmpty(candidate)) continue;
+            try { return TimeZoneInfo.FindSystemTimeZoneById(candidate); } catch (TimeZoneNotFoundException) { }
+        }
+        return TimeZoneInfo.Utc;
+    }
+
+    private static void Finish(OutboundQueueItem item, MessageStatus st, string? err, DateTimeOffset now)
+    { item.Status = st; item.LastError = err; item.UpdatedAt = now; }
+}
+
+/// <summary>Serviço em segundo plano: roda independente da janela do aplicativo.</summary>
+public class OutboundQueueWorker(IServiceScopeFactory scopes, ILogger<OutboundQueueWorker> log) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        // Após reinicialização, itens que ficaram "Enviando" voltam para a fila e são reavaliados.
+        using (var scope = scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
+            var stuck = await db.OutboundQueue.Where(q => q.Status == MessageStatus.Enviando).ToListAsync(stoppingToken);
+            foreach (var q in stuck) { q.Status = MessageStatus.NaFila; q.LastError = "Recuperado após reinicialização"; }
+            if (stuck.Count > 0) { await db.SaveChangesAsync(stoppingToken); log.LogWarning("{N} item(ns) recuperado(s) após reinicialização", stuck.Count); }
+        }
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = scopes.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<OutboundQueueProcessor>().ProcessDueAsync(10, stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { log.LogError(ex, "Erro no processamento da fila"); }
+            await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken).ContinueWith(_ => { });
+        }
+    }
+}
+
+/// <summary>Monitora o estado da instância da Evolution API a cada 60 segundos.</summary>
+public class InstanceMonitorWorker(IServiceScopeFactory scopes, InstanceStatusCache cache, IHubContext<CrmHub> hub) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = scopes.CreateScope();
+                var cfg = await scope.ServiceProvider.GetRequiredService<EvolutionGateway>().GetConfigAsync(stoppingToken);
+                if (cfg is not null)
+                {
+                    var st = await scope.ServiceProvider.GetRequiredService<IEvolutionApi>().GetConnectionStateAsync(cfg, stoppingToken);
+                    var previous = cache.State;
+                    cache.State = st.Reachable ? st.State : "unreachable";
+                    cache.Error = st.Error; cache.CheckedAt = DateTimeOffset.UtcNow;
+                    if (previous != cache.State) await hub.Clients.All.SendAsync(HubEvents.ConnectionChanged, cache.State, stoppingToken);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { cache.Error = ex.Message; }
+            await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken).ContinueWith(_ => { });
+        }
+    }
+}

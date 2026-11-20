@@ -1,0 +1,86 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:DominiusPlay.Desktop"
+             x:Class="DominiusPlay.Desktop.App"
+             RequestedThemeVariant="Dark">
+  <Application.DataTemplates>
+    <local:ViewLocator />
+  </Application.DataTemplates>
+  <Application.Resources>
+    <!-- Identidade Dominius Play: fundo #070A12 (theme-color do site). Demais tons ajustáveis aqui. -->
+    <SolidColorBrush x:Key="BgBrush" Color="#070A12" />
+    <SolidColorBrush x:Key="SidebarBrush" Color="#0B0F1C" />
+    <SolidColorBrush x:Key="PanelBrush" Color="#111729" />
+    <SolidColorBrush x:Key="CardBrush" Color="#182037" />
+    <SolidColorBrush x:Key="CardHoverBrush" Color="#202A47" />
+    <SolidColorBrush x:Key="BorderBrush" Color="#263152" />
+    <SolidColorBrush x:Key="AccentBrush" Color="#E0B341" />
+    <SolidColorBrush x:Key="AccentSoftBrush" Color="#33E0B341" />
+    <SolidColorBrush x:Key="TextBrush" Color="#E8ECF6" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#8C96B3" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#EF5B5B" />
+    <SolidColorBrush x:Key="OkBrush" Color="#3CC48A" />
+    <SolidColorBrush x:Key="InboundBrush" Color="#1D2640" />
+    <SolidColorBrush x:Key="OutboundBrush" Color="#1E5A47" />
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme />
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{StaticResource BgBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.h1"><Setter Property="FontSize" Value="24" /><Setter Property="FontWeight" Value="Bold" /></Style>
+    <Style Selector="TextBlock.h2"><Setter Property="FontSize" Value="16" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+    <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{StaticResource MutedBrush}" /><Setter Property="FontSize" Value="12" /></Style>
+    <Style Selector="TextBlock.error"><Setter Property="Foreground" Value="{StaticResource DangerBrush}" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+    <Style Selector="TextBlock.ok"><Setter Property="Foreground" Value="{StaticResource OkBrush}" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="16" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource CardBrush}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+    <Style Selector="Border.card:pointerover"><Setter Property="Background" Value="{StaticResource CardHoverBrush}" /></Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+      <Setter Property="Foreground" Value="#111" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#F0C75A" />
+      <Setter Property="Foreground" Value="#111" />
+    </Style>
+    <Style Selector="Button.danger"><Setter Property="Background" Value="#5A2020" /></Style>
+    <Style Selector="Button.nav">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Padding" Value="14,9" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+    </Style>
+    <Style Selector="Button.nav.active">
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    </Style>
+    <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#44E0B341" />
+    </Style>
+    <Style Selector="Border.badge">
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    </Style>
+  </Application.Styles>
+</Application>

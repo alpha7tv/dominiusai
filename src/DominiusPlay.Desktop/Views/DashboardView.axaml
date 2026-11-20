@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+            
+             x:Class="DominiusPlay.Desktop.Views.DashboardView" x:DataType="vm:DashboardViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="28" Spacing="20">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="Atualizar" Command="{Binding RefreshCommand}" />
+        <StackPanel>
+          <TextBlock Text="Dashboard" Classes="h1" />
+          <TextBlock Text="Tentativas, entregas e respostas são contadas separadamente." Classes="muted" />
+        </StackPanel>
+      </DockPanel>
+      <TextBlock Text="{Binding Error}" Classes="error" />
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+      <UniformGrid Columns="4" IsVisible="{Binding Data, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <UniformGrid.Styles>
+          <Style Selector="Border.kpi"><Setter Property="Margin" Value="0,0,12,12" /></Style>
+          <Style Selector="TextBlock.v"><Setter Property="FontSize" Value="28" /><Setter Property="FontWeight" Value="Bold" /></Style>
+        </UniformGrid.Styles>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Leads cadastrados" /><TextBlock Classes="v" Text="{Binding Data.LeadsTotal}" /></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Com autorização válida" /><TextBlock Classes="v" Foreground="{StaticResource OkBrush}" Text="{Binding Data.LeadsWithConsent}" /></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Pendentes de autorização" /><TextBlock Classes="v" Text="{Binding Data.LeadsPendingConsent}" /></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Contatos iniciados" /><TextBlock Classes="v" Text="{Binding Data.ContactsInitiated}" /></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Conversas respondidas" /><TextBlock Classes="v" Text="{Binding Data.ConversationsReplied}" /></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Mensagens enviadas" /><TextBlock Classes="v" Text="{Binding Data.MessagesSent}" /></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Entregues / lidas" /><StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Classes="v" Text="{Binding Data.MessagesDelivered}" /><TextBlock Classes="v" Text="/" /><TextBlock Classes="v" Text="{Binding Data.MessagesRead}" /></StackPanel></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Falhas de envio" /><TextBlock Classes="v" Foreground="{StaticResource DangerBrush}" Text="{Binding Data.MessagesFailed}" /></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Assumidas por humanos" /><TextBlock Classes="v" Text="{Binding Data.HumanTakeovers}" /></StackPanel></Border>
+        <Border Classes="panel kpi"><StackPanel><TextBlock Classes="muted" Text="Na fila de envio" /><TextBlock Classes="v" Text="{Binding Data.QueuePending}" /></StackPanel></Border>
+      </UniformGrid>
+      <Grid ColumnDefinitions="*,16,*">
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Funil (colunas do Kanban)" Classes="h2" />
+            <ItemsControl ItemsSource="{Binding Stages}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:Stat">
+                  <DockPanel Margin="0,4"><TextBlock DockPanel.Dock="Right" Text="{Binding Value}" FontWeight="Bold" /><TextBlock Text="{Binding Key}" /></DockPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+        <Border Grid.Column="2" Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Principais dores identificadas" Classes="h2" />
+            <TextBlock Text="Ainda sem dados." Classes="muted" IsVisible="{Binding !Pains.Count}" />
+            <ItemsControl ItemsSource="{Binding Pains}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:Stat">
+                  <DockPanel Margin="0,4"><TextBlock DockPanel.Dock="Right" Text="{Binding Value}" FontWeight="Bold" /><TextBlock Text="{Binding Key}" /></DockPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

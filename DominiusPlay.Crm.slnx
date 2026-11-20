@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DominiusPlay.Desktop/DominiusPlay.Desktop.csproj" />
+    <Project Path="src/DominiusPlay.Domain/DominiusPlay.Domain.csproj" />
+    <Project Path="src/DominiusPlay.Infrastructure/DominiusPlay.Infrastructure.csproj" />
+    <Project Path="src/DominiusPlay.Server/DominiusPlay.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DominiusPlay.Tests/DominiusPlay.Tests.csproj" />
+  </Folder>
+</Solution>

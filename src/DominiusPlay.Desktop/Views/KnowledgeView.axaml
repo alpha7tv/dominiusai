@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.KnowledgeView" x:DataType="vm:KnowledgeViewModel">
+  <Grid ColumnDefinitions="360,*" Margin="24">
+    <DockPanel Margin="0,0,16,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+        <TextBlock Text="Base de conhecimento" Classes="h1" />
+        <TextBlock Text="Conteúdo extraído do site em revisão. Só itens aprovados alimentam a IA (Fase 5)." Classes="muted" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Error}" Classes="error" />
+      </StackPanel>
+      <ListBox ItemsSource="{Binding Articles}" SelectedItem="{Binding Selected}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="c:KnowledgeDto">
+            <StackPanel Margin="2,4"><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+              <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Text="{Binding Category}" Classes="muted" /><TextBlock Text="{Binding Approval}" Classes="muted" /></StackPanel></StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+    <Border Grid.Column="1" Classes="panel" VerticalAlignment="Top">
+      <StackPanel Spacing="10">
+        <TextBlock Text="{Binding Selected.Title}" Classes="h2" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Selected.Content}" TextWrapping="Wrap" />
+        <TextBlock Text="{Binding Selected.SourceUrl, StringFormat='Fonte: {0}'}" Classes="muted" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

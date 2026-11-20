@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             x:Class="DominiusPlay.Desktop.Views.LoginView" x:DataType="vm:LoginViewModel">
+  <Grid>
+    <Border Classes="panel" Width="420" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="32">
+      <StackPanel Spacing="12">
+        <Image Source="/Assets/dominius.png" Width="64" Height="64" HorizontalAlignment="Center" />
+        <TextBlock Text="DOMINIUS PLAY AI CRM" Classes="h1" HorizontalAlignment="Center" Foreground="{StaticResource AccentBrush}" />
+        <TextBlock Text="Central de prospecção, atendimento e vendas" Classes="muted" HorizontalAlignment="Center" />
+        <TextBlock Text="Servidor do CRM" Classes="muted" Margin="0,12,0,0" />
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Content="Verificar" Command="{Binding CheckServerCommand}" Margin="8,0,0,0" />
+          <TextBox Text="{Binding ServerUrl}" Watermark="http://servidor:5080" />
+        </DockPanel>
+        <TextBlock Text="Usuário" Classes="muted" />
+        <TextBox Text="{Binding UserName}" />
+        <StackPanel IsVisible="{Binding NeedsSetup}" Spacing="6">
+          <TextBlock Text="Nome de exibição" Classes="muted" />
+          <TextBox Text="{Binding DisplayName}" />
+        </StackPanel>
+        <TextBlock Text="Senha" Classes="muted" />
+        <TextBox Text="{Binding Password}" PasswordChar="●" />
+        <Button Classes="primary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Padding="10" Margin="0,8,0,0"
+                Command="{Binding EnterCommand}" IsEnabled="{Binding !IsBusy}">
+          <TextBlock Text="Entrar" />
+        </Button>
+        <TextBlock Text="{Binding Info}" Classes="ok" />
+        <TextBlock Text="{Binding Error}" Classes="error" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

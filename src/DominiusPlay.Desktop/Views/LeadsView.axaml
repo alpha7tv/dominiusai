@@ -1,0 +1,99 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.LeadsView" x:DataType="vm:LeadsViewModel">
+  <Grid ColumnDefinitions="*,380" Margin="24">
+    <DockPanel Grid.Column="0" Margin="0,0,16,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+        <TextBlock Text="Leads" Classes="h1" />
+        <DockPanel>
+          <ComboBox DockPanel.Dock="Right" SelectedIndex="{Binding FilterIndex}" Width="200" Margin="8,0,0,0">
+            <ComboBoxItem>Todos</ComboBoxItem>
+            <ComboBoxItem>Autorizados</ComboBoxItem>
+            <ComboBoxItem>Pendências (sem autorização)</ComboBoxItem>
+            <ComboBoxItem>Descadastrados</ComboBoxItem>
+          </ComboBox>
+          <TextBox Text="{Binding Search}" Watermark="Pesquisar nome, telefone ou tag" />
+        </DockPanel>
+        <StackPanel Orientation="Horizontal" Spacing="4"><TextBlock Text="{Binding Total}" Classes="muted" /><TextBlock Text="leads" Classes="muted" /></StackPanel>
+        <TextBlock Text="{Binding Info}" Classes="ok" />
+        <TextBlock Text="{Binding Error}" Classes="error" />
+      </StackPanel>
+      <Border Classes="panel" Padding="0">
+        <DockPanel>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="2*,1.7*,1.4*,1.4*,1.1*" Margin="12,8">
+            <TextBlock Text="Nome" Classes="muted" /><TextBlock Grid.Column="1" Text="WhatsApp" Classes="muted" />
+            <TextBlock Grid.Column="2" Text="Etapa" Classes="muted" /><TextBlock Grid.Column="3" Text="Autorização" Classes="muted" />
+            <TextBlock Grid.Column="4" Text="Tags" Classes="muted" />
+          </Grid>
+          <ListBox ItemsSource="{Binding Leads}" SelectedItem="{Binding Selected}" Background="Transparent">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:LeadCardVm">
+                <Grid ColumnDefinitions="2*,1.7*,1.4*,1.4*,1.1*">
+                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="1" Text="{Binding Phone}" />
+                  <TextBlock Grid.Column="2" Text="{Binding Stage}" />
+                  <TextBlock Grid.Column="3" Text="{Binding Consent}" />
+                  <TextBlock Grid.Column="4" Text="{Binding Tags}" Classes="muted" TextTrimming="CharacterEllipsis" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+    </DockPanel>
+
+    <ScrollViewer Grid.Column="1">
+      <StackPanel Spacing="12">
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Importar contatos" Classes="h2" />
+            <TextBlock Text="CSV ou XLSX com coluna 'telefone'/'whatsapp'. Colunas opcionais: nome, cidade, uf, origem, tags, consentimento, origem do consentimento." Classes="muted" TextWrapping="Wrap" />
+            <TextBox Text="{Binding ImportSource}" Watermark="Origem (ex.: Feira 2026, Instagram)" />
+            <TextBox Text="{Binding ImportTags}" Watermark="Tags separadas por vírgula" />
+            <Button Content="Escolher arquivo CSV/XLSX…" Click="OnPickFile" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <TextBox Text="{Binding PasteText}" AcceptsReturn="True" Height="110" TextWrapping="Wrap" Watermark="Ou cole aqui: um contato por linha (Nome - telefone)" />
+            <Button Classes="primary" Content="Importar texto colado" Command="{Binding ImportPasteCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <TextBlock Text="{Binding ImportSummary}" TextWrapping="Wrap" FontSize="12" />
+            <ItemsControl ItemsSource="{Binding Problems}" MaxHeight="160">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="c:ImportRowDto">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding Line, StringFormat='Linha {0}:'}" Classes="muted" />
+                    <TextBlock Text="{Binding RawPhone}" FontSize="12" />
+                    <TextBlock Text="{Binding Message}" Classes="muted" />
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock Text="Importar um número não autoriza mensagens. Leads sem consentimento ficam em Pendências e não recebem disparos." Classes="muted" TextWrapping="Wrap" Foreground="{StaticResource AccentBrush}" />
+          </StackPanel>
+        </Border>
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Cadastro manual" Classes="h2" />
+            <TextBox Text="{Binding NewName}" Watermark="Nome" />
+            <TextBox Text="{Binding NewPhone}" Watermark="WhatsApp com DDD" />
+            <TextBox Text="{Binding NewSource}" Watermark="Origem" />
+            <Button Content="Cadastrar lead" Command="{Binding AddManualCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Lead selecionado: autorização" Classes="h2" />
+            <TextBox Text="{Binding ConsentSource}" Watermark="Origem verificável (ex.: formulário do site em 10/11)" />
+            <Button Content="Registrar consentimento" Command="{Binding RegisterConsentCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <Button Classes="danger" Content="Descadastrar (não enviar mais)" Command="{Binding OptOutSelectedCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Lista de bloqueio / descadastro" Classes="h2" />
+            <TextBox Text="{Binding OptOutText}" AcceptsReturn="True" Height="80" Watermark="Um número por linha" />
+            <Button Content="Importar lista de bloqueio" Command="{Binding ImportOptOutsCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

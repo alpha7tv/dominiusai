@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.PlansView" x:DataType="vm:PlansViewModel">
+  <Grid ColumnDefinitions="*,380" Margin="24">
+    <DockPanel Margin="0,0,16,0">
+      <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
+        <TextBlock Text="Planos — tabela comercial" Classes="h1" />
+        <TextBlock Text="A IA só apresenta planos aprovados e dentro da validade. Alterar preço cria uma nova versão em rascunho." Classes="muted" />
+        <TextBlock Text="{Binding Info}" Classes="ok" /><TextBlock Text="{Binding Error}" Classes="error" />
+      </StackPanel>
+      <ListBox ItemsSource="{Binding Plans}" SelectedItem="{Binding Selected}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="c:PlanDto">
+            <Border Classes="card">
+              <DockPanel>
+                <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
+                  <TextBlock Text="{Binding MonthlyPrice, StringFormat='R$ {0:N2}/mês'}" FontSize="18" FontWeight="Bold" Foreground="{StaticResource AccentBrush}" />
+                  <TextBlock Text="{Binding Approval}" Classes="muted" HorizontalAlignment="Right" />
+                </StackPanel>
+                <StackPanel Spacing="2">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{Binding Name}" Classes="h2" />
+                    <TextBlock Text="{Binding Version, StringFormat='v{0}'}" Classes="muted" VerticalAlignment="Center" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding Description}" TextWrapping="Wrap" FontSize="12" />
+                  <TextBlock Text="{Binding Benefits}" TextWrapping="Wrap" Classes="muted" />
+                </StackPanel>
+              </DockPanel>
+            </Border>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+    <Border Grid.Column="1" Classes="panel" VerticalAlignment="Top">
+      <StackPanel Spacing="8">
+        <TextBlock Text="Editar plano selecionado" Classes="h2" />
+        <TextBlock Text="{Binding Selected.Name, FallbackValue='Selecione um plano'}" />
+        <TextBlock Text="Limites e requisitos" Classes="muted" />
+        <TextBlock Text="{Binding Selected.Limits}" TextWrapping="Wrap" FontSize="12" />
+        <TextBlock Text="{Binding Selected.TechnicalRequirements}" TextWrapping="Wrap" FontSize="12" />
+        <TextBlock Text="Preço mensal (R$)" Classes="muted" />
+        <TextBox Text="{Binding EditPrice}" />
+        <TextBlock Text="Benefícios (um por linha)" Classes="muted" />
+        <TextBox Text="{Binding EditBenefits}" AcceptsReturn="True" Height="120" TextWrapping="Wrap" />
+        <Button Content="Criar nova versão (rascunho)" Command="{Binding NewVersionCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        <Button Classes="primary" Content="Aprovar versão selecionada" Command="{Binding ApproveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        <TextBlock Text="Somente administradores podem criar versões e aprovar." Classes="muted" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>
