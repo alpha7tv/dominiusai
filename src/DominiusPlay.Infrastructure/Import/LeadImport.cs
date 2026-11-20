@@ -26,6 +26,9 @@ public sealed class RawLeadRow
     public string? Consent { get; set; }
     public string? ConsentSource { get; set; }
     public string? ConsentDate { get; set; }
+    public string? Company { get; set; }
+    public string? Segment { get; set; }
+    public string? ConsentPurpose { get; set; }
 }
 
 public enum ImportRowOutcome { Created, Updated, DuplicateInFile, Invalid, Blocked }
@@ -51,6 +54,9 @@ public static class LeadFileParser
         ["consentimento"] = "consent", ["autorizacao"] = "consent", ["autorizado"] = "consent", ["optin"] = "consent", ["opt-in"] = "consent",
         ["origem consentimento"] = "consentSource", ["origem do consentimento"] = "consentSource", ["fonte consentimento"] = "consentSource",
         ["data consentimento"] = "consentDate", ["data do consentimento"] = "consentDate",
+        ["empresa"] = "company", ["company"] = "company", ["razao social"] = "company", ["nome fantasia"] = "company", ["loja"] = "company",
+        ["segmento"] = "segment", ["segment"] = "segment", ["ramo"] = "segment", ["nicho"] = "segment", ["perfil"] = "segment",
+        ["finalidade"] = "consentPurpose", ["finalidade do consentimento"] = "consentPurpose", ["finalidade consentimento"] = "consentPurpose",
     };
 
     public static string? MapHeader(string header) =>
@@ -187,6 +193,7 @@ public static class LeadFileParser
         State = c.GetValueOrDefault("state"), Source = c.GetValueOrDefault("source"), Notes = c.GetValueOrDefault("notes"),
         Tags = c.GetValueOrDefault("tags"), Consent = c.GetValueOrDefault("consent"),
         ConsentSource = c.GetValueOrDefault("consentSource"), ConsentDate = c.GetValueOrDefault("consentDate"),
+        Company = c.GetValueOrDefault("company"), Segment = c.GetValueOrDefault("segment"), ConsentPurpose = c.GetValueOrDefault("consentPurpose"),
     };
 }
 
@@ -227,6 +234,7 @@ public class LeadImportService(CrmDbContext db)
                 {
                     if (string.IsNullOrWhiteSpace(lead.Name) && !string.IsNullOrWhiteSpace(row.Name)) lead.Name = row.Name.Trim();
                     lead.City ??= Clean(row.City); lead.State ??= Clean(row.State)?.ToUpperInvariant();
+                    lead.Company ??= Clean(row.Company); lead.Segment ??= Clean(row.Segment); lead.ConsentPurpose ??= Clean(row.ConsentPurpose);
                     if (!string.IsNullOrWhiteSpace(row.Notes)) lead.Notes = string.Join("\n", new[] { lead.Notes, row.Notes.Trim() }.Where(s => !string.IsNullOrWhiteSpace(s)));
                     lead.Tags = MergeTags(lead.Tags, row.Tags, opt.DefaultTags);
                     lead.UpdatedAt = now;
@@ -242,6 +250,7 @@ public class LeadImportService(CrmDbContext db)
                 Name = Clean(row.Name) ?? "", Phone = phone, City = Clean(row.City), State = Clean(row.State)?.ToUpperInvariant(),
                 Source = Clean(row.Source) ?? opt.DefaultSource, Notes = Clean(row.Notes), Tags = MergeTags("", row.Tags, opt.DefaultTags),
                 ImportedAt = now, ImportBatchId = batch.Id,
+                Company = Clean(row.Company), Segment = Clean(row.Segment), ConsentPurpose = Clean(row.ConsentPurpose),
             };
             if (isBlocked) { lead.ConsentStatus = ConsentStatus.Revogado; lead.Stage = KanbanStage.NaoTemInteresse; lead.Mode = ConversationMode.Encerrado; }
             else if (consent is not null) { ApplyConsent(lead, consent, opt.ImportedBy); withConsent++; }

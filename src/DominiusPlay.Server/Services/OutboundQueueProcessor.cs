@@ -16,7 +16,7 @@ namespace DominiusPlay.Server.Services;
 /// Cada item é reavaliado pelo SendGuard imediatamente antes do envio, dentro do bloqueio da conversa.
 /// </summary>
 public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, EvolutionGateway gateway, SettingsStore settings,
-    ConversationLocks locks, InstanceStatusCache status, IHubContext<CrmHub> hub, TimeProvider clock, ILogger<OutboundQueueProcessor> log)
+    ConversationLocks locks, InstanceStatusCache status, IHubContext<CrmHub> hub, ApproachGenerator approaches, TimeProvider clock, ILogger<OutboundQueueProcessor> log)
 {
     public const int MaxAttempts = 4;
 
@@ -40,7 +40,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             if (ct.IsCancellationRequested) break;
             if (await ProcessOneAsync(id, cfg, ct)) sent++;
         }
-        if (batch.Count > 0) await CompleteCampaignsAsync(ct);
+        await CompleteCampaignsAsync(ct); // também quando a fila esvaziou por cancelamento (ex.: contato respondeu)
         return sent;
     }
 
@@ -54,7 +54,45 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task<bool> ProcessOneAsync(Guid itemId, EvolutionConfig cfg, CancellationToken ct)
+    public async Task<bool> ProcessOneAsync(Guid itemId, EvolutionConfig globalCfg, CancellationToken ct)
+    {
+        var sentOk = await ProcessOneCoreAsync(itemId, globalCfg, ct);
+        var campaignId = await db.OutboundQueue.AsNoTracking().Where(q => q.Id == itemId).Select(q => q.CampaignId).FirstOrDefaultAsync(ct);
+        if (campaignId is { } cid) await CheckAutoPauseAsync(cid, ct);
+        return sentOk;
+    }
+
+    /// <summary>
+    /// Condições de pausa da campanha (a partir de 10 envios): taxa de falhas acima do limite ou pico de descadastros.
+    /// A campanha pausada não envia mais nada até alguém revisar e retomar.
+    /// </summary>
+    public async Task CheckAutoPauseAsync(Guid campaignId, CancellationToken ct)
+    {
+        var c = await db.Campaigns.FirstOrDefaultAsync(x => x.Id == campaignId, ct);
+        if (c is null || c.Status != CampaignStatus.Ativa) return;
+        var items = await db.OutboundQueue.AsNoTracking().Where(q => q.CampaignId == campaignId && (q.Status == MessageStatus.EnviadaServidor || q.Status == MessageStatus.Falhou))
+            .Select(q => new { q.Status, q.LeadId }).ToListAsync(ct);
+        var sent = items.Count(i => i.Status == MessageStatus.EnviadaServidor);
+        var failed = items.Count(i => i.Status == MessageStatus.Falhou);
+        string? reason = null;
+        if (sent + failed >= 10 && failed * 100 > c.MaxFailurePercent * (sent + failed))
+            reason = $"Pausa automática: {failed} de {sent + failed} envios falharam (limite {c.MaxFailurePercent}%). Verifique a conexão do WhatsApp e a lista.";
+        else if (sent >= 10)
+        {
+            var leadIds = items.Where(i => i.Status == MessageStatus.EnviadaServidor).Select(i => i.LeadId).Distinct().ToList();
+            var phones = await db.Leads.AsNoTracking().Where(l => leadIds.Contains(l.Id)).Select(l => l.Phone).ToListAsync(ct);
+            var optOuts = await db.OptOuts.AsNoTracking().Where(o => phones.Contains(o.Phone)).CountAsync(ct);
+            if (optOuts * 100 > c.MaxOptOutPercent * leadIds.Count)
+                reason = $"Pausa automática: {optOuts} de {leadIds.Count} contatos pediram descadastro (limite {c.MaxOptOutPercent}%). Revise a lista e a abordagem.";
+        }
+        if (reason is null) return;
+        c.Status = CampaignStatus.Pausada; c.PauseReason = reason; c.UpdatedAt = clock.GetUtcNow();
+        db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "campaign.autopause", EntityType = "Campaign", EntityId = c.Id.ToString(), Details = reason });
+        await db.SaveChangesAsync(ct);
+        log.LogWarning("Campanha {Campaign} pausada: {Reason}", c.Name, reason);
+    }
+
+    private async Task<bool> ProcessOneCoreAsync(Guid itemId, EvolutionConfig globalCfg, CancellationToken ct)
     {
         var item = await db.OutboundQueue.Include(q => q.Lead).FirstOrDefaultAsync(q => q.Id == itemId, ct);
         if (item?.Lead is null || item.Status != MessageStatus.NaFila) return false;
@@ -62,6 +100,8 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
         await db.Entry(item).ReloadAsync(ct);
         await db.Entry(item.Lead).ReloadAsync(ct); // estado mais recente (ex.: humano assumiu há instantes)
         if (item.Status != MessageStatus.NaFila) return false;
+        // cada agente de disparo pode usar a própria instância (mesmo servidor Evolution)
+        var cfg = !string.IsNullOrWhiteSpace(item.InstanceName) && item.InstanceName != globalCfg.InstanceName ? globalCfg with { InstanceName = item.InstanceName } : globalCfg;
 
         var now = clock.GetUtcNow();
         if (item.ExpiresAt is { } exp && exp < now) { Finish(item, MessageStatus.Cancelada, "Item expirado", now); await db.SaveChangesAsync(ct); return false; }
@@ -74,6 +114,20 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             else Finish(item, MessageStatus.Cancelada, decision.Reason, now);
             await db.SaveChangesAsync(ct);
             return false;
+        }
+
+        if (item.Personalize && item.Kind == OutboundKind.AbordagemInicial && ctx.Campaign is { } camp)
+        {
+            var dispatcher = camp.DispatchAgentId is { } did ? await db.AgentProfiles.AsNoTracking().FirstOrDefaultAsync(a => a.Id == did, ct) : null;
+            try
+            {
+                var gen = await approaches.GenerateAsync(item.Lead, item.Text, camp, dispatcher, ct);
+                item.Text = gen.Text; item.PersonalizationNote = gen.Note;
+                if (gen.MaxSimilarity >= ApproachGenerator.SimilarityAlert && gen.Personalized)
+                    db.AuditLogs.Add(new AuditLog { Actor = "IA", Action = "campaign.similarity-alert", EntityType = "Campaign", EntityId = camp.Id.ToString(), Details = gen.Note });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { item.PersonalizationNote = "IA indisponível: enviado o modelo aprovado"; log.LogWarning(ex, "Falha ao personalizar {Item}", item.Id); }
+            item.Personalize = false; // personaliza uma vez só (retentativas reutilizam o mesmo texto)
         }
 
         item.Status = MessageStatus.Enviando;
@@ -97,6 +151,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             item.Lead.LastInteractionAt = now;
             item.Lead.LastMessagePreview = item.Text.Length > 120 ? item.Text[..120] + "…" : item.Text;
             if (item.Lead.Mode == ConversationMode.AguardandoContato && item.Kind == OutboundKind.AbordagemInicial) item.Lead.Mode = ConversationMode.Ia;
+            if (item.Kind == OutboundKind.AbordagemInicial && item.CampaignId is { } origin) item.Lead.OriginCampaignId ??= origin;
             await db.SaveChangesAsync(ct);
             await hub.Clients.All.SendAsync(HubEvents.MessageAdded, item.LeadId, ct);
             return true;
@@ -158,6 +213,22 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
         if (campaign is not null) minInterval = Math.Max(minInterval, campaign.MinIntervalSeconds);
         var dailyLimit = int.TryParse(await settings.GetAsync(SettingKeys.DailyLimit, ct), out var dl) ? dl : 50;
         if (campaign is not null) dailyLimit = Math.Min(dailyLimit, campaign.DailyLimit);
+        if (campaign?.DispatchAgentId is { } agentId && await db.AgentProfiles.AsNoTracking().FirstOrDefaultAsync(a => a.Id == agentId, ct) is { } dispatcher)
+        {
+            dailyLimit = Math.Min(dailyLimit, dispatcher.DailyLimit);
+            minInterval = Math.Max(minInterval, dispatcher.MinIntervalSeconds);
+        }
+
+        // acompanhamento: depende da abordagem inicial desta campanha e para se o contato respondeu
+        DateTimeOffset? initialAt = null; var initialPending = false;
+        if (item.Kind == OutboundKind.Acompanhamento && item.CampaignId is { } fcid)
+        {
+            initialAt = await db.Messages.AsNoTracking().Where(m => m.LeadId == lead.Id && m.CampaignId == fcid && m.Direction == MessageDirection.Saida
+                    && m.Author != MessageAuthor.Sistema && m.Status != MessageStatus.Falhou)
+                .Select(m => m.Timestamp).ToListAsync(ct) is { Count: > 0 } ts ? ts.Min() : (DateTimeOffset?)null;
+            initialPending = await db.OutboundQueue.AnyAsync(q => q.LeadId == lead.Id && q.CampaignId == fcid && q.Kind == OutboundKind.AbordagemInicial
+                && (q.Status == MessageStatus.NaFila || q.Status == MessageStatus.Enviando), ct);
+        }
 
         return new SendContext(lead, item.Kind, now,
             IsOptedOut: await db.OptOuts.AnyAsync(o => o.Phone == lead.Phone, ct),
@@ -168,7 +239,8 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             SentTodayOnInstance: automatedToday.Count(t => t >= dayStart),
             DailyLimit: dailyLimit,
             MinInitialInterval: TimeSpan.FromSeconds(minInterval),
-            Campaign: campaign, TemplateApproved: templateApproved, ConsecutiveFailures: failures, TimeZone: tz);
+            Campaign: campaign, TemplateApproved: templateApproved, ConsecutiveFailures: failures, TimeZone: tz,
+            InitialSentInCampaignAt: initialAt, InitialPendingInCampaign: initialPending);
     }
 
     public static TimeZoneInfo ResolveTz(string? id)

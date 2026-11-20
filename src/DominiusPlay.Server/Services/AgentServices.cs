@@ -185,6 +185,20 @@ Sinal de compra (como pago, quero, forma de pagamento): resuma o plano escolhido
         if (await settings.GetAsync(SeededKey, ct) == "true") return;
         if (!await db.QualificationQuestions.AnyAsync(ct))
             db.QualificationQuestions.AddRange(QualificationScorer.Defaults());
+        if (!await db.MessageTemplates.AnyAsync(t => t.Purpose == "Acompanhamento", ct))
+        {
+            // Acompanhamento em 3 etapas (D+1, D+3, D+7) — fica EM REVISÃO até o administrador aprovar cada versão
+            var t = new MessageTemplate { Name = "Acompanhamento revenda (3 etapas)", Purpose = "Acompanhamento" };
+            string[] steps =
+            [
+                "Oi{, nome}, aqui é {assistente}, assistente virtual da Dominius Play. Passando só para saber se viu minha mensagem: você trabalha com revenda de IPTV? Se não quiser receber mensagens, responda SAIR.",
+                "Oi{, nome}! {assistente} da Dominius Play de novo (assistente virtual). Muita gente que revende reclama de crédito caro e suporte lento. Se isso te interessar, te conto como funciona aqui; se não, sem problema. Responda SAIR para não receber mais.",
+                "Última mensagem para não te incomodar{, nome}: aqui é {assistente}, assistente virtual da Dominius Play. Se um dia quiser conhecer, é só me chamar aqui. Para não receber mais nada, responda SAIR.",
+            ];
+            for (var i = 0; i < steps.Length; i++)
+                t.Versions.Add(new MessageTemplateVersion { TemplateId = t.Id, Version = i + 1, Body = steps[i], Approval = ApprovalStatus.EmRevisao });
+            db.MessageTemplates.Add(t);
+        }
         if (!await db.AgentProfiles.AnyAsync(a => a.Kind == AgentKind.Atendimento, ct))
             db.AgentProfiles.Add(DefaultAttendanceAgent());
         await db.SaveChangesAsync(ct);

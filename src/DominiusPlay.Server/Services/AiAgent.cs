@@ -150,7 +150,7 @@ CONTATO SEM NOME (listas importadas só com o número):
     public async Task<int> TokensUsedTodayAsync(CancellationToken ct = default) =>
         int.TryParse(await settings.GetAsync(SettingKeys.AiUsage(DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime)), ct), out var u) ? u : 0;
 
-    private async Task AddUsageAsync(int tokens, CancellationToken ct)
+    public async Task AddUsageAsync(int tokens, CancellationToken ct)
     {
         if (tokens <= 0) return;
         // escopo separado: não pode salvar junto as alterações do lead que ainda estão pendentes neste contexto

@@ -112,9 +112,19 @@ public sealed record ChangePasswordRequest(string Current, string NewPassword);
 
 public sealed record CampaignDto(Guid Id, string Name, CampaignStatus Status, string InstanceName, string StartTime, string EndTime, string AllowedDays,
     int MaxContacts, int MinIntervalSeconds, int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter, DateTimeOffset? StartedAt,
-    int Queued, int Sent, int Delivered, int Replied, int Failed, int Cancelled, int Eligible);
+    int Queued, int Sent, int Delivered, int Replied, int Failed, int Cancelled, int Eligible,
+    Guid? DispatchAgentId = null, string Segment = "", string Prompt = "", DateTimeOffset? StartDate = null, bool AiPersonalization = false,
+    Guid? FollowUpTemplateId = null, string FollowUpDays = "", int MaxFailurePercent = 20, int MaxOptOutPercent = 10, string? PauseReason = null,
+    int OptOuts = 0, int SimilarityAlerts = 0, int FollowUpsSent = 0);
 public sealed record CampaignUpsert(string Name, string StartTime, string EndTime, string AllowedDays, int MaxContacts, int MinIntervalSeconds,
-    int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter);
+    int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter,
+    Guid? DispatchAgentId = null, string? Segment = null, string? Prompt = null, DateTimeOffset? StartDate = null, bool AiPersonalization = false,
+    Guid? FollowUpTemplateId = null, string? FollowUpDays = null, int MaxFailurePercent = 20, int MaxOptOutPercent = 10);
+
+/// <summary>Resultado da validação da campanha antes de iniciar: problemas impedem o início; avisos não.</summary>
+public sealed record CampaignValidation(bool Ok, int Eligible, IReadOnlyList<string> Problems, IReadOnlyList<string> Warnings);
+/// <summary>Prévia de abordagem personalizada para um contato elegível (nada é salvo nem enviado).</summary>
+public sealed record ApproachPreview(string Contact, string Text, string Note);
 
 public sealed record ReportDto(DateTimeOffset From, DateTimeOffset To, int NewLeads, int Contacted, int Replied, int Closed, int Lost,
     IReadOnlyList<ReportRow> Funnel, IReadOnlyList<ReportRow> ClosedByPlan, IReadOnlyList<ReportRow> LossReasons, IReadOnlyList<ReportRow> Pains,

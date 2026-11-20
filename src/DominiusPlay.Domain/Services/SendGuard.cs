@@ -19,7 +19,11 @@ public sealed record SendContext(
     Campaign? Campaign,
     bool TemplateApproved,
     int ConsecutiveFailures,
-    TimeZoneInfo TimeZone);
+    TimeZoneInfo TimeZone,
+    /// <summary>Quando a abordagem inicial desta campanha foi enviada ao contato (acompanhamentos dependem dela).</summary>
+    DateTimeOffset? InitialSentInCampaignAt = null,
+    /// <summary>A abordagem inicial desta campanha ainda está na fila para o contato.</summary>
+    bool InitialPendingInCampaign = false);
 
 public sealed record GuardResult(bool Allowed, string? Reason, DateTimeOffset? RetryAt = null)
 {
@@ -69,12 +73,21 @@ public static class SendGuard
                     return GuardResult.Block("Sem consentimento válido e verificável para mensagens comerciais");
                 if (c.Kind == OutboundKind.AbordagemInicial && c.AlreadyContactedInCampaign)
                     return GuardResult.Block("Contato inicial já realizado nesta campanha");
+                if (c.Kind == OutboundKind.Acompanhamento && c.Campaign is not null)
+                {
+                    if (c.InitialSentInCampaignAt is not { } initial)
+                        return c.InitialPendingInCampaign ? GuardResult.Defer("Aguardando a abordagem inicial ser enviada", c.Now.AddMinutes(30))
+                            : GuardResult.Block("Abordagem inicial não foi enviada — acompanhamento cancelado");
+                    if (c.LastInboundAt is { } replied && replied >= initial)
+                        return GuardResult.Block("Contato respondeu — acompanhamento automático interrompido");
+                }
                 if (!inWindow && !c.TemplateApproved)
                     return GuardResult.Block("Fora da janela de 24h: exige modelo de mensagem aprovado");
                 if (c.Campaign is { } camp)
                 {
                     if (camp.Status == CampaignStatus.Pausada) return GuardResult.Defer("Campanha pausada", c.Now.AddMinutes(5));
                     if (camp.Status != CampaignStatus.Ativa) return GuardResult.Block($"Campanha não está ativa ({camp.Status})");
+                    if (camp.StartDate is { } sd && sd > c.Now) return GuardResult.Defer("Campanha ainda não começou", sd);
                     var next = CampaignWindow.NextAllowed(camp, c.Now, c.TimeZone);
                     if (next > c.Now) return GuardResult.Defer("Fora do horário/dia permitido da campanha", next);
                 }

@@ -89,6 +89,7 @@ builder.Services.AddScoped<AiAgent>();
 builder.Services.AddScoped<AiResponder>();
 builder.Services.AddScoped<CampaignService>();
 builder.Services.AddScoped<AgentResolver>();
+builder.Services.AddScoped<ApproachGenerator>();
 builder.Services.AddScoped<HandoffService>();
 builder.Services.AddScoped<IntentRouter>();
 builder.Services.AddSingleton<AgentTestSessions>();

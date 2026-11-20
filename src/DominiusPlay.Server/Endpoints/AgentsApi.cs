@@ -175,6 +175,11 @@ public static partial class AgentsApi
             return Results.Ok(new OperationResult(true, "Pergunta excluída."));
         }).RequireAuthorization(Api.AdminPolicy);
 
+        // ---------- campanhas: validar e pré-visualizar abordagens ----------
+        api.MapPost("/campaigns/{id:guid}/validate", async (Guid id, CrmDbContext db, CampaignService svc) =>
+            await db.Campaigns.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id) is { } c ? Results.Ok(await svc.ValidateAsync(c)) : Results.NotFound());
+        api.MapPost("/campaigns/{id:guid}/preview", async (Guid id, CampaignService svc) => Results.Ok(await svc.PreviewAsync(id)));
+
         // ---------- transferência manual para humano ----------
         api.MapPost("/leads/{id:guid}/handoff", async (Guid id, HandoffRequest r, CrmDbContext db, ConversationLocks locks, HandoffService handoff, IHubContext<CrmHub> hub, ClaimsPrincipal user) =>
         {

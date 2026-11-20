@@ -138,6 +138,9 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
             else
             {
                 if (lead.Mode == ConversationMode.AguardandoContato) lead.Mode = ConversationMode.Ia;
+                // respondeu = acompanhamentos automáticos pendentes são interrompidos (o SendGuard também bloqueia)
+                var followUps = await db.OutboundQueue.Where(q => q.LeadId == lead.Id && q.Kind == OutboundKind.Acompanhamento && q.Status == MessageStatus.NaFila).ToListAsync(ct);
+                foreach (var q in followUps) { q.Status = MessageStatus.Cancelada; q.LastError = "Contato respondeu"; q.UpdatedAt = clock.GetUtcNow(); }
                 // intenção com fluxo próprio (ex.: pedido de humano transfere na hora, sem depender da IA)
                 handedTo = await intents.RouteAsync(lead, message.Intent, ct);
             }

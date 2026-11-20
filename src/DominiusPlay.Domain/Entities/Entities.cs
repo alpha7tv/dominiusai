@@ -135,6 +135,12 @@ public class OutboundQueueItem : Entity
     public Guid? MessageId { get; set; }
     /// <summary>Chave de idempotência — impede envios duplicados do mesmo item.</summary>
     public string IdempotencyKey { get; set; } = Guid.NewGuid().ToString("N");
+    /// <summary>Abordagem a personalizar com IA logo antes do envio (o texto atual é o modelo aprovado, usado se a IA falhar).</summary>
+    public bool Personalize { get; set; }
+    /// <summary>Resultado da personalização / alerta de similaridade.</summary>
+    public string? PersonalizationNote { get; set; }
+    /// <summary>Etapa do acompanhamento (1, 2, 3…); 0 = não é acompanhamento.</summary>
+    public int FollowUpStep { get; set; }
 }
 
 /// <summary>Evento de webhook recebido. EventKey é único → deduplicação.</summary>
@@ -238,6 +244,22 @@ public class Campaign : Entity
     public DateTimeOffset? StartedAt { get; set; }
     /// <summary>Agente de disparo responsável (v0.4). Nulo = configuração global.</summary>
     public Guid? DispatchAgentId { get; set; }
+    /// <summary>Somente leads deste segmento comercial (vazio = todos).</summary>
+    public string Segment { get; set; } = "";
+    /// <summary>Instruções da campanha para a IA que personaliza a abordagem.</summary>
+    public string Prompt { get; set; } = "";
+    /// <summary>Primeiro dia em que a campanha pode enviar (nulo = assim que iniciada).</summary>
+    public DateTimeOffset? StartDate { get; set; }
+    /// <summary>Personaliza a abordagem com IA a partir do modelo aprovado (desligado no modo Cloud API oficial).</summary>
+    public bool AiPersonalization { get; set; }
+    /// <summary>Modelo de mensagem (finalidade Acompanhamento) cujas versões aprovadas são as etapas do follow-up.</summary>
+    public Guid? FollowUpTemplateId { get; set; }
+    /// <summary>Dias após a abordagem para cada etapa de acompanhamento, ex.: "1,3,7". Vazio = sem acompanhamento.</summary>
+    public string FollowUpDays { get; set; } = "";
+    /// <summary>Condições de pausa automática: % de falhas e % de descadastros (a partir de 10 envios).</summary>
+    public int MaxFailurePercent { get; set; } = 20;
+    public int MaxOptOutPercent { get; set; } = 10;
+    public string? PauseReason { get; set; }
 }
 
 public class User : Entity
