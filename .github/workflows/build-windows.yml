@@ -52,7 +52,19 @@ jobs:
             Start-Sleep -Seconds 2
             try { $h = Invoke-RestMethod http://127.0.0.1:5080/health; $ok = $h.status -eq "ok" } catch { }
           }
-          if (-not $ok) { Get-Service DominiusPlayCRM | Format-List; throw "Serviço instalado não respondeu /health" }
+          if (-not $ok) {
+            Get-Service DominiusPlayCRM | Format-List
+            Write-Host "--- Eventos do Windows (Application) ---"
+            Get-WinEvent -FilterHashtable @{ LogName = "Application"; StartTime = (Get-Date).AddMinutes(-10) } -ErrorAction SilentlyContinue |
+              Where-Object { $_.ProviderName -match "\.NET Runtime|Application Error|DominiusPlay" } | Select-Object -First 5 | Format-List TimeCreated, ProviderName, Message
+            Write-Host "--- Execução direta do servidor (15 s) ---"
+            $out = "$env:RUNNER_TEMP\server-out.txt"
+            $proc = Start-Process "$dir\server\DominiusPlay.Server.exe" -WorkingDirectory "$dir\server" -RedirectStandardOutput $out -RedirectStandardError "$out.err" -PassThru
+            Start-Sleep -Seconds 15
+            if (-not $proc.HasExited) { Stop-Process $proc -Force }
+            Get-Content $out, "$out.err" -ErrorAction SilentlyContinue | Select-Object -Last 60
+            throw "Serviço instalado não respondeu /health"
+          }
           $setupStatus = Invoke-RestMethod http://127.0.0.1:5080/api/auth/setup
           if (-not $setupStatus.needsSetup) { throw "Banco novo deveria pedir configuração inicial" }
           if (-not (Test-Path "$env:ProgramData\DominiusPlay\CRM\crm.db")) { throw "Banco não criado em ProgramData" }
@@ -64,9 +76,10 @@ jobs:
           Write-Host "Instalação e servidor verificados no Windows."
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: DominiusPlayCRM-Setup
           path: |
             artifacts/installer/*.exe
             artifacts/testes/*.trx
-          if-no-files-found: error
+          if-no-files-found: warn

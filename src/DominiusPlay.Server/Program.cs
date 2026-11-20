@@ -13,8 +13,14 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
-var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseWindowsService(o => o.ServiceName = "DominiusPlayCRM"); // roda como Serviço do Windows quando instalado assim
+// Como Serviço do Windows o diretório atual é C:\Windows\System32: a raiz do conteúdo precisa ser a pasta do executável
+// já na criação do builder (WebApplicationBuilder não permite trocar depois, o que derrubava o serviço na partida).
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService() ? AppContext.BaseDirectory : null,
+});
+builder.Services.AddWindowsService(o => o.ServiceName = "DominiusPlayCRM"); // roda como Serviço do Windows quando instalado assim
 
 // Diretório de dados (banco SQLite, chaves de criptografia, logs)
 var dataDir = builder.Configuration["DataDirectory"] is { Length: > 0 } d ? d
