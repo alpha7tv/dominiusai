@@ -17,6 +17,11 @@ public static class KanbanRules
         KanbanStage.NegocioFechado => "Negócio fechado",
         KanbanStage.EmDuvidas => "Em dúvidas",
         KanbanStage.NaoTemInteresse => "Não tem interesse",
+        KanbanStage.AbordagemRealizada => "Abordagem realizada",
+        KanbanStage.Respondeu => "Respondeu",
+        KanbanStage.EmAtendimento => "Em atendimento",
+        KanbanStage.Qualificado => "Qualificado",
+        KanbanStage.PropostaEnviada => "Proposta enviada",
         _ => s.ToString(),
     };
 
@@ -47,6 +52,28 @@ public static class KanbanRules
             return new(false, true, "Conversa em atendimento humano: mudança fica como sugestão");
         return new(true, false, null);
     }
+
+    /// <summary>Pontuação mínima para o Sistema mover o card para "Qualificado".</summary>
+    public const int QualifiedScore = 60;
+
+    /// <summary>
+    /// Movimentação automática do funil (sempre pelo Sistema, com registro em StageChanges). Só avança: nunca tira o card
+    /// de uma etapa posterior nem de "Negócio fechado"/"Não tem interesse". Retorna a mudança aplicada ou null.
+    /// </summary>
+    public static StageChange? AutoAdvance(Lead lead, KanbanStage to, string reason)
+    {
+        if (lead.Stage == to || !AutoFrom(to).Contains(lead.Stage)) return null;
+        return Apply(lead, to, "Sistema", reason);
+    }
+
+    private static KanbanStage[] AutoFrom(KanbanStage to) => to switch
+    {
+        KanbanStage.AbordagemRealizada => [KanbanStage.PrimeiroContato],
+        KanbanStage.Respondeu => [KanbanStage.AbordagemRealizada],
+        KanbanStage.EmAtendimento => [KanbanStage.PrimeiroContato, KanbanStage.AbordagemRealizada, KanbanStage.Respondeu],
+        KanbanStage.Qualificado => [KanbanStage.PrimeiroContato, KanbanStage.AbordagemRealizada, KanbanStage.Respondeu, KanbanStage.EmAtendimento, KanbanStage.EmDuvidas],
+        _ => [],
+    };
 
     public static StageChange Apply(Lead lead, KanbanStage to, string changedBy, string? reason)
     {

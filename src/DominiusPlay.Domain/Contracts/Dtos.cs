@@ -12,7 +12,8 @@ public sealed record SetupStatus(bool NeedsSetup);
 public sealed record LeadCard(
     Guid Id, string Name, string Phone, string PhoneFormatted, KanbanStage Stage, ConversationMode Mode, Priority Priority,
     string? InterestPlanCode, int? ActiveClients, PainCategory MainPain, string? LastMessagePreview, DateTimeOffset? LastInteractionAt,
-    string? AssignedTo, string? NextAction, ConsentStatus Consent, string Tags, KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null);
+    string? AssignedTo, string? NextAction, ConsentStatus Consent, string Tags, KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null,
+    string? Company = null, string? AgentName = null, string? CampaignName = null, int? Score = null);
 
 public sealed record LeadDetail(
     Guid Id, string Name, string Phone, string PhoneFormatted, string? City, string? State, string? Source, string? Notes, string Tags,
@@ -56,6 +57,7 @@ public sealed record MoveCardRequest(KanbanStage To, string? Reason, bool Commer
 public sealed record MoveCardResponse(bool Applied, bool IsSuggestion, string? Message);
 
 public sealed record KanbanColumn(KanbanStage Stage, string Title, IReadOnlyList<LeadCard> Cards);
+public sealed record KanbanStageDto(KanbanStage Stage, string Title, int Order, bool Visible, string DefaultTitle);
 
 public sealed record MessageDto(Guid Id, MessageDirection Direction, MessageAuthor Author, string Text, MessageStatus Status,
     DateTimeOffset Timestamp, string? Error, string? SentBy);

@@ -241,7 +241,7 @@ public class ServerTests
         var r2 = await (await c.PostAsJsonAsync($"/api/kanban/{lead.Id}/move", new MoveCardRequest(KanbanStage.EmNegociacao, "pediu proposta", false))).Content.ReadFromJsonAsync<MoveCardResponse>();
         Assert.True(r2!.Applied);
         var board = await c.GetFromJsonAsync<List<KanbanColumn>>("/api/kanban");
-        Assert.Equal(6, board!.Count);
+        Assert.Equal(10, board!.Count); // 9 etapas do funil + "Em fase de teste"; "Em dúvidas" oculta sem cards
         Assert.Equal(lead.Id, board.Single(b => b.Stage == KanbanStage.EmNegociacao).Cards.Single().Id);
         var detail = await c.GetFromJsonAsync<LeadDetail>($"/api/leads/{lead.Id}");
         Assert.Single(detail!.StageHistory);

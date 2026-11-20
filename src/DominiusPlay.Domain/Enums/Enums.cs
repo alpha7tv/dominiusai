@@ -9,6 +9,12 @@ public enum KanbanStage
     NegocioFechado = 4,
     EmDuvidas = 5,
     NaoTemInteresse = 6,
+    // v0.4: funil de prospecção (etapas configuráveis em Configurações → Kanban)
+    AbordagemRealizada = 7,
+    Respondeu = 8,
+    EmAtendimento = 9,
+    Qualificado = 10,
+    PropostaEnviada = 11,
 }
 
 /// <summary>Estado operacional do lead/conversa, separado da coluna do Kanban.</summary>

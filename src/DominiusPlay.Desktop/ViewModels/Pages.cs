@@ -30,6 +30,9 @@ public partial class LeadCardVm(LeadCard c) : ObservableObject
     public string Consent => Ui.Consent(Model.Consent);
     public string Stage => Ui.Stage(Model.Stage);
     public string Tags => Model.Tags;
+    /// <summary>Empresa · campanha de origem · agente responsável (o que existir).</summary>
+    public string Origin => string.Join(" · ", new[] { Model.Company, Model.CampaignName is { } c ? "Campanha: " + c : null, Model.AgentName is { } a ? "Agente: " + a : null }.Where(x => !string.IsNullOrWhiteSpace(x)));
+    public string Score => Model.Score is { } s and > 0 ? $"Qualificação {s}/100" : "";
     public bool HasSuggestion => Model.SuggestedStage is not null;
     public string SuggestionText => Model.SuggestedStage is { } st ? $"IA sugere: {Ui.Stage(st)}" + (Model.SuggestedStageReason is { Length: > 0 } r ? $" ({r})" : "") : "";
 }
@@ -51,6 +54,14 @@ public partial class DashboardViewModel(AppSession s) : ViewModelBase
         Stages.Clear(); foreach (var kv in Data.ByStage) Stages.Add(new(kv.Key, kv.Value));
         Pains.Clear(); foreach (var kv in Data.TopPains) Pains.Add(new(kv.Key, kv.Value));
     });
+}
+
+public partial class StageRowVm : ObservableObject
+{
+    public KanbanStage Stage { get; init; }
+    public string DefaultTitle { get; init; } = "";
+    [ObservableProperty] private string _title = "";
+    [ObservableProperty] private bool _visible = true;
 }
 
 public partial class KanbanColumnVm : ObservableObject
@@ -82,6 +93,36 @@ public partial class KanbanViewModel : ViewModelBase
     public Task OpenChatAsync(Guid leadId) => Chat.OpenAsync(leadId);
 
     public override Task OnActivatedAsync() => Refresh();
+
+    // ---------- etapas configuráveis (administrador) ----------
+    public ObservableCollection<StageRowVm> StageRows { get; } = new();
+    [ObservableProperty] private bool _showStages;
+    [ObservableProperty] private StageRowVm? _selectedStage;
+
+    [RelayCommand]
+    private Task ToggleStages() => Run(async () =>
+    {
+        ShowStages = !ShowStages;
+        if (!ShowStages) return;
+        StageRows.Clear();
+        foreach (var st in await _s.Api.KanbanStagesAsync())
+            StageRows.Add(new StageRowVm { Stage = st.Stage, DefaultTitle = st.DefaultTitle, Title = st.Title, Visible = st.Visible });
+    });
+
+    [RelayCommand]
+    private void StageUp(StageRowVm? r) { if (r is not null && StageRows.IndexOf(r) is var i and > 0) StageRows.Move(i, i - 1); }
+
+    [RelayCommand]
+    private void StageDown(StageRowVm? r) { if (r is not null && StageRows.IndexOf(r) is var i && i >= 0 && i < StageRows.Count - 1) StageRows.Move(i, i + 1); }
+
+    [RelayCommand]
+    private Task SaveStages() => Run(async () =>
+    {
+        var r = await _s.Api.SaveKanbanStagesAsync(StageRows.Select((x, i) => new KanbanStageDto(x.Stage, x.Title, i + 1, x.Visible, x.DefaultTitle)).ToList());
+        Info = r.Message;
+        ShowStages = false;
+        await RefreshCore();
+    });
 
     [RelayCommand]
     public Task Refresh() => Run(async () =>

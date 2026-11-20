@@ -163,11 +163,13 @@ public class DispatchTests
 
         // enquanto o contato não responde, o Atendimento não fala (só o Disparo tem a palavra)
         var leadId = await f.WithDb(db => db.Leads.Select(l => l.Id).SingleAsync());
+        Assert.Equal(KanbanStage.AbordagemRealizada, await f.WithDb(db => db.Leads.Select(l => l.Stage).SingleAsync()));
         using (var scope = f.Services.CreateScope())
             Assert.Equal(DominiusPlay.Server.Services.AiReplyOutcome.Skipped,
                 await scope.ServiceProvider.GetRequiredService<DominiusPlay.Server.Services.AiResponder>().RespondAsync(leadId));
 
         await Inbound(f, "5511987650020", "R1", "Oi, como funciona?");
+        Assert.Equal(KanbanStage.Respondeu, await f.WithDb(db => db.Leads.Select(l => l.Stage).SingleAsync()));
         f.Ai.Script.Enqueue(_ => FakeAi.Text("Oi, Ana! Aqui é o Bruno. Você já revende hoje?"));
         using (var scope = f.Services.CreateScope())
             Assert.Equal(DominiusPlay.Server.Services.AiReplyOutcome.Replied,
@@ -178,6 +180,12 @@ public class DispatchTests
         Assert.Contains("Revenda Sul", req.System);
         Assert.Contains("Bruno", req.System);
         Assert.Equal(ConversationMode.Ia, await f.WithDb(db => db.Leads.Select(l => l.Mode).SingleAsync()));
+        Assert.Equal(KanbanStage.EmAtendimento, await f.WithDb(db => db.Leads.Select(l => l.Stage).SingleAsync()));
+        // movimentações automáticas auditadas, com a campanha e o agente no card
+        Assert.Equal(3, await f.WithDb(db => db.StageChanges.CountAsync(sc => sc.ChangedBy == "Sistema")));
+        var card = (await c.GetFromJsonAsync<List<KanbanColumn>>("/api/kanban"))!.Single(k => k.Stage == KanbanStage.EmAtendimento).Cards.Single();
+        Assert.Equal("Revenda Sul", card.CampaignName);
+        Assert.Equal("Fechamento revenda", card.AgentName);
     }
 
     [Fact]

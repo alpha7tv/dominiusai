@@ -47,6 +47,8 @@ public class ApiClient
 
     public Task<DashboardDto> DashboardAsync() => Get<DashboardDto>("api/dashboard");
     public Task<List<KanbanColumn>> KanbanAsync() => Get<List<KanbanColumn>>("api/kanban");
+    public Task<List<KanbanStageDto>> KanbanStagesAsync() => Get<List<KanbanStageDto>>("api/kanban/stages");
+    public Task<OperationResult> SaveKanbanStagesAsync(List<KanbanStageDto> s) => Send<OperationResult>(HttpMethod.Put, "api/kanban/stages", s);
     public Task<MoveCardResponse> MoveAsync(Guid id, KanbanStage to, string? reason, bool confirm) => Post<MoveCardResponse>($"api/kanban/{id}/move", new MoveCardRequest(to, reason, confirm));
     public Task<List<LeadCard>> LeadsAsync(string? q = null, ConsentStatus? consent = null) =>
         Get<List<LeadCard>>($"api/leads?take=2000{(string.IsNullOrWhiteSpace(q) ? "" : "&q=" + Uri.EscapeDataString(q))}{(consent is null ? "" : "&consent=" + consent)}");

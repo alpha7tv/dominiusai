@@ -152,6 +152,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             item.Lead.LastMessagePreview = item.Text.Length > 120 ? item.Text[..120] + "…" : item.Text;
             if (item.Kind is OutboundKind.AbordagemInicial or OutboundKind.Acompanhamento) ConversationStateMachine.Apply(item.Lead, ConversationTrigger.AbordagemEnviada);
             if (item.Kind == OutboundKind.AbordagemInicial && item.CampaignId is { } origin) item.Lead.OriginCampaignId ??= origin;
+            if (item.Kind == OutboundKind.AbordagemInicial) KanbanRules.AutoAdvance(item.Lead, KanbanStage.AbordagemRealizada, "Abordagem da campanha enviada");
             await db.SaveChangesAsync(ct);
             await hub.Clients.All.SendAsync(HubEvents.MessageAdded, item.LeadId, ct);
             return true;

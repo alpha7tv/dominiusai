@@ -240,12 +240,39 @@ public static class Api
         });
 
         // ---------- Kanban ----------
-        api.MapGet("/kanban", async (CrmDbContext db) =>
+        api.MapGet("/kanban", async (CrmDbContext db, SettingsStore settings, Guid? agentId, Guid? campaignId) =>
         {
-            var leads = await db.Leads.Include(l => l.AssignedUser).AsNoTracking().ToListAsync();
-            return Enum.GetValues<KanbanStage>().Select(s => new KanbanColumn(s, KanbanRules.Title(s),
-                leads.Where(l => l.Stage == s).OrderByDescending(l => l.Priority).ThenByDescending(l => l.LastInteractionAt ?? l.CreatedAt).Select(l => l.ToCard()).ToList()));
+            var q = db.Leads.Include(l => l.AssignedUser).AsNoTracking();
+            if (agentId is { } aid) q = q.Where(l => l.AttendanceAgentId == aid);
+            if (campaignId is { } cid) q = q.Where(l => l.OriginCampaignId == cid);
+            var leads = await q.ToListAsync();
+            var agents = await db.AgentProfiles.AsNoTracking().ToDictionaryAsync(a => a.Id, a => a.Name);
+            var camps = await db.Campaigns.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name);
+            var stages = KanbanBoardConfig.Parse(await settings.GetAsync(KanbanBoardConfig.SettingKey));
+            return stages.Where(s => s.Visible || leads.Any(l => l.Stage == s.Stage)).Select(s => new KanbanColumn(s.Stage, s.Title,
+                leads.Where(l => l.Stage == s.Stage).OrderByDescending(l => l.Priority).ThenByDescending(l => l.LastInteractionAt ?? l.CreatedAt)
+                    .Select(l => l.ToCard() with
+                    {
+                        AgentName = l.AttendanceAgentId is { } a && agents.TryGetValue(a, out var an) ? an : null,
+                        CampaignName = l.OriginCampaignId is { } c && camps.TryGetValue(c, out var cn) ? cn : null,
+                    }).ToList()));
         });
+
+        api.MapGet("/kanban/stages", async (SettingsStore settings) =>
+            KanbanBoardConfig.Parse(await settings.GetAsync(KanbanBoardConfig.SettingKey)).Select(s => new KanbanStageDto(s.Stage, s.Title, s.Order, s.Visible, KanbanRules.Title(s.Stage))));
+
+        api.MapPut("/kanban/stages", async (List<KanbanStageDto> r, SettingsStore settings, CrmDbContext db, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
+        {
+            var merged = KanbanBoardConfig.Parse(System.Text.Json.JsonSerializer.Serialize(r.Select(x => new KanbanStageConfig(x.Stage, x.Title ?? "", x.Order, x.Visible))));
+            if (KanbanBoardConfig.Validate(r.Select(x => new KanbanStageConfig(x.Stage, x.Title ?? "", x.Order, x.Visible)).ToList()) is { } err)
+                return Results.BadRequest(new OperationResult(false, err));
+            await settings.SetAsync(KanbanBoardConfig.SettingKey, System.Text.Json.JsonSerializer.Serialize(merged));
+            db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "kanban.stages", EntityType = "Setting", EntityId = KanbanBoardConfig.SettingKey,
+                Details = string.Join(" | ", merged.Where(s => s.Visible).Select(s => s.Title)) });
+            await db.SaveChangesAsync();
+            await hub.Clients.All.SendAsync(HubEvents.LeadChanged, Guid.Empty);
+            return Results.Ok(new OperationResult(true, "Etapas do Kanban salvas."));
+        }).RequireAuthorization(AdminPolicy);
 
         api.MapPost("/kanban/{id:guid}/move", async (Guid id, MoveCardRequest r, CrmDbContext db, ConversationLocks locks, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
         {

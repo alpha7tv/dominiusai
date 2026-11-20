@@ -159,13 +159,16 @@ public class UiTests
         await main.NavigateCommand.ExecuteAsync("kanban");
         await Pump();
         var kanban = Assert.IsType<KanbanViewModel>(main.Current);
-        Assert.Equal(6, kanban.Columns.Count);
-        Assert.Equal(["Primeiro contato", "Em fase de teste", "Em negociação", "Negócio fechado", "Em dúvidas", "Não tem interesse"], kanban.Columns.Select(c => c.Title));
+        Assert.Equal(11, kanban.Columns.Count); // "Em dúvidas" aparece porque tem card
+        Assert.Equal(["Primeiro contato", "Abordagem realizada", "Respondeu", "Em atendimento", "Qualificado", "Em fase de teste", "Proposta enviada",
+            "Em negociação", "Negócio fechado", "Não tem interesse", "Em dúvidas"], kanban.Columns.Select(c => c.Title));
         Shot(win, "02-kanban");
 
         // clique no card abre a conversa do WhatsApp em popup, sem sair do Kanban
         var joaoCard = kanban.Columns.SelectMany(c => c.Cards).First(c => c.Name == "João (exemplo)");
         var cardBorder = win.GetVisualDescendants().OfType<Border>().First(b => b.Name == "Card" && b.Tag is Guid g && g == joaoCard.Id);
+        cardBorder.BringIntoView(); // quadro com rolagem horizontal (11 etapas)
+        await Pump(200);
         var at = cardBorder.TranslatePoint(new Point(20, 20), win)!.Value;
         win.MouseDown(at, MouseButton.Left);
         win.MouseUp(at, MouseButton.Left);

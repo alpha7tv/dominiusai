@@ -192,6 +192,11 @@ public static class Ui
         KanbanStage.EmNegociacao => "#8B6FD6",
         KanbanStage.NegocioFechado => "#2E9E6E",
         KanbanStage.EmDuvidas => "#D9822B",
+        KanbanStage.AbordagemRealizada => "#4E9BB8",
+        KanbanStage.Respondeu => "#3FA7A0",
+        KanbanStage.EmAtendimento => "#6C8EE0",
+        KanbanStage.Qualificado => "#B58BE0",
+        KanbanStage.PropostaEnviada => "#D6A84E",
         _ => "#7A8194",
     };
 

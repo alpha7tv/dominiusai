@@ -102,6 +102,8 @@ public class AiResponder(CrmDbContext db, AiAgent agent, ConversationLocks locks
         lead.UpdatedAt = clock.GetUtcNow();
         lead.ConcurrencyStamp = Guid.NewGuid();
         if (profile is not null && lead.AttendanceAgentId is null) lead.AttendanceAgentId = profile.Id;
+        if (result.Reply is not null && !result.Transferred && !result.Closed) KanbanRules.AutoAdvance(lead, KanbanStage.EmAtendimento, "Agente de Atendimento IA conversando");
+        if (lead.QualificationScore >= KanbanRules.QualifiedScore) KanbanRules.AutoAdvance(lead, KanbanStage.Qualificado, $"Pontuação de qualificação {lead.QualificationScore}/100");
         string? assigned = null;
         if (result.Transferred)
             assigned = await handoff.ApplyAsync(lead, result.HandoffReason ?? "Solicitado pela IA", "IA", noticeToCustomer: result.Reply is null, ct);

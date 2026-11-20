@@ -16,24 +16,52 @@
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
         <TextBox Text="{Binding Filter}" Watermark="Filtrar por nome ou telefone" Width="260" />
         <Button Content="Atualizar" Command="{Binding RefreshCommand}" />
+        <Button Content="Etapas" Command="{Binding ToggleStagesCommand}" ToolTip.Tip="Renomear, ordenar e ocultar etapas (administrador)" />
       </StackPanel>
       <StackPanel>
         <TextBlock Text="Dominius Play — CRM Comercial" Classes="h1" />
-        <TextBlock Text="Clique no card para abrir a conversa do WhatsApp. Arraste os cards entre as colunas. 'Negócio fechado' exige confirmação comercial." Classes="muted" />
+        <TextBlock Text="Clique no card para abrir a conversa do WhatsApp. Arraste os cards entre as colunas (role para o lado para ver todas). 'Negócio fechado' exige confirmação comercial." Classes="muted" TextWrapping="Wrap" />
       </StackPanel>
     </DockPanel>
     <StackPanel DockPanel.Dock="Top" Spacing="2">
       <TextBlock Text="{Binding Info}" Classes="ok" />
       <TextBlock Text="{Binding Error}" Classes="error" />
     </StackPanel>
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Disabled">
+    <!-- editor de etapas -->
+    <Border DockPanel.Dock="Right" Classes="panel" Width="360" Margin="10,0,0,0" IsVisible="{Binding ShowStages}">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+          <TextBlock Text="Etapas do Kanban" Classes="h2" />
+          <TextBlock Text="Renomeie, ordene e oculte. Etapas ocultas que têm cards continuam aparecendo. 'Primeiro contato', 'Negócio fechado' e 'Não tem interesse' são usadas pelas regras e ficam sempre visíveis." Classes="muted" TextWrapping="Wrap" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+          <Button Classes="primary" Content="Salvar etapas" Command="{Binding SaveStagesCommand}" />
+          <Button Content="Fechar" Command="{Binding ToggleStagesCommand}" />
+        </StackPanel>
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding StageRows}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:StageRowVm">
+                <DockPanel Margin="0,0,0,6">
+                  <CheckBox DockPanel.Dock="Left" IsChecked="{Binding Visible}" ToolTip.Tip="Visível" />
+                  <Button DockPanel.Dock="Right" Content="▼" Padding="6,2" Command="{Binding $parent[UserControl].((vm:KanbanViewModel)DataContext).StageDownCommand}" CommandParameter="{Binding}" />
+                  <Button DockPanel.Dock="Right" Content="▲" Padding="6,2" Margin="4,0" Command="{Binding $parent[UserControl].((vm:KanbanViewModel)DataContext).StageUpCommand}" CommandParameter="{Binding}" />
+                  <TextBox Text="{Binding Title}" Watermark="{Binding DefaultTitle}" />
+                </DockPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
       <ItemsControl ItemsSource="{Binding Columns}">
         <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate><UniformGrid Rows="1" Columns="6" /></ItemsPanelTemplate>
+          <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:KanbanColumnVm">
-            <Border Classes="panel" Margin="0,0,10,0" Padding="8" DragDrop.AllowDrop="True" Tag="{Binding Stage}" Name="Column">
+            <Border Classes="panel" Width="235" Margin="0,0,10,0" Padding="8" DragDrop.AllowDrop="True" Tag="{Binding Stage}" Name="Column">
               <DockPanel>
                 <DockPanel DockPanel.Dock="Top" Margin="2,0,2,10">
                   <Border Width="4" Height="18" CornerRadius="2" Background="{Binding Color}" Margin="0,0,8,0" />
@@ -51,6 +79,8 @@
                               <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                             </DockPanel>
                             <TextBlock Text="{Binding Phone}" Classes="muted" />
+                            <TextBlock Text="{Binding Origin}" FontSize="12" TextWrapping="Wrap" Classes="muted" IsVisible="{Binding Origin, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                            <TextBlock Text="{Binding Score}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" IsVisible="{Binding Score, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             <TextBlock Text="{Binding Plan}" FontSize="12" TextWrapping="Wrap" />
                             <TextBlock Text="{Binding Clients}" FontSize="12" IsVisible="{Binding Clients, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                             <TextBlock Text="{Binding Pain}" FontSize="12" TextWrapping="Wrap" Foreground="#F2B36B" IsVisible="{Binding Pain, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -69,6 +99,7 @@
                               <Border Classes="badge" Margin="0,0,4,4"><TextBlock Text="{Binding Mode}" FontSize="11" /></Border>
                               <Border Classes="badge" Margin="0,0,4,4" Background="#22FFFFFF"><TextBlock Text="{Binding Priority}" FontSize="11" /></Border>
                               <Border Classes="badge" Margin="0,0,4,4" Background="#22FFFFFF"><TextBlock Text="{Binding Owner}" FontSize="11" /></Border>
+                              <Border Classes="badge" Margin="0,0,4,4" Background="#22FFFFFF" IsVisible="{Binding Tags, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"><TextBlock Text="{Binding Tags}" FontSize="11" /></Border>
                             </WrapPanel>
                           </StackPanel>
                         </Border>
