@@ -69,3 +69,45 @@ public class CrmTests
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
     }
 }
+
+public class LgpdTests
+{
+    [Fact]
+    public async Task Anonimizacao_apaga_dados_pessoais_e_bloqueia_novos_contatos()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        var lead = (await (await c.PostAsJsonAsync("/api/leads", new LeadUpsert("Ana Souza", "11987650077", "Bauru", "SP", "Planilha", "cliente antiga", "revenda", IptvExperience.JaTrabalha,
+            null, 120, PainCategory.Nenhuma, null, null, Priority.Normal, null))).Content.ReadFromJsonAsync<LeadCard>())!;
+        await f.WithDb(async db =>
+        {
+            db.Messages.Add(new DominiusPlay.Domain.Entities.Message { LeadId = lead.Id, Direction = MessageDirection.Entrada, Author = MessageAuthor.Contato, Text = "meu CPF é 123" });
+            db.LeadFacts.Add(new DominiusPlay.Domain.Entities.LeadFact { LeadId = lead.Id, Key = "painel", Value = "Sigma" });
+            return await db.SaveChangesAsync();
+        });
+        var r = (await (await c.PostAsync($"/api/leads/{lead.Id}/anonymize", null)).Content.ReadFromJsonAsync<OperationResult>())!;
+        Assert.True(r.Ok, r.Message);
+        var l = await f.WithDb(db => db.Leads.SingleAsync());
+        Assert.Equal("Contato anonimizado", l.Name);
+        Assert.StartsWith("anon-", l.Phone);
+        Assert.Null(l.City); Assert.Null(l.Notes); Assert.Equal("", l.Tags);
+        Assert.Equal(ConversationMode.Encerrado, l.Mode);
+        Assert.Equal(0, await f.WithDb(db => db.LeadFacts.CountAsync()));
+        Assert.DoesNotContain("CPF", await f.WithDb(db => db.Messages.Select(m => m.Text).SingleAsync()));
+        Assert.True(await f.WithDb(db => db.OptOuts.AnyAsync(o => o.Phone == "5511987650077")));
+        Assert.Equal(1, await f.WithDb(db => db.AuditLogs.CountAsync(a => a.Action == "lead.anonymize")));
+        // a mesma pessoa importada de novo não pode ser abordada (lista de descadastro)
+        Assert.Equal(HttpStatusCode.NotFound, (await c.PostAsync($"/api/leads/{Guid.NewGuid()}/anonymize", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Retencao_valida_limites()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        Assert.Equal(HttpStatusCode.BadRequest, (await c.PutAsync("/api/lgpd/retention?days=10", null)).StatusCode);
+        var ok = (await (await c.PutAsync("/api/lgpd/retention?days=365", null)).Content.ReadFromJsonAsync<OperationResult>())!;
+        Assert.True(ok.Ok);
+        Assert.Equal("365", (await c.GetFromJsonAsync<OperationResult>("/api/lgpd/retention"))!.Message);
+    }
+}

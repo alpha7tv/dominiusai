@@ -146,6 +146,28 @@ public static class Api
             return Results.Ok(new OperationResult(true, "Lead e dados associados excluídos"));
         }).RequireAuthorization(SupervisorPolicy);
 
+        // LGPD: anonimização (mantém números agregados, apaga dados pessoais e conteúdo das mensagens)
+        api.MapPost("/leads/{id:guid}/anonymize", async (Guid id, LgpdService lgpd, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
+        {
+            if (!await lgpd.AnonymizeAsync(id, user.Identity?.Name ?? "", "Pedido do titular / supervisor")) return Results.NotFound();
+            await hub.Clients.All.SendAsync(HubEvents.LeadChanged, id);
+            return Results.Ok(new OperationResult(true, "Contato anonimizado: dados pessoais e textos apagados, número na lista de descadastro."));
+        }).RequireAuthorization(SupervisorPolicy);
+
+        api.MapGet("/lgpd/retention", async (SettingsStore s) =>
+            new OperationResult(true, await s.GetAsync(LgpdService.RetentionDaysKey) ?? "0"));
+
+        api.MapPut("/lgpd/retention", async (int days, SettingsStore s, LgpdService lgpd, CrmDbContext db, ClaimsPrincipal user) =>
+        {
+            if (days is < 0 or > 3650) return Results.BadRequest(new OperationResult(false, "Informe de 0 (desligado) a 3650 dias"));
+            if (days is > 0 and < 30) return Results.BadRequest(new OperationResult(false, "Retenção mínima de 30 dias"));
+            await s.SetAsync(LgpdService.RetentionDaysKey, days.ToString());
+            db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "lgpd.retention", EntityType = "Setting", Details = $"{days} dias" });
+            await db.SaveChangesAsync();
+            var n = await lgpd.ApplyRetentionAsync(days, user.Identity?.Name ?? "");
+            return Results.Ok(new OperationResult(true, days == 0 ? "Retenção automática desligada." : $"Retenção de {days} dias salva. {n} contato(s) anonimizado(s) agora."));
+        }).RequireAuthorization(AdminPolicy);
+
         // ---------- Ações em lote (seleção na lista ou todos com uma tag) ----------
         api.MapPost("/leads/bulk", async (BulkLeadRequest r, CrmDbContext db, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
         {

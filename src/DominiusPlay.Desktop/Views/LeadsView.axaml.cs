@@ -43,6 +43,15 @@ public partial class LeadsView : UserControl
             await vm.DeleteSelectedAsync();
     }
 
+    private async void OnAnonymizeLead(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not LeadsViewModel vm) return;
+        if (vm.Selected is null) { vm.Error = "Selecione um lead na lista."; return; }
+        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this) as Window, "Anonimizar contato",
+                $"Anonimizar {vm.Selected.Name} ({vm.Selected.Phone})?\n\nNome, telefone, cidade, notas, fatos e o texto das mensagens são apagados. Os números de campanha e funil continuam nos relatórios. O telefone entra na lista de descadastro para nunca mais ser abordado. Não pode ser desfeito."))
+            await vm.AnonymizeSelectedAsync();
+    }
+
     private async void OnDeleteChecked(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not LeadsViewModel vm) return;

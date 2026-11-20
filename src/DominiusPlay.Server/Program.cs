@@ -92,6 +92,7 @@ builder.Services.AddScoped<AgentResolver>();
 builder.Services.AddScoped<ApproachGenerator>();
 builder.Services.AddScoped<HandoffService>();
 builder.Services.AddScoped<AutomationService>();
+builder.Services.AddScoped<LgpdService>();
 builder.Services.AddScoped<IntentRouter>();
 builder.Services.AddSingleton<AgentTestSessions>();
 builder.Services.AddSingleton(new DataPaths(dataDir));
@@ -100,6 +101,7 @@ if (builder.Configuration.GetValue("Workers:Enabled", true))
     builder.Services.AddHostedService<OutboundQueueWorker>();
     builder.Services.AddHostedService<InstanceMonitorWorker>();
     builder.Services.AddHostedService<AiWorker>();
+    builder.Services.AddHostedService<RetentionWorker>();
 }
 
 var app = builder.Build();

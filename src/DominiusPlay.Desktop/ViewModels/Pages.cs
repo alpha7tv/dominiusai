@@ -563,6 +563,13 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
         Info = $"Dados exportados para {fileName}";
     });
 
+    public Task AnonymizeSelectedAsync() => Run(async () =>
+    {
+        if (Selected is null) return;
+        Info = (await s.Api.AnonymizeLeadAsync(Selected.Id)).Message;
+        await RefreshCore();
+    });
+
     public Task DeleteSelectedAsync() => Run(async () =>
     {
         if (Selected is null) return;
