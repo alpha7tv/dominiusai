@@ -128,6 +128,8 @@ public class ApiClient
     public Task<List<CampaignDto>> CampaignsAsync() => Get<List<CampaignDto>>("api/campaigns");
     public Task<CampaignDto> CreateCampaignAsync(CampaignUpsert c) => Post<CampaignDto>("api/campaigns", c);
     public Task<CampaignDto> UpdateCampaignAsync(Guid id, CampaignUpsert c) => Send<CampaignDto>(HttpMethod.Put, $"api/campaigns/{id}", c);
+    public Task<CampaignValidation> ValidateCampaignAsync(Guid id) => Post<CampaignValidation>($"api/campaigns/{id}/validate", null);
+    public Task<List<ApproachPreview>> PreviewCampaignAsync(Guid id) => Post<List<ApproachPreview>>($"api/campaigns/{id}/preview", null);
     public Task<OperationResult> CampaignActionAsync(Guid id, string action) => Post<OperationResult>($"api/campaigns/{id}/{action}", null);
     // Fase 9
     public Task<ReportDto> ReportAsync(DateTimeOffset from, DateTimeOffset to) =>

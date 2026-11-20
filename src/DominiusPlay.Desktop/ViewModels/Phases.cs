@@ -167,6 +167,19 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
 {
     public ObservableCollection<CampaignRowVm> Campaigns { get; } = new();
     public ObservableCollection<TemplateDto> ApprovedTemplates { get; } = new();
+    public ObservableCollection<TemplateDto> FollowUpTemplates { get; } = new();
+    public ObservableCollection<AgentDto> DispatchAgents { get; } = new();
+    public ObservableCollection<ApproachPreview> Previews { get; } = new();
+    [ObservableProperty] private AgentDto? _dispatchAgent;
+    [ObservableProperty] private string _segment = "";
+    [ObservableProperty] private string _prompt = "";
+    [ObservableProperty] private string _startDate = "";
+    [ObservableProperty] private bool _aiPersonalization;
+    [ObservableProperty] private TemplateDto? _followUpTemplate;
+    [ObservableProperty] private string _followUpDays = "";
+    [ObservableProperty] private decimal? _maxFailurePercent = 20;
+    [ObservableProperty] private decimal? _maxOptOutPercent = 10;
+    [ObservableProperty] private string? _validation;
     [ObservableProperty] private CampaignRowVm? _selected;
     [ObservableProperty] private string _name = "";
     [ObservableProperty] private string _startTime = "09:00";
@@ -197,12 +210,15 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
     private async Task Load()
     {
         var sel = Selected?.Model.Id;
-        ApprovedTemplates.Clear();
+        ApprovedTemplates.Clear(); FollowUpTemplates.Clear();
         foreach (var t in (await s.Api.TemplatesAsync()).Where(t => t.Approval == ApprovalStatus.Aprovado).GroupBy(t => t.Id).Select(g => g.First()))
-            ApprovedTemplates.Add(t);
+            (t.Purpose == "Acompanhamento" ? FollowUpTemplates : ApprovedTemplates).Add(t);
+        DispatchAgents.Clear();
+        foreach (var a in await s.Api.AgentsAsync(AgentKind.Disparo)) DispatchAgents.Add(a);
         Campaigns.Clear();
         foreach (var c in await s.Api.CampaignsAsync()) Campaigns.Add(new CampaignRowVm(c, ApprovedTemplates.FirstOrDefault(t => t.Id == c.TemplateId)?.Name));
         Selected = Campaigns.FirstOrDefault(c => c.Model.Id == sel);
+        if (Selected is null && DispatchAgent is null) DispatchAgent = DispatchAgents.FirstOrDefault(a => a.IsDefault);
         Notify();
     }
 
@@ -219,6 +235,10 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
         Name = c.Name; StartTime = c.StartTime; EndTime = c.EndTime; MaxContacts = c.MaxContacts; DailyLimit = c.DailyLimit;
         IntervalMinutes = c.MinIntervalSeconds / 60m; Objective = c.Objective ?? ""; TagFilter = c.TagFilter;
         Template = ApprovedTemplates.FirstOrDefault(t => t.Id == c.TemplateId);
+        DispatchAgent = DispatchAgents.FirstOrDefault(a => a.Id == c.DispatchAgentId); Segment = c.Segment; Prompt = c.Prompt;
+        StartDate = c.StartDate is { } sd ? sd.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : ""; AiPersonalization = c.AiPersonalization;
+        FollowUpTemplate = FollowUpTemplates.FirstOrDefault(t => t.Id == c.FollowUpTemplateId); FollowUpDays = c.FollowUpDays;
+        MaxFailurePercent = c.MaxFailurePercent; MaxOptOutPercent = c.MaxOptOutPercent; Validation = c.PauseReason; Previews.Clear();
         var d = c.AllowedDays.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToHashSet();
         Sun = d.Contains(0); Mon = d.Contains(1); Tue = d.Contains(2); Wed = d.Contains(3); Thu = d.Contains(4); Fri = d.Contains(5); Sat = d.Contains(6);
     }
@@ -227,14 +247,21 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
     private void New()
     {
         Selected = null; Name = ""; Objective = ""; TagFilter = ""; Template = ApprovedTemplates.FirstOrDefault();
+        DispatchAgent = DispatchAgents.FirstOrDefault(a => a.IsDefault); Segment = ""; Prompt = ""; StartDate = ""; AiPersonalization = false;
+        FollowUpTemplate = FollowUpTemplates.FirstOrDefault(); FollowUpDays = FollowUpTemplate is null ? "" : "1,3,7"; MaxFailurePercent = 20; MaxOptOutPercent = 10;
+        Validation = null; Previews.Clear();
         Info = "Preencha os dados e salve. A campanha só envia depois de clicar em Iniciar.";
     }
 
     private CampaignUpsert Form()
     {
         var days = new[] { Sun, Mon, Tue, Wed, Thu, Fri, Sat }.Select((on, i) => (on, i)).Where(x => x.on).Select(x => x.i.ToString());
+        DateTimeOffset? start = DateTime.TryParseExact(StartDate.Trim(), ["dd/MM/yyyy HH:mm", "dd/MM/yyyy"], System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeLocal, out var dt) ? new DateTimeOffset(dt) : null;
+        if (!string.IsNullOrWhiteSpace(StartDate) && start is null) throw new DominiusPlay.Desktop.Services.ApiException("Data de início inválida (use dd/mm/aaaa hh:mm)");
         return new CampaignUpsert(Name, StartTime, EndTime, string.Join(',', days), (int)(MaxContacts ?? 0), (int)((IntervalMinutes ?? 5) * 60),
-            (int)(DailyLimit ?? 0), Objective, Template?.Id, TagFilter);
+            (int)(DailyLimit ?? 0), Objective, Template?.Id, TagFilter, DispatchAgent?.Id, Segment, Prompt, start, AiPersonalization,
+            FollowUpTemplate?.Id, FollowUpDays, (int)(MaxFailurePercent ?? 20), (int)(MaxOptOutPercent ?? 10));
     }
 
     [RelayCommand]
@@ -244,6 +271,24 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
         Info = "Campanha salva.";
         Selected = new CampaignRowVm(dto, null);
         await Load();
+    });
+
+    [RelayCommand]
+    private Task Validate() => Run(async () =>
+    {
+        if (Selected is null) { Error = "Salve a campanha antes de validar."; return; }
+        var v = await s.Api.ValidateCampaignAsync(Selected.Model.Id);
+        Validation = (v.Ok ? $"✓ Pronta para iniciar: {v.Eligible} contato(s) elegível(is)." : "✕ Corrija antes de iniciar:\n• " + string.Join("\n• ", v.Problems))
+            + (v.Warnings.Count > 0 ? "\n\nAvisos:\n• " + string.Join("\n• ", v.Warnings) : "");
+    });
+
+    [RelayCommand]
+    private Task Preview() => Run(async () =>
+    {
+        if (Selected is null) { Error = "Salve a campanha antes de pré-visualizar."; return; }
+        Previews.Clear();
+        foreach (var p in await s.Api.PreviewCampaignAsync(Selected.Model.Id)) Previews.Add(p);
+        Info = "Prévia gerada: nada foi salvo nem enviado.";
     });
 
     [RelayCommand] private Task Start() => Act("start");
@@ -282,7 +327,13 @@ public class CampaignRowVm(CampaignDto c, string? templateName)
     public string Template => "Modelo: " + (templateName ?? "—") + (Model.TagFilter.Length > 0 ? $" · tags: {Model.TagFilter}" : " · todos os leads autorizados");
     public string Numbers => Model.Status == CampaignStatus.Rascunho
         ? $"{Model.Eligible} lead(s) elegível(is) agora (máx. {Model.MaxContacts})"
-        : $"Na fila {Model.Queued} · Enviadas {Model.Sent} · Entregues {Model.Delivered} · Responderam {Model.Replied} · Falhas {Model.Failed} · Canceladas {Model.Cancelled}";
+        : $"Na fila {Model.Queued} · Enviadas {Model.Sent} · Entregues {Model.Delivered} · Responderam {Model.Replied} · Falhas {Model.Failed} · Canceladas {Model.Cancelled}"
+          + (Model.FollowUpsSent > 0 ? $" · Acompanhamentos {Model.FollowUpsSent}" : "") + (Model.OptOuts > 0 ? $" · Descadastros {Model.OptOuts}" : "")
+          + (Model.SimilarityAlerts > 0 ? $" · ⚠ {Model.SimilarityAlerts} mensagem(ns) muito parecida(s)" : "");
+    public string Extras => string.Join(" · ", new[] { Model.AiPersonalization ? "Personalizada por IA" : null, Model.FollowUpDays.Length > 0 ? "Acompanhamento D+" + Model.FollowUpDays.Replace(",", ", D+") : null,
+        Model.Segment.Length > 0 ? "Segmento: " + Model.Segment : null }.Where(x => x is not null));
+    public string? PauseReason => Model.PauseReason;
+    public bool HasPauseReason => !string.IsNullOrEmpty(Model.PauseReason);
 }
 
 // ======================= Relatórios (Fase 9) =======================

@@ -30,6 +30,11 @@ public class AgentResolver(CrmDbContext db)
         return await DefaultAttendanceAsync(ct);
     }
 
+    /// <summary>Agente de atendimento que assume as respostas das campanhas deste agente de disparo.</summary>
+    public async Task<AgentProfile?> ForDispatchAsync(AgentProfile dispatch, CancellationToken ct = default) =>
+        (dispatch.AttendanceAgentId is { } id ? await db.AgentProfiles.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id && a.Kind == AgentKind.Atendimento, ct) : null)
+        ?? await DefaultAttendanceAsync(ct);
+
     public Task<AgentProfile?> DefaultAttendanceAsync(CancellationToken ct = default) =>
         db.AgentProfiles.AsNoTracking().Where(a => a.Kind == AgentKind.Atendimento && a.Status != AgentStatus.Inativo)
             .OrderByDescending(a => a.IsDefault).ThenBy(a => a.CreatedAt).FirstOrDefaultAsync(ct);

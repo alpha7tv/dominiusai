@@ -53,6 +53,9 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
     public ObservableCollection<QuestionRow> Questions { get; } = new();
     public ObservableCollection<IntentRow> Intents { get; } = new();
     public ObservableCollection<TestLine> TestLines { get; } = new();
+    /// <summary>Só disparo: agentes de atendimento que podem assumir as respostas das campanhas.</summary>
+    public ObservableCollection<AgentDto> AttendanceAgents { get; } = new();
+    [ObservableProperty] private AgentDto? _attendanceAgent;
     public static string[] Statuses { get; } = ["Ativo", "Pausado", "Inativo"];
 
     [ObservableProperty] private AgentDto? _selected;
@@ -92,6 +95,11 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
     {
         if (Intents.Count == 0)
             foreach (var i in await s.Api.IntentsAsync()) Intents.Add(new IntentRow { Intent = i.Intent, Title = i.Title, ActionIndex = (int)i.DefaultAction });
+        if (!IsAttendance)
+        {
+            AttendanceAgents.Clear();
+            foreach (var a in await s.Api.AgentsAsync(AgentKind.Atendimento)) AttendanceAgents.Add(a);
+        }
         await Reload(Selected?.Id);
     });
 
@@ -111,6 +119,7 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
         Personality = value.Personality; Tone = value.Tone; Prompt = value.Prompt; Products = value.ProductsAndServices; AllowedAnswers = value.AllowedAnswers;
         Restrictions = value.NegotiationRestrictions; HandoffCriteria = value.HandoffCriteria; Model = value.Model; AdvancedModel = value.AdvancedModel;
         StatusIndex = (int)value.Status; IsDefault = value.IsDefault; StartTime = value.StartTime; EndTime = value.EndTime; TimeZoneId = value.TimeZoneId;
+        AttendanceAgent = AttendanceAgents.FirstOrDefault(a => a.Id == value.AttendanceAgentId);
         InstanceName = value.InstanceName; DailyLimit = value.DailyLimit; MinIntervalMinutes = Math.Max(5, value.MinIntervalSeconds / 60);
         var days = BusinessHours.ParseDays(value.AllowedDays);
         Sun = days.Contains(DayOfWeek.Sunday); Mon = days.Contains(DayOfWeek.Monday); Tue = days.Contains(DayOfWeek.Tuesday); Wed = days.Contains(DayOfWeek.Wednesday);
@@ -136,7 +145,7 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
     public AgentUpsert BuildUpsert() => new(Kind, Name, AssistantName, Description, Objective, Company, Personality, Tone, Prompt, Products, AllowedAnswers,
         Restrictions, HandoffCriteria, Model, AdvancedModel, (AgentStatus)StatusIndex, IsDefault, StartTime, EndTime, Days(), TimeZoneId,
         IntentDetector.FormatActions(Intents.ToDictionary(i => i.Intent, i => (IntentAction)i.ActionIndex)), InstanceName, DailyLimit, MinIntervalMinutes * 60,
-        Selected?.AttendanceAgentId);
+        IsAttendance ? null : AttendanceAgent?.Id);
 
     [RelayCommand]
     private void New()
@@ -145,7 +154,7 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
         Name = Kind == AgentKind.Atendimento ? "Novo agente de atendimento" : "Novo agente de disparo";
         AssistantName = Description = Objective = Personality = Tone = Prompt = Products = AllowedAnswers = Restrictions = HandoffCriteria = Model = AdvancedModel = InstanceName = "";
         Company = "Dominius Play"; StatusIndex = (int)AgentStatus.Pausado; IsDefault = false; StartTime = "09:00"; EndTime = "21:00";
-        Sun = false; Mon = Tue = Wed = Thu = Fri = Sat = true; DailyLimit = 50; MinIntervalMinutes = 5;
+        Sun = false; Mon = Tue = Wed = Thu = Fri = Sat = true; DailyLimit = 50; MinIntervalMinutes = 5; AttendanceAgent = null;
         foreach (var r in Intents) r.ActionIndex = (int)(r.Locked ? IntentAction.Encerrar : IntentDetector.DefaultAction(r.Intent));
         ResetTestState();
         Info = "Preencha e clique em Salvar. O agente começa pausado: teste antes de ativar.";
@@ -191,7 +200,8 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
     private void ResetTestState()
     {
         _testSession = null; TestLines.Clear(); TestMemory = null; TestScore = null;
-        TestStatus = "Simulação: escreva como se fosse o cliente. Nada é salvo nem enviado pelo WhatsApp (só usa tokens da IA). Salve antes de testar mudanças.";
+        TestStatus = (IsAttendance ? "" : "Simula a resposta de um contato a uma campanha deste disparo: quem responde é o agente de atendimento vinculado. Para ver as mensagens de abordagem, use Pré-visualizar na tela Campanhas. ")
+            + "Simulação: escreva como se fosse o cliente. Nada é salvo nem enviado pelo WhatsApp (só usa tokens da IA). Salve antes de testar mudanças.";
     }
 
     [RelayCommand]
@@ -210,7 +220,7 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
         var detail = $"Intenção: {r.FinalIntent}" + (r.Actions.Count > 0 ? " · " + string.Join(" · ", r.Actions) : "") + (r.Tokens > 0 ? $" · {r.Tokens} tokens" : "");
         if (!r.Ok) TestLines.Add(new TestLine(false, "Erro: " + r.Error, null));
         else if (r.Reply is { } reply) TestLines.Add(new TestLine(false, reply, detail));
-        else TestLines.Add(new TestLine(false, "(sem resposta)", detail));
+        else TestLines.Add(new TestLine(false, r.Closed ? "(sem resposta: o sistema encerrou a conversa)" : "(sem resposta)", detail));
         if (r.HandoffSummary is { } h) TestLines.Add(new TestLine(false, "→ Transferido para humano. Ficha que o atendente recebe:\n" + h, null));
         TestScore = r.Score is { } sc ? $"Qualificação: {sc}/100" : null;
         TestMemory = (r.ScoreExplanation is { Length: > 0 } ex ? ex + "\n\n" : "") + "Memória:\n" + string.Join("\n", r.Memory);

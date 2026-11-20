@@ -206,10 +206,26 @@ public static partial class AgentsApi
         var now = DateTimeOffset.UtcNow;
         history.Add(new Message { LeadId = lead.Id, Direction = MessageDirection.Entrada, Author = MessageAuthor.Contato, Text = r.Message.Trim(), Timestamp = now, CreatedAt = now, Intent = intent });
 
+        var actions = new List<string>();
+        // agente de disparo: a resposta do contato à campanha é atendida pelo agente de atendimento vinculado (máquina de estados: só um agente fala)
+        if (profile?.Kind == AgentKind.Disparo)
+        {
+            var dispatchName = profile.Name;
+            profile = await agents.ForDispatchAsync(profile);
+            actions.Add($"Resposta à campanha de \"{dispatchName}\" → atendida por \"{profile?.Name ?? "configuração global"}\"");
+        }
+        // descadastro: o sistema registra o opt-out e para de falar, sem chamar a IA (igual ao recebimento real)
+        if (lead.Mode == ConversationMode.Ia && OptOutDetector.IsOptOut(r.Message))
+        {
+            lead.Mode = ConversationMode.Encerrado;
+            actions.Add("Pedido de descadastro: número entra na lista de opt-out, consentimento revogado, nenhum envio futuro");
+            return Results.Ok(new AgentTestResponse(sid, true, null, actions, false, true, null, 0, IntentDetector.Title(intent), IntentDetector.Title(intent),
+                lead.QualificationScore, lead.QualificationExplanation, null, Memory(lead), "(regra do sistema, sem IA)"));
+        }
+
         var cfg = await agent.LoadConfigAsync();
         var questions = await agents.QuestionsAsync(profile?.Id);
         string? handoffSummary = null;
-        var actions = new List<string>();
         AgentResult res;
         // pedido de humano por intenção: o sistema transfere sem chamar a IA (igual ao atendimento real)
         var action = IntentDetector.ParseActions(profile?.IntentActions).GetValueOrDefault(intent, IntentAction.Continuar);
