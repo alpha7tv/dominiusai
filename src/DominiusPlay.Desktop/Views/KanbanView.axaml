@@ -1,6 +1,16 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
              x:Class="DominiusPlay.Desktop.Views.KanbanView" x:DataType="vm:KanbanViewModel">
+  <UserControl.Styles>
+    <Style Selector="Border.bubble">
+      <Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="12,8" /><Setter Property="Margin" Value="0,4" />
+      <Setter Property="MaxWidth" Value="460" /><Setter Property="HorizontalAlignment" Value="Left" /><Setter Property="Background" Value="{StaticResource InboundBrush}" />
+    </Style>
+    <Style Selector="Border.bubble.out"><Setter Property="HorizontalAlignment" Value="Right" /><Setter Property="Background" Value="{StaticResource OutboundBrush}" /></Style>
+    <Style Selector="Border.bubble.sys"><Setter Property="HorizontalAlignment" Value="Center" /><Setter Property="Background" Value="#22FFFFFF" /></Style>
+    <Style Selector="Border.bubble.fail"><Setter Property="HorizontalAlignment" Value="Right" /><Setter Property="Background" Value="#4A1E24" /></Style>
+  </UserControl.Styles>
+  <Panel>
   <DockPanel Margin="24">
     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
@@ -9,7 +19,7 @@
       </StackPanel>
       <StackPanel>
         <TextBlock Text="Dominius Play — CRM Comercial" Classes="h1" />
-        <TextBlock Text="Arraste os cards entre as colunas. 'Negócio fechado' exige confirmação comercial." Classes="muted" />
+        <TextBlock Text="Clique no card para abrir a conversa do WhatsApp. Arraste os cards entre as colunas. 'Negócio fechado' exige confirmação comercial." Classes="muted" />
       </StackPanel>
     </DockPanel>
     <StackPanel DockPanel.Dock="Top" Spacing="2">
@@ -73,4 +83,59 @@
       </ItemsControl>
     </ScrollViewer>
   </DockPanel>
+
+  <!-- Popup: conversa do WhatsApp do card clicado -->
+  <Panel Name="ChatOverlay" IsVisible="{Binding Chat.IsOpen}">
+    <Border Name="ChatBackdrop" Background="#B3000000" PointerPressed="OnBackdropPressed" />
+    <Border Classes="panel" Width="640" Margin="0,32" HorizontalAlignment="Center" VerticalAlignment="Stretch" Padding="0"
+            BoxShadow="0 12 40 0 #80000000" DataContext="{Binding Chat}" x:DataType="vm:ChatPopupViewModel">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="16,12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+          <StackPanel Spacing="8">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="✕" Command="{Binding CloseCommand}" ToolTip.Tip="Fechar (Esc)" Padding="10,4" VerticalAlignment="Top" Name="CloseChat" />
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding Title}" Classes="h2" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding Subtitle}" Classes="muted" />
+                <TextBlock Text="{Binding ModeText}" Classes="muted" Foreground="{StaticResource AccentBrush}" />
+              </StackPanel>
+            </DockPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="primary" Content="ASSUMIR ATENDIMENTO" Command="{Binding TakeOverCommand}" IsVisible="{Binding CanTakeOver}" />
+              <Button Content="DEVOLVER PARA IA" Command="{Binding ReturnToAiCommand}" IsVisible="{Binding CanReturn}" />
+              <Button Content="Sugerir resposta (IA)" Command="{Binding SuggestCommand}" IsVisible="{Binding CanReturn}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Border DockPanel.Dock="Bottom" Padding="12" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+          <StackPanel Spacing="6">
+            <TextBlock Text="{Binding Info}" Classes="ok" IsVisible="{Binding Info, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <TextBlock Text="{Binding Error}" Classes="error" IsVisible="{Binding Error, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="primary" Content="Enviar" Command="{Binding SendCommand}" IsEnabled="{Binding IsHuman}" Margin="8,0,0,0" VerticalAlignment="Stretch" />
+              <TextBox Name="ChatDraft" Text="{Binding Draft}" Watermark="{Binding ComposerHint}" IsEnabled="{Binding IsHuman}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" MaxHeight="120" />
+            </DockPanel>
+          </StackPanel>
+        </Border>
+        <Panel>
+          <ScrollViewer Name="ChatHistory" Padding="16">
+            <ItemsControl ItemsSource="{Binding Messages}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:MessageVm">
+                  <Border Classes="bubble" Classes.out="{Binding IsOutbound}" Classes.sys="{Binding IsSystem}" Classes.fail="{Binding IsFailed}">
+                    <StackPanel Spacing="3">
+                      <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding Meta}" Classes="muted" FontSize="10" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <TextBlock Text="Ainda não há mensagens com este contato." Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding HasNoMessages}" />
+        </Panel>
+      </DockPanel>
+    </Border>
+  </Panel>
+  </Panel>
 </UserControl>
