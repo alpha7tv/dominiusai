@@ -41,6 +41,8 @@ public static class LeadFileParser
     {
         ["nome"] = "name", ["name"] = "name", ["cliente"] = "name", ["contato"] = "name",
         ["telefone"] = "phone", ["phone"] = "phone", ["whatsapp"] = "phone", ["celular"] = "phone", ["numero"] = "phone", ["fone"] = "phone",
+        ["telefones"] = "phone", ["numeros"] = "phone", ["celulares"] = "phone", ["whatsapps"] = "phone", ["tel"] = "phone", ["zap"] = "phone",
+        ["numero de telefone"] = "phone", ["numero do whatsapp"] = "phone", ["numero whatsapp"] = "phone", ["phone number"] = "phone",
         ["cidade"] = "city", ["city"] = "city",
         ["estado"] = "state", ["uf"] = "state", ["state"] = "state",
         ["origem"] = "source", ["source"] = "source", ["fonte"] = "source",
@@ -54,27 +56,26 @@ public static class LeadFileParser
     public static string? MapHeader(string header) =>
         HeaderMap.TryGetValue(PainClassifier.Strip(header.Trim().ToLowerInvariant()).Replace('_', ' '), out var v) ? v : null;
 
+    /// <summary>
+    /// CSV/TXT. Aceita arquivo com cabeçalho (telefone, nome, cidade…) ou só uma lista de números,
+    /// sem cabeçalho e sem nome: o nome é opcional e a coluna de telefone é detectada pelo conteúdo.
+    /// </summary>
     public static List<RawLeadRow> ParseCsv(Stream stream)
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         var text = reader.ReadToEnd();
         var firstLine = text.Split('\n')[0];
         var delimiter = firstLine.Count(c => c == ';') > firstLine.Count(c => c == ',') ? ";" : firstLine.Contains('\t') ? "\t" : ",";
-        var cfg = new CsvConfiguration(CultureInfo.InvariantCulture) { Delimiter = delimiter, BadDataFound = null, MissingFieldFound = null, DetectColumnCountChanges = false };
+        var cfg = new CsvConfiguration(CultureInfo.InvariantCulture) { Delimiter = delimiter, BadDataFound = null, MissingFieldFound = null, DetectColumnCountChanges = false, HasHeaderRecord = false };
         using var csv = new CsvReader(new StringReader(text), cfg);
-        csv.Read(); csv.ReadHeader();
-        var headers = csv.HeaderRecord ?? [];
-        var rows = new List<RawLeadRow>();
-        var line = 1;
+        var table = new List<(int Line, string[] Cells)>();
         while (csv.Read())
         {
-            line++;
-            var cells = new Dictionary<string, string>();
-            for (var i = 0; i < headers.Length; i++)
-                if (MapHeader(headers[i]) is { } key) cells[key] = csv.GetField(i) ?? "";
-            rows.Add(FromCells(cells, line));
+            var cells = csv.Parser.Record ?? [];
+            if (cells.All(string.IsNullOrWhiteSpace)) continue;
+            table.Add((csv.Parser.Row, cells));
         }
-        return rows;
+        return FromTable(table);
     }
 
     public static List<RawLeadRow> ParseXlsx(Stream stream)
@@ -83,22 +84,57 @@ public static class LeadFileParser
         var ws = wb.Worksheets.First();
         var range = ws.RangeUsed();
         if (range is null) return [];
-        var headerRow = range.FirstRow();
-        var map = new Dictionary<int, string>();
-        foreach (var cell in headerRow.Cells())
-            if (MapHeader(cell.GetString()) is { } key) map[cell.Address.ColumnNumber] = key;
-        var rows = new List<RawLeadRow>();
-        foreach (var row in range.RowsUsed().Skip(1))
+        var table = new List<(int Line, string[] Cells)>();
+        foreach (var row in range.RowsUsed())
         {
-            var cells = new Dictionary<string, string>();
-            foreach (var (col, key) in map)
-            {
-                var c = row.Cell(col - range.FirstColumn().ColumnNumber() + 1);
+            var cells = row.Cells(1, range.ColumnCount()).Select(c =>
                 // números de telefone salvos como número no Excel
-                cells[key] = c.DataType == XLDataType.Number ? c.GetDouble().ToString("0", CultureInfo.InvariantCulture)
-                    : c.DataType == XLDataType.DateTime ? c.GetDateTime().ToString("yyyy-MM-dd") : c.GetString();
+                c.DataType == XLDataType.Number ? c.GetDouble().ToString("0", CultureInfo.InvariantCulture)
+                : c.DataType == XLDataType.DateTime ? c.GetDateTime().ToString("yyyy-MM-dd") : c.GetString()).ToArray();
+            if (cells.All(string.IsNullOrWhiteSpace)) continue;
+            table.Add((row.RowNumber(), cells));
+        }
+        return FromTable(table);
+    }
+
+    /// <summary>Célula que parece um telefone (8 ou mais dígitos).</summary>
+    public static bool LooksLikePhone(string? s) => s is not null && s.Count(char.IsAsciiDigit) >= 8;
+
+    /// <summary>
+    /// Converte a planilha em linhas. Se a primeira linha tiver cabeçalhos conhecidos, usa os nomes das colunas.
+    /// Senão (lista só de números, ou cabeçalho com outros nomes), detecta a coluna de telefone pelo conteúdo
+    /// e usa a primeira coluna de texto, se houver, como nome.
+    /// </summary>
+    private static List<RawLeadRow> FromTable(List<(int Line, string[] Cells)> table)
+    {
+        if (table.Count == 0) return [];
+        var header = table[0].Cells;
+        var map = new Dictionary<int, string>();
+        for (var i = 0; i < header.Length; i++)
+            if (MapHeader(header[i]) is { } key) map.TryAdd(i, key);
+
+        var rows = new List<RawLeadRow>();
+        if (map.ContainsValue("phone"))
+        {
+            foreach (var (line, cells) in table.Skip(1))
+            {
+                var c = new Dictionary<string, string>();
+                foreach (var (col, key) in map) c[key] = col < cells.Length ? cells[col] : "";
+                rows.Add(FromCells(c, line));
             }
-            rows.Add(FromCells(cells, row.RowNumber()));
+            return rows;
+        }
+
+        // Sem coluna "telefone": a primeira linha só é dados se tiver um número.
+        var data = header.Any(LooksLikePhone) ? table : table.Skip(1).ToList();
+        if (data.Count == 0) return [];
+        var width = data.Max(r => r.Cells.Length);
+        var phoneCol = Enumerable.Range(0, width).OrderByDescending(i => data.Count(r => i < r.Cells.Length && LooksLikePhone(r.Cells[i]))).First();
+        foreach (var (line, cells) in data)
+        {
+            var phone = phoneCol < cells.Length ? cells[phoneCol].Trim() : "";
+            var others = cells.Where((_, j) => j != phoneCol).Select(p => p.Trim()).Where(p => p.Length > 0 && !LooksLikePhone(p)).ToList();
+            rows.Add(new RawLeadRow { LineNumber = line, Phone = phone, Name = others.FirstOrDefault() });
         }
         return rows;
     }
@@ -157,7 +193,7 @@ public static class LeadFileParser
 public class LeadImportService(CrmDbContext db)
 {
     public sealed record Options(string FileName, string Format, string ImportedBy, string? DefaultSource, string? DefaultTags,
-        bool UpdateExisting = true);
+        bool UpdateExisting = true, string? BatchConsentSource = null);
 
     /// <summary>
     /// Importa linhas: normaliza telefone, descarta inválidos, detecta duplicados no arquivo e no banco,
@@ -183,7 +219,7 @@ public class LeadImportService(CrmDbContext db)
             if (!seen.Add(phone)) { batch.Duplicates++; results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.DuplicateInFile, "Número repetido no arquivo")); continue; }
 
             var isBlocked = blocked.Contains(phone);
-            var consent = ParseConsent(row, opt.FileName);
+            var consent = ParseConsent(row, opt.FileName) ?? BatchConsent(opt);
 
             if (existing.TryGetValue(phone, out var lead))
             {
@@ -232,6 +268,14 @@ public class LeadImportService(CrmDbContext db)
         var at = DateTimeOffset.TryParse(r.ConsentDate, CultureInfo.GetCultureInfo("pt-BR"), DateTimeStyles.AssumeUniversal, out var d) ? d : DateTimeOffset.UtcNow;
         return new(r.ConsentSource.Trim() + $" (importado de {fileName})", at);
     }
+
+    /// <summary>
+    /// Autorização declarada para a lista inteira (ex.: "clientes que pediram contato no Instagram").
+    /// Fica registrada com a origem, o arquivo e quem importou.
+    /// </summary>
+    private static ParsedConsent? BatchConsent(Options opt) =>
+        string.IsNullOrWhiteSpace(opt.BatchConsentSource) ? null
+            : new(opt.BatchConsentSource.Trim() + $" (declarado por {opt.ImportedBy} ao importar {opt.FileName})", DateTimeOffset.UtcNow);
 
     private static void ApplyConsent(Lead lead, ParsedConsent c, string by)
     {

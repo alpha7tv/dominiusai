@@ -105,11 +105,20 @@ public class UiTests
         await main.NavigateCommand.ExecuteAsync("leads");
         await Pump();
         var leads = Assert.IsType<LeadsViewModel>(main.Current);
-        leads.PasteText = "Ana Souza - (21) 99876-5432\nNúmero ruim 123\nMaria;(11) 98888-7766";
+        // lista só com números, sem nomes
+        leads.PasteText = "(21) 99876-5432\n123\n11 98888-7766\n+55 31 99777-6655";
+        leads.ImportConsentSource = "Pediram informações no Instagram";
         await leads.ImportPasteCommand.ExecuteAsync(null);
         await Pump();
-        Assert.Contains("2 novos", leads.ImportSummary);
+        Assert.Contains("3 novos", leads.ImportSummary);
         Assert.Contains("1 inválidos", leads.ImportSummary);
+        Assert.Contains("3 com consentimento", leads.ImportSummary);
+        Assert.Contains(leads.Leads, l => l.Name == "+55 (21) 99876-5432");
+        leads.NewPhone = "14 99666-5544"; // cadastro manual sem nome
+        await leads.AddManualCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(leads.Error);
+        Assert.Contains(leads.Leads, l => l.Name == "+55 (14) 99666-5544");
         Shot(win, "05-leads-importacao");
 
         await main.NavigateCommand.ExecuteAsync("planos");
@@ -184,12 +193,12 @@ public class UiTests
         camp.Sat = camp.Sun = true; camp.Objective = "Apresentar planos de revenda";
         await camp.SaveCommand.ExecuteAsync(null);
         await Pump();
-        Assert.Equal(1, camp.Selected!.Model.Eligible);
+        Assert.Equal(4, camp.Selected!.Model.Eligible); // 1 do exemplo + 3 números importados sem nome, com autorização
         await camp.StartCommand.ExecuteAsync(null);
         await Pump();
         Assert.Null(camp.Error);
         Assert.Equal(CampaignStatus.Ativa, camp.Selected!.Model.Status);
-        Assert.Equal(1, camp.Selected.Model.Queued);
+        Assert.Equal(4, camp.Selected.Model.Queued);
         Shot(win, "12-campanhas");
 
         // Fase 9: relatórios

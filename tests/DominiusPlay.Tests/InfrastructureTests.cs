@@ -23,6 +23,62 @@ public sealed class SqliteDb : IDisposable
 public class ImportTests
 {
     [Fact]
+    public void Lista_so_de_numeros_sem_cabecalho_e_sem_nome()
+    {
+        var rows = LeadFileParser.ParseCsv(new MemoryStream(Encoding.UTF8.GetBytes("14988159045\r\n(21) 99999-8888\r\n\r\n+55 11 98765-4321\r\n")));
+        Assert.Equal(["14988159045", "(21) 99999-8888", "+55 11 98765-4321"], rows.Select(r => r.Phone));
+        Assert.All(rows, r => Assert.Null(r.Name));
+        Assert.Equal(1, rows[0].LineNumber);
+    }
+
+    [Theory]
+    [InlineData("Números\n14988159045\n21999998888\n")]
+    [InlineData("Contatos da feira\n14988159045\n21999998888\n")]
+    [InlineData("telefones;observação\n14988159045;\n21999998888;\n")]
+    public void Lista_de_numeros_com_cabecalho_qualquer(string csv)
+    {
+        var rows = LeadFileParser.ParseCsv(new MemoryStream(Encoding.UTF8.GetBytes(csv)));
+        Assert.Equal(["14988159045", "21999998888"], rows.Select(r => r.Phone));
+        Assert.All(rows, r => Assert.True(string.IsNullOrEmpty(r.Name)));
+    }
+
+    [Fact]
+    public void Csv_sem_cabecalho_com_nome_opcional()
+    {
+        var rows = LeadFileParser.ParseCsv(new MemoryStream(Encoding.UTF8.GetBytes("Ana;14988159045\n;21999998888\n")));
+        Assert.Equal(("Ana", "14988159045"), (rows[0].Name, rows[0].Phone));
+        Assert.Equal((null, "21999998888"), (rows[1].Name, rows[1].Phone));
+    }
+
+    [Fact]
+    public void Xlsx_so_com_numeros_salvos_como_numero()
+    {
+        using var wb = new XLWorkbook();
+        var ws = wb.AddWorksheet("Plan1");
+        ws.Cell(1, 1).Value = 14988159045; ws.Cell(2, 1).Value = 21999998888;
+        using var ms = new MemoryStream(); wb.SaveAs(ms); ms.Position = 0;
+        var rows = LeadFileParser.ParseXlsx(ms);
+        Assert.Equal(["14988159045", "21999998888"], rows.Select(r => r.Phone));
+        Assert.All(rows, r => Assert.Null(r.Name));
+    }
+
+    [Fact]
+    public async Task Autorizacao_declarada_para_a_lista_inteira()
+    {
+        using var s = new SqliteDb();
+        await using var db = s.New();
+        var r = await new LeadImportService(db).ImportAsync(
+            [new RawLeadRow { LineNumber = 1, Phone = "14988159045" }, new RawLeadRow { LineNumber = 2, Phone = "21999998888" }],
+            new("numeros.txt", "TXT", "carlos", null, null, BatchConsentSource: "Pediram informações no Instagram"));
+        Assert.Equal((2, 2), (r.Created, r.WithConsent));
+        var lead = await db.Leads.Include(l => l.ConsentRecords).FirstAsync();
+        Assert.Equal(ConsentStatus.Valido, lead.ConsentStatus);
+        Assert.Equal("", lead.Name);
+        Assert.Contains("Instagram", lead.ConsentSource);
+        Assert.Contains("carlos", lead.ConsentSource);
+    }
+
+    [Fact]
     public void Csv_ponto_e_virgula_com_cabecalhos_em_portugues()
     {
         var csv = "Nome;WhatsApp;Cidade;UF;Origem;Tags;Consentimento;Origem do consentimento\n" +

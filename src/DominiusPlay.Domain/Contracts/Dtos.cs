@@ -21,7 +21,12 @@ public sealed record LeadDetail(
     Guid? AssignedUserId, string? AssignedTo, string? NextAction, DateTimeOffset? LastInteractionAt, string? ConversationSummary,
     ConsentStatus Consent, DateTimeOffset? ConsentAt, string? ConsentSource, DateTimeOffset CreatedAt,
     IReadOnlyList<FactDto> Facts, IReadOnlyList<StageChangeDto> StageHistory, RecommendationDto? Recommendation,
-    KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null);
+    KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null)
+{
+    /// <summary>Nome para exibir: o número formatado quando o lead não tem nome.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? PhoneFormatted : Name;
+}
 
 public sealed record FactDto(string Key, string Value, FactSource Source, DateTimeOffset At);
 public sealed record StageChangeDto(KanbanStage? From, KanbanStage To, string ChangedBy, string? Reason, DateTimeOffset At);
@@ -48,7 +53,7 @@ public sealed record SendMessageResponse(bool Queued, string? Reason, Guid? Queu
 public sealed record ImportResponse(Guid BatchId, int Total, int Created, int Updated, int Duplicates, int Invalid, int Blocked,
     int WithConsent, IReadOnlyList<ImportRowDto> Problems);
 public sealed record ImportRowDto(int Line, string? RawPhone, string Outcome, string? Message);
-public sealed record PasteImportRequest(string Text, string? Source, string? Tags);
+public sealed record PasteImportRequest(string Text, string? Source, string? Tags, string? ConsentSource = null);
 public sealed record OptOutImportRequest(string Text, string Reason);
 
 public sealed record PlanDto(Guid Id, string Code, string Name, int Version, decimal MonthlyPrice, int? Credits, int? MaxActiveLogins,

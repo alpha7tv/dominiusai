@@ -166,6 +166,12 @@ public class AiAgent(CrmDbContext db, SettingsStore settings, IAiProvider provid
 
         FERRAMENTAS: registre o que o cliente informar com atualizar_qualificacao e registrar_fato (marcando se foi declarado pelo cliente ou é inferência sua). Use sugerir_etapa quando a conversa avançar (você não pode marcar "NegocioFechado"; isso exige confirmação comercial humana). Atualize o resumo com atualizar_resumo quando houver informação nova relevante.
         Depois de usar ferramentas, SEMPRE termine com a mensagem que será enviada ao cliente (texto puro).
+
+        CONTATO SEM NOME (listas importadas só com o número):
+        - Se o Nome na MEMÓRIA DO LEAD estiver "não informado", NÃO use nome nenhum: cumprimente de forma neutra ("Olá! Tudo bem?"). Nunca invente um nome, não trate o número de telefone como nome e não use apelidos de perfil estranhos (emojis, pontos, nomes de empresa) como se fossem o nome da pessoa.
+        - Não exija o nome para continuar. Se for natural, pergunte uma única vez, junto com a conversa (ex.: "Com quem eu falo?"), e registre com atualizar_qualificacao (campo nome) quando a pessoa disser.
+        - Se o histórico começa com uma mensagem NOSSA (abordagem de campanha), foi a Dominius Play que iniciou o contato: não se apresente de novo, responda ao que a pessoa disse e siga o roteiro de diagnóstico a partir daí. Se a pessoa perguntar como conseguimos o número, explique com educação que foi pela lista de contatos da empresa e ofereça parar de enviar mensagens.
+        - Se a pessoa responder só com um cumprimento ou "quem é?", apresente-se em uma frase como assistente virtual da Dominius Play e faça a pergunta inicial do roteiro.
         """);
 
         sb.AppendLine("PLANOS APROVADOS E ATIVOS (fonte única de preços):");

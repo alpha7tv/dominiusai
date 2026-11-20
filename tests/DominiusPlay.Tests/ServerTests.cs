@@ -171,6 +171,27 @@ public class ServerTests
     }
 
     [Fact]
+    public async Task Importacao_so_de_numeros_sem_nome_e_cadastro_manual_sem_nome()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        // arquivo só com números, sem cabeçalho
+        var form = new MultipartFormDataContent { { new ByteArrayContent(Encoding.UTF8.GetBytes("14988159045\n(21) 99999-8888\n11 98765-4321\n")), "file", "numeros.txt" } };
+        form.Add(new StringContent("Lista do Instagram"), "consentSource");
+        var r = await (await c.PostAsync("/api/import/file", form)).Content.ReadFromJsonAsync<ImportResponse>();
+        Assert.Equal((3, 3, 0), (r!.Created, r.WithConsent, r.Invalid));
+        // cadastro manual sem nome
+        var lead = await (await c.PostAsJsonAsync("/api/leads", new LeadUpsert("", "31 99888-7766", null, null, null, null, null, IptvExperience.NaoInformado, null, null, PainCategory.Nenhuma, null, null, Priority.Normal, null))).Content.ReadFromJsonAsync<LeadCard>();
+        Assert.Equal("+55 (31) 99888-7766", lead!.Name);
+        var cards = await c.GetFromJsonAsync<List<LeadCard>>("/api/leads");
+        Assert.Equal(4, cards!.Count);
+        Assert.All(cards, x => Assert.StartsWith("+55 (", x.Name)); // o número aparece no lugar do nome
+        Assert.Equal(3, (await c.GetFromJsonAsync<List<LeadCard>>("/api/leads?consent=Valido"))!.Count);
+        var kanban = await c.GetStringAsync("/api/kanban");
+        Assert.Contains("(21) 99999-8888", kanban);
+    }
+
+    [Fact]
     public async Task Kanban_move_e_negocio_fechado_exige_confirmacao()
     {
         using var f = new CrmFactory();

@@ -41,9 +41,9 @@ public class AiTests
         (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, model, "claude-sonnet-5-5", "sk-ant-teste-123", 4000, "Lia", "", 100000, false, 0))).EnsureSuccessStatusCode();
     }
 
-    private static async Task<Guid> Inbound(CrmFactory f, string id, string text)
+    private static async Task<Guid> Inbound(CrmFactory f, string id, string text, string pushName = "João")
     {
-        var body = $$$"""{"event":"messages.upsert","instance":"dominius","data":{"key":{"remoteJid":"5514988159045@s.whatsapp.net","fromMe":false,"id":"{{{id}}}"},"pushName":"João","message":{"conversation":"{{{text}}}"},"messageTimestamp":{{{f.Clock.GetUtcNow().ToUnixTimeSeconds()}}}}}""";
+        var body = $$$"""{"event":"messages.upsert","instance":"dominius","data":{"key":{"remoteJid":"5514988159045@s.whatsapp.net","fromMe":false,"id":"{{{id}}}"},"pushName":"{{{pushName}}}","message":{"conversation":"{{{text}}}"},"messageTimestamp":{{{f.Clock.GetUtcNow().ToUnixTimeSeconds()}}}}}""";
         var req = new HttpRequestMessage(HttpMethod.Post, "/webhooks/evolution") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         req.Headers.Add("x-dominius-token", await f.WebhookTokenAsync());
         (await f.CreateClient().SendAsync(req)).EnsureSuccessStatusCode();
@@ -67,6 +67,26 @@ public class AiTests
         Assert.Contains("\"hasApiKey\":true", raw);
         var stored = await f.WithDb(db => db.Settings.SingleAsync(s => s.Key == SettingKeys.AiApiKey));
         Assert.True(stored.IsSecret); Assert.DoesNotContain("sk-teste", stored.Value);
+    }
+
+    [Fact]
+    public async Task IA_conversa_com_lead_importado_so_com_numero()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        await EnableAi(f, c);
+        var imp = await (await c.PostAsJsonAsync("/api/import/paste", new PasteImportRequest("14 98815-9045", null, null, "Pediram contato no Instagram"))).Content.ReadFromJsonAsync<ImportResponse>();
+        Assert.Equal((1, 1), (imp!.Created, imp.WithConsent));
+        var id = await Inbound(f, "N1", "oi, quem é?", pushName: "");
+        f.Ai.Script.Enqueue(_ => FakeAi.Text("Olá! Tudo bem? Sou a Lia, assistente virtual da Dominius Play. Você já trabalha com revenda de IPTV ou está pensando em começar?"));
+        Assert.Equal(AiReplyOutcome.Replied, await Respond(f, id));
+
+        var system = f.Ai.Requests[0].System;
+        Assert.Contains("- Nome: não informado", system);
+        Assert.Contains("CONTATO SEM NOME", system);
+        Assert.Contains("NÃO use nome nenhum", system);
+        var card = (await c.GetFromJsonAsync<List<LeadCard>>("/api/leads"))!.Single();
+        Assert.Equal("+55 (14) 98815-9045", card.Name); // sem nome, o card mostra o número
     }
 
     [Fact]
