@@ -35,11 +35,14 @@ public static class SchemaUpgrader
             if (existing.Count == 0)
             {
                 // tabela nova: executa o CREATE TABLE (e índices) do script gerado pelo próprio modelo
+                // só o CREATE TABLE desta tabela e os índices dela (não os de tabelas que apenas a referenciam)
                 foreach (var stmt in createScript.Split(";", StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim())
-                             .Where(s => s.Contains($"\"{table}\"") && (s.StartsWith("CREATE TABLE") || s.StartsWith("CREATE UNIQUE INDEX") || s.StartsWith("CREATE INDEX"))))
+                             .Where(s => s.StartsWith($"CREATE TABLE \"{table}\"") ||
+                                         ((s.StartsWith("CREATE UNIQUE INDEX") || s.StartsWith("CREATE INDEX")) && s.Contains($" ON \"{table}\""))))
                 {
                     await using var cmd = conn.CreateCommand();
-                    cmd.CommandText = stmt;
+                    cmd.CommandText = stmt.Replace("CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ")
+                        .Replace("CREATE UNIQUE INDEX ", "CREATE UNIQUE INDEX IF NOT EXISTS ").Replace("CREATE INDEX ", "CREATE INDEX IF NOT EXISTS ");
                     await cmd.ExecuteNonQueryAsync(ct);
                 }
                 changes.Add($"tabela {table}");

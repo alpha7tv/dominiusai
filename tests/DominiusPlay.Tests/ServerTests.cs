@@ -41,7 +41,7 @@ public class FakeEvolution : IEvolutionApi
         Task.FromResult<IReadOnlyList<(string, bool, string?)>>([]);
 }
 
-public sealed class CrmFactory(bool realAi = false) : WebApplicationFactory<Program>
+public sealed class CrmFactory(bool realAi = false, bool shippedConnection = false) : WebApplicationFactory<Program>
 {
     public readonly string DataDir = Path.Combine(Path.GetTempPath(), "dpcrm-tests-" + Guid.NewGuid().ToString("N"));
     public readonly FakeEvolution Evolution = new();
@@ -53,7 +53,8 @@ public sealed class CrmFactory(bool realAi = false) : WebApplicationFactory<Prog
         Directory.CreateDirectory(DataDir);
         b.UseSetting("DataDirectory", DataDir);
         b.UseSetting("Workers:Enabled", "false");
-        b.UseSetting("ConnectionStrings:Crm", $"Data Source={Path.Combine(DataDir, "crm.db")}");
+        // shippedConnection: igual ao appsettings.json instalado (conexão vazia → crm.db no diretório de dados)
+        b.UseSetting("ConnectionStrings:Crm", shippedConnection ? "" : $"Data Source={Path.Combine(DataDir, "crm.db")}");
         b.ConfigureTestServices(s =>
         {
             s.AddSingleton<IEvolutionApi>(Evolution);

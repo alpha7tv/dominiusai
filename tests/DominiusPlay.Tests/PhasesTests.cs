@@ -12,6 +12,34 @@ namespace DominiusPlay.Tests;
 /// <summary>Fases 6 a 9: qualificação, equipe, modelos, campanhas, relatórios, LGPD e manutenção.</summary>
 public class PhasesTests
 {
+    [Fact]
+    public async Task Configuracao_instalada_grava_banco_no_diretorio_de_dados_e_mantem_os_dados()
+    {
+        // appsettings.json do instalador: ConnectionStrings:Crm vazio
+        string dir;
+        using (var f = new CrmFactory(shippedConnection: true))
+        {
+            dir = f.DataDir;
+            await f.AdminAsync(); // cria o administrador
+            Assert.True(File.Exists(Path.Combine(dir, "crm.db")));
+            Assert.Equal(1, await f.WithDb(db => db.Users.CountAsync()));
+        }
+    }
+
+    [Fact]
+    public async Task Atualizador_do_banco_nao_recria_tabelas_existentes()
+    {
+        using var f = new CrmFactory();
+        await f.AdminAsync();
+        // rodar de novo num banco completo não muda nada e não falha
+        var changes = await f.WithDb(db => DominiusPlay.Infrastructure.Data.SchemaUpgrader.UpgradeSqliteAsync(db));
+        Assert.Empty(changes);
+        // tabela que referencia outra (ConsentRecords → Leads) ausente: é criada sozinha, sem tocar nas demais
+        await f.WithDb(db => db.Database.ExecuteSqlRawAsync("DROP TABLE \"ConsentRecords\""));
+        changes = await f.WithDb(db => DominiusPlay.Infrastructure.Data.SchemaUpgrader.UpgradeSqliteAsync(db));
+        Assert.Equal(["tabela ConsentRecords"], changes);
+    }
+
     private static async Task<LeadCard> NewLead(HttpClient c, string name, string phone, string? tags = null, bool consent = true)
     {
         var res = await c.PostAsJsonAsync("/api/leads", new LeadUpsert(name, phone, null, null, "Formulário site", null, tags, IptvExperience.NaoInformado,

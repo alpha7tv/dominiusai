@@ -30,7 +30,9 @@ Directory.CreateDirectory(dataDir);
 
 // Banco: "Sqlite" (uma máquina) ou "Postgres" (equipe, fonte única de verdade)
 var provider = builder.Configuration["Database:Provider"] ?? "Sqlite";
-var conn = builder.Configuration.GetConnectionString("Crm");
+// appsettings.json vem com a conexão vazia: nesse caso usa o arquivo crm.db no diretório de dados
+// (string vazia no SQLite seria um banco temporário por conexão — os dados se perderiam).
+var conn = builder.Configuration.GetConnectionString("Crm") is { Length: > 0 } cs ? cs : null;
 builder.Services.AddDbContext<CrmDbContext>(o =>
 {
     if (provider.Equals("Postgres", StringComparison.OrdinalIgnoreCase)) o.UseNpgsql(conn);
