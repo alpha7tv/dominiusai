@@ -57,6 +57,9 @@ public static class SendGuard
             return GuardResult.Block("Atendimento humano em andamento — IA bloqueada para esta conversa");
         if (automated && c.Lead.Mode == ConversationMode.Pausado)
             return GuardResult.Block("Conversa pausada");
+        // máquina de estados: só quem tem a palavra envia (Disparo não fala depois que o contato respondeu; Atendimento não fala na prospecção)
+        if (automated && !ConversationStateMachine.MaySend(c.Lead.Mode, c.Kind))
+            return GuardResult.Block($"Quem fala nesta conversa agora é: {ConversationStateMachine.SpeakerTitle(ConversationStateMachine.Speaker(c.Lead.Mode))} ({KanbanRules.ModeTitle(c.Lead.Mode)})");
 
         if (c.ConsecutiveFailures >= MaxConsecutiveFailures)
             return GuardResult.Block($"{c.ConsecutiveFailures} falhas consecutivas para este contato — revisão manual necessária");

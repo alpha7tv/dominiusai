@@ -1,3 +1,4 @@
+using DominiusPlay.Domain.Services;
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -41,7 +42,7 @@ public partial class ChatPopupViewModel : ViewModelBase
 
     public string Title => Detail?.DisplayName ?? "";
     public string Subtitle => Detail is null ? "" : $"{Detail.PhoneFormatted} · {Ui.Stage(Detail.Stage)}";
-    public string ModeText => Detail is null ? "" : Ui.Mode(Detail.Mode) + (Detail.AssignedTo is null ? "" : " · " + Detail.AssignedTo);
+    public string ModeText => Detail is null ? "" : Ui.Mode(Detail.Mode) + " · fala agora: " + ConversationStateMachine.SpeakerTitle(ConversationStateMachine.Speaker(Detail.Mode)) + (Detail.AssignedTo is null ? "" : " · " + Detail.AssignedTo);
     public bool IsHuman => Detail?.Mode == ConversationMode.AtendimentoHumano;
     public bool CanTakeOver => Detail is not null && !IsHuman;
     public bool CanReturn => Detail is not null && Detail.Mode is ConversationMode.AtendimentoHumano or ConversationMode.Pausado;

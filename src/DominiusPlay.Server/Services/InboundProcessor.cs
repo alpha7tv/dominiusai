@@ -131,13 +131,13 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
                 if (!await db.OptOuts.AnyAsync(o => o.Phone == lead.Phone, ct))
                     db.OptOuts.Add(new OptOut { Phone = lead.Phone, Reason = "Pedido do contato", Source = "WhatsApp" });
                 lead.Stage = KanbanStage.NaoTemInteresse;
-                lead.Mode = ConversationMode.Encerrado;
+                ConversationStateMachine.Apply(lead, ConversationTrigger.Descadastro);
                 lead.StageChanges.Add(new StageChange { LeadId = lead.Id, To = KanbanStage.NaoTemInteresse, ChangedBy = "Sistema", Reason = "Pedido de descadastro" });
                 db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "lead.optout", EntityType = "Lead", EntityId = lead.Id.ToString(), Details = Preview(p.Text) });
             }
             else
             {
-                if (lead.Mode == ConversationMode.AguardandoContato) lead.Mode = ConversationMode.Ia;
+                ConversationStateMachine.Apply(lead, ConversationTrigger.ContatoRespondeu); // Disparo → Atendimento: só um agente fala
                 // respondeu = acompanhamentos automáticos pendentes são interrompidos (o SendGuard também bloqueia)
                 var followUps = await db.OutboundQueue.Where(q => q.LeadId == lead.Id && q.Kind == OutboundKind.Acompanhamento && q.Status == MessageStatus.NaFila).ToListAsync(ct);
                 foreach (var q in followUps) { q.Status = MessageStatus.Cancelada; q.LastError = "Contato respondeu"; q.UpdatedAt = clock.GetUtcNow(); }

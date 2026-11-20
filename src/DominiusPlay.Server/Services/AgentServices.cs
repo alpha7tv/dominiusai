@@ -62,7 +62,7 @@ public class HandoffService(CrmDbContext db, ConversationService conversations, 
     {
         var now = clock.GetUtcNow();
         await conversations.CancelAutomatedAsync(lead.Id, "Transferido para atendimento humano", ct);
-        lead.Mode = ConversationMode.AtendimentoHumano;
+        ConversationStateMachine.Apply(lead, ConversationTrigger.TransferirHumano);
         lead.Priority = lead.Priority < Priority.Alta ? Priority.Alta : lead.Priority;
         lead.NextAction = "Atendimento humano: " + reason;
         lead.HandoffAt = now;
@@ -134,7 +134,7 @@ public class IntentRouter(AgentResolver agents, HandoffService handoff)
     public async Task<string?> RouteAsync(Lead lead, IntentCategory intent, CancellationToken ct = default)
     {
         if (intent is IntentCategory.Nenhuma or IntentCategory.Descadastro) return null; // descadastro tem fluxo próprio
-        if (lead.Mode is not (ConversationMode.Ia or ConversationMode.AguardandoContato)) return null;
+        if (lead.Mode is not (ConversationMode.Ia or ConversationMode.AguardandoContato or ConversationMode.Prospeccao)) return null;
         var agent = await agents.ResolveAttendanceAsync(lead, ct);
         var action = IntentDetector.ParseActions(agent?.IntentActions).GetValueOrDefault(intent, IntentAction.Continuar);
         switch (action)
@@ -145,7 +145,7 @@ public class IntentRouter(AgentResolver agents, HandoffService handoff)
                 if (lead.Priority < Priority.Alta) lead.Priority = Priority.Alta;
                 return null;
             case IntentAction.Encerrar:
-                lead.Mode = ConversationMode.Encerrado;
+                ConversationStateMachine.Apply(lead, ConversationTrigger.Encerrar);
                 return null;
         }
         return null;

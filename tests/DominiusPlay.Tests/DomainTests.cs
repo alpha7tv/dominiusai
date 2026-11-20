@@ -78,8 +78,42 @@ public class SendGuardTests
     public void Resposta_ignora_intervalo_mas_exige_janela_24h()
     {
         var l = Consented();
+        l.Mode = ConversationMode.Ia; // resposta só sai quando o Agente de Atendimento tem a palavra
         Assert.True(SendGuard.Evaluate(Ctx(l, OutboundKind.Resposta, lastInbound: Now.AddMinutes(-1), lastInitial: Now.AddSeconds(-10))).Allowed);
         Assert.False(SendGuard.Evaluate(Ctx(l, OutboundKind.Resposta, lastInbound: Now.AddHours(-25))).Allowed);
+    }
+
+    [Theory]
+    [InlineData(ConversationMode.AguardandoContato, ConversationTrigger.AbordagemEnviada, ConversationMode.Prospeccao)]
+    [InlineData(ConversationMode.Prospeccao, ConversationTrigger.ContatoRespondeu, ConversationMode.Ia)]
+    [InlineData(ConversationMode.Ia, ConversationTrigger.AbordagemEnviada, null)]
+    [InlineData(ConversationMode.Ia, ConversationTrigger.TransferirHumano, ConversationMode.AtendimentoHumano)]
+    [InlineData(ConversationMode.AtendimentoHumano, ConversationTrigger.ContatoRespondeu, ConversationMode.AtendimentoHumano)]
+    [InlineData(ConversationMode.AtendimentoHumano, ConversationTrigger.DevolverIa, ConversationMode.Ia)]
+    [InlineData(ConversationMode.Prospeccao, ConversationTrigger.DevolverIa, null)]
+    [InlineData(ConversationMode.Prospeccao, ConversationTrigger.Descadastro, ConversationMode.Encerrado)]
+    [InlineData(ConversationMode.Encerrado, ConversationTrigger.ContatoRespondeu, null)]
+    [InlineData(ConversationMode.Encerrado, ConversationTrigger.AbordagemEnviada, null)]
+    [InlineData(ConversationMode.Pausado, ConversationTrigger.ContatoRespondeu, null)]
+    [InlineData(ConversationMode.Pausado, ConversationTrigger.Retomar, ConversationMode.AguardandoContato)]
+    public void Maquina_de_estados_da_conversa(ConversationMode from, ConversationTrigger t, ConversationMode? to) =>
+        Assert.Equal(to, ConversationStateMachine.Next(from, t));
+
+    [Fact]
+    public void So_quem_tem_a_palavra_envia()
+    {
+        foreach (var mode in Enum.GetValues<ConversationMode>())
+        {
+            var speakers = new[] { OutboundKind.AbordagemInicial, OutboundKind.Acompanhamento, OutboundKind.Resposta }
+                .Where(k => ConversationStateMachine.MaySend(mode, k)).ToList();
+            // nunca Disparo (abordagem/acompanhamento) e Atendimento (resposta) ao mesmo tempo
+            Assert.False(speakers.Contains(OutboundKind.Resposta) && speakers.Count > 1, mode.ToString());
+        }
+        var l = Consented(); l.Mode = ConversationMode.Prospeccao;
+        var r = SendGuard.Evaluate(Ctx(l, OutboundKind.Resposta, lastInbound: Now.AddMinutes(-1)));
+        Assert.False(r.Allowed); Assert.Contains("Agente de Disparo", r.Reason);
+        l.Mode = ConversationMode.Ia;
+        Assert.False(SendGuard.Evaluate(Ctx(l, OutboundKind.AbordagemInicial)).Allowed);
     }
 
     [Fact] public void Bloqueia_contato_repetido_na_campanha() => Assert.False(SendGuard.Evaluate(Ctx(Consented(), already: true)).Allowed);

@@ -150,7 +150,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             Finish(item, MessageStatus.EnviadaServidor, null, now);
             item.Lead.LastInteractionAt = now;
             item.Lead.LastMessagePreview = item.Text.Length > 120 ? item.Text[..120] + "…" : item.Text;
-            if (item.Lead.Mode == ConversationMode.AguardandoContato && item.Kind == OutboundKind.AbordagemInicial) item.Lead.Mode = ConversationMode.Ia;
+            if (item.Kind is OutboundKind.AbordagemInicial or OutboundKind.Acompanhamento) ConversationStateMachine.Apply(item.Lead, ConversationTrigger.AbordagemEnviada);
             if (item.Kind == OutboundKind.AbordagemInicial && item.CampaignId is { } origin) item.Lead.OriginCampaignId ??= origin;
             await db.SaveChangesAsync(ct);
             await hub.Clients.All.SendAsync(HubEvents.MessageAdded, item.LeadId, ct);

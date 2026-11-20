@@ -87,7 +87,7 @@ public static class Api
             var blocked = await db.OptOuts.AnyAsync(o => o.Phone == ph.Normalized);
             var l = new Lead { Phone = ph.Normalized, ImportedAt = DateTimeOffset.UtcNow, Source = r.Source ?? "Cadastro manual" };
             Apply(l, r);
-            if (blocked) { l.ConsentStatus = ConsentStatus.Revogado; l.Stage = KanbanStage.NaoTemInteresse; l.Mode = ConversationMode.Encerrado; }
+            if (blocked) { l.ConsentStatus = ConsentStatus.Revogado; l.Stage = KanbanStage.NaoTemInteresse; ConversationStateMachine.Apply(l, ConversationTrigger.Bloquear); }
             db.Leads.Add(l);
             db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "lead.create", EntityType = "Lead", EntityId = l.Id.ToString() });
             await db.SaveChangesAsync();

@@ -27,6 +27,7 @@ public static class KanbanRules
         ConversationMode.AtendimentoHumano => "Atendimento humano",
         ConversationMode.Pausado => "Pausado",
         ConversationMode.Encerrado => "Encerrado",
+        ConversationMode.Prospeccao => "Prospecção (aguardando resposta)",
         _ => m.ToString(),
     };
 

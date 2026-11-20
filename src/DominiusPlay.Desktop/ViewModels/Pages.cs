@@ -1,3 +1,4 @@
+using DominiusPlay.Domain.Services;
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -182,7 +183,7 @@ public partial class ConversationsViewModel : ViewModelBase
 
     public bool CanTakeOver => Detail is not null && Detail.Mode != ConversationMode.AtendimentoHumano;
     public bool CanReturn => Detail is not null && Detail.Mode is ConversationMode.AtendimentoHumano or ConversationMode.Pausado;
-    public string ModeText => Detail is null ? "" : Ui.Mode(Detail.Mode) + (Detail.AssignedTo is null ? "" : " · " + Detail.AssignedTo);
+    public string ModeText => Detail is null ? "" : Ui.Mode(Detail.Mode) + " · fala agora: " + ConversationStateMachine.SpeakerTitle(ConversationStateMachine.Speaker(Detail.Mode)) + (Detail.AssignedTo is null ? "" : " · " + Detail.AssignedTo);
     public string ExperienceText => Detail?.Experience switch { IptvExperience.JaTrabalha => "Já trabalha com revenda", IptvExperience.Iniciante => "Está começando", _ => "Não informado" };
     public string PainText => Detail is null ? "" : Ui.Pain(Detail.MainPain);
     public string StageText => Detail is null ? "" : Ui.Stage(Detail.Stage);

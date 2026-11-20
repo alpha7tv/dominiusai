@@ -252,7 +252,7 @@ public class LeadImportService(CrmDbContext db)
                 ImportedAt = now, ImportBatchId = batch.Id,
                 Company = Clean(row.Company), Segment = Clean(row.Segment), ConsentPurpose = Clean(row.ConsentPurpose),
             };
-            if (isBlocked) { lead.ConsentStatus = ConsentStatus.Revogado; lead.Stage = KanbanStage.NaoTemInteresse; lead.Mode = ConversationMode.Encerrado; }
+            if (isBlocked) { lead.ConsentStatus = ConsentStatus.Revogado; lead.Stage = KanbanStage.NaoTemInteresse; ConversationStateMachine.Apply(lead, ConversationTrigger.Bloquear); }
             else if (consent is not null) { ApplyConsent(lead, consent, opt.ImportedBy); withConsent++; }
             db.Leads.Add(lead);
             existing[phone] = lead;

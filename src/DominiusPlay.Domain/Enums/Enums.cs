@@ -19,7 +19,19 @@ public enum ConversationMode
     AtendimentoHumano = 2,
     Pausado = 3,
     Encerrado = 4,
+    /// <summary>Agente de Disparo abordou e aguarda resposta (só ele pode enviar: acompanhamentos da campanha).</summary>
+    Prospeccao = 5,
 }
+
+/// <summary>Eventos que mudam o estado da conversa (máquina de estados explícita — ver ConversationStateMachine).</summary>
+public enum ConversationTrigger
+{
+    AbordagemEnviada, ContatoRespondeu, Descadastro, TransferirHumano, HumanoAssumiu, MensagemManual,
+    DevolverIa, Pausar, Retomar, Encerrar, Bloquear,
+}
+
+/// <summary>Quem tem a palavra na conversa. Nunca há dois ao mesmo tempo.</summary>
+public enum ConversationSpeaker { Ninguem, AgenteDisparo, AgenteAtendimento, Humano }
 
 public enum ConsentStatus { Pendente = 0, Valido = 1, Revogado = 2 }
 

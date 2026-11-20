@@ -7,6 +7,7 @@ using DominiusPlay.Domain.Services;
 using DominiusPlay.Infrastructure.Evolution;
 using DominiusPlay.Infrastructure.Import;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DominiusPlay.Tests;
 
@@ -116,8 +117,11 @@ public class DispatchTests
         Assert.Equal(1, await f.RunQueueAsync()); // Ana
         f.Clock.Advance(TimeSpan.FromMinutes(6));
         Assert.Equal(1, await f.RunQueueAsync()); // Bia
-        // Ana responde: as etapas dela param
+        // máquina de estados: depois da abordagem quem tem a palavra é o Agente de Disparo
+        Assert.All(await f.WithDb(db => db.Leads.ToListAsync()), l => Assert.Equal(ConversationMode.Prospeccao, l.Mode));
+        // Ana responde: as etapas dela param e o Agente de Atendimento assume
         await Inbound(f, "5511987650010", "R1", "Oi, quem é?");
+        Assert.Equal(ConversationMode.Ia, await f.WithDb(db => db.Leads.Where(l => l.Phone.EndsWith("87650010")).Select(l => l.Mode).SingleAsync()));
         Assert.Equal(3, await f.WithDb(db => db.OutboundQueue.CountAsync(q => q.Kind == OutboundKind.Acompanhamento && q.Status == MessageStatus.Cancelada)));
 
         f.Clock.Advance(TimeSpan.FromDays(1).Add(TimeSpan.FromMinutes(10)));
@@ -136,6 +140,44 @@ public class DispatchTests
         Assert.Equal(CampaignStatus.Concluida, dto.Status);
         // origem do contato registrada para o CRM e para o agente de atendimento
         Assert.All(await f.WithDb(db => db.Leads.ToListAsync()), l => Assert.Equal(camp.Id, l.OriginCampaignId));
+    }
+
+    [Fact]
+    public async Task Disparo_passa_a_conversa_para_o_agente_de_atendimento_vinculado()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        await f.ConfigureEvolutionAsync(c);
+        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", "sk-ant-teste-123", 4000, "Lia", "", 100000, false, 0))).EnsureSuccessStatusCode();
+        var att = (await (await c.PostAsJsonAsync("/api/agents", new AgentUpsert(AgentKind.Atendimento, "Fechamento revenda", "Bruno", "", "Qualificar e fechar",
+            "Dominius Play", "Consultivo", "Direto", "", "", "", "", "", "claude-sonnet-5-5", "", AgentStatus.Ativo, false, "00:00", "23:59", "0,1,2,3,4,5,6", "America/Sao_Paulo", ""))).Content.ReadFromJsonAsync<AgentDto>())!;
+        var disp = (await (await c.PostAsJsonAsync("/api/agents", new AgentUpsert(AgentKind.Disparo, "Prospecção revenda", "Lia", "", "Abrir conversa",
+            "Dominius Play", "", "", "", "", "", "", "", "", "", AgentStatus.Ativo, true, "00:00", "23:59", "0,1,2,3,4,5,6", "America/Sao_Paulo", "",
+            "", 40, 300, att.Id))).Content.ReadFromJsonAsync<AgentDto>())!;
+        Assert.Equal(att.Id, disp.AttendanceAgentId);
+        await NewLead(c, "Ana", "11987650020");
+        var tid = await ApprovedTemplate(c, Approved);
+        var camp = (await (await c.PostAsJsonAsync("/api/campaigns", Camp(tid, disp.Id) with { Name = "Revenda Sul" })).Content.ReadFromJsonAsync<CampaignDto>())!;
+        Assert.True((await Act(c, camp.Id, "start")).Ok);
+        Assert.Equal(1, await f.RunQueueAsync());
+
+        // enquanto o contato não responde, o Atendimento não fala (só o Disparo tem a palavra)
+        var leadId = await f.WithDb(db => db.Leads.Select(l => l.Id).SingleAsync());
+        using (var scope = f.Services.CreateScope())
+            Assert.Equal(DominiusPlay.Server.Services.AiReplyOutcome.Skipped,
+                await scope.ServiceProvider.GetRequiredService<DominiusPlay.Server.Services.AiResponder>().RespondAsync(leadId));
+
+        await Inbound(f, "5511987650020", "R1", "Oi, como funciona?");
+        f.Ai.Script.Enqueue(_ => FakeAi.Text("Oi, Ana! Aqui é o Bruno. Você já revende hoje?"));
+        using (var scope = f.Services.CreateScope())
+            Assert.Equal(DominiusPlay.Server.Services.AiReplyOutcome.Replied,
+                await scope.ServiceProvider.GetRequiredService<DominiusPlay.Server.Services.AiResponder>().RespondAsync(leadId));
+        var req = f.Ai.Requests.Last();
+        Assert.Equal("claude-sonnet-5-5", req.Model); // modelo do agente de atendimento vinculado
+        Assert.Contains("ORIGEM DO CONTATO", req.System);
+        Assert.Contains("Revenda Sul", req.System);
+        Assert.Contains("Bruno", req.System);
+        Assert.Equal(ConversationMode.Ia, await f.WithDb(db => db.Leads.Select(l => l.Mode).SingleAsync()));
     }
 
     [Fact]

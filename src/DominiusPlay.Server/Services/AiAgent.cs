@@ -33,7 +33,7 @@ public sealed record AiConfig(bool Enabled, string Model, string AdvancedModel, 
 }
 
 /// <summary>Contexto do agente para uma rodada: perfil (opcional), perguntas de qualificação e intenção detectada na última mensagem.</summary>
-public sealed record AgentContext(AgentProfile? Agent, IReadOnlyList<QualificationQuestion> Questions, IntentCategory Intent = IntentCategory.Nenhuma, string? OutOfHoursNote = null);
+public sealed record AgentContext(AgentProfile? Agent, IReadOnlyList<QualificationQuestion> Questions, IntentCategory Intent = IntentCategory.Nenhuma, string? OutOfHoursNote = null, string? CampaignNote = null);
 
 public sealed class AgentResult
 {
@@ -278,6 +278,8 @@ CONTATO SEM NOME (listas importadas só com o número):
         }
         if (context is { Intent: not IntentCategory.Nenhuma })
             sb.AppendLine($"\nINTENÇÃO DETECTADA NA ÚLTIMA MENSAGEM: {IntentDetector.Title(context.Intent)}. Escolha a próxima ação de acordo (responda a dúvida, apresente o plano adequado, trate a objeção sem pressionar ou transfira).");
+        if (!string.IsNullOrWhiteSpace(context?.CampaignNote))
+            sb.AppendLine($"\nORIGEM DO CONTATO (passagem do Agente de Disparo): {context.CampaignNote} A abordagem enviada está no histórico. Continue a partir dela, sem repetir a apresentação e sem prometer nada que a abordagem não disse.");
         if (!string.IsNullOrWhiteSpace(context?.OutOfHoursNote))
             sb.AppendLine($"\nFORA DO HORÁRIO DE ATENDIMENTO HUMANO: {context.OutOfHoursNote} Continue atendendo normalmente. Se o cliente precisar de humano, transfira e diga que o time responde a partir desse horário e que já deixou tudo anotado.");
         if (historyCount > 30)
@@ -406,7 +408,7 @@ CONTATO SEM NOME (listas importadas só com o número):
                 return "{\"ok\":true}";
 
             case "transferir_para_humano":
-                lead.Mode = ConversationMode.AtendimentoHumano;
+                ConversationStateMachine.Apply(lead, ConversationTrigger.TransferirHumano);
                 lead.Priority = Priority.Alta;
                 lead.NextAction = "Atendimento humano: " + (S("motivo") ?? "solicitado");
                 r.Transferred = true;
@@ -433,7 +435,7 @@ CONTATO SEM NOME (listas importadas só com o número):
                 return "{\"ok\":true}";
 
             case "encerrar_conversa":
-                lead.Mode = ConversationMode.Encerrado;
+                ConversationStateMachine.Apply(lead, ConversationTrigger.Encerrar);
                 if (a["sem_interesse"] is JsonValue si && si.TryGetValue<bool>(out var no) && no && lead.Stage != KanbanStage.NaoTemInteresse)
                 {
                     KanbanRules.Apply(lead, KanbanStage.NaoTemInteresse, "IA", S("motivo"));

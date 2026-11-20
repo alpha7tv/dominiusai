@@ -62,7 +62,7 @@ public class AiResponder(CrmDbContext db, AiAgent agent, ConversationLocks locks
             return AiReplyOutcome.Skipped;
         }
         var questions = await agents.QuestionsAsync(profile?.Id, ct);
-        var context = new AgentContext(profile, questions, last.Intent, AgentHours.OutOfHoursNote(profile, clock.GetUtcNow()));
+        var context = new AgentContext(profile, questions, last.Intent, AgentHours.OutOfHoursNote(profile, clock.GetUtcNow()), await CampaignNoteAsync(lead, ct));
 
         var evo = await gateway.GetConfigAsync(ct);
         if (cfg.Typing && evo is not null) _ = evolution.SendPresenceAsync(evo, lead.Phone, "composing", 4000, CancellationToken.None);
@@ -85,7 +85,7 @@ public class AiResponder(CrmDbContext db, AiAgent agent, ConversationLocks locks
             log.LogWarning("IA não respondeu {Lead}: {Error}", leadId, result.Error);
             db.ChangeTracker.Clear();
             var l = await db.Leads.FirstAsync(x => x.Id == leadId, ct);
-            l.Mode = ConversationMode.AtendimentoHumano; l.Priority = Priority.Alta; l.NextAction = "IA indisponível: " + result.Error;
+            ConversationStateMachine.Apply(l, ConversationTrigger.TransferirHumano); l.Priority = Priority.Alta; l.NextAction = "IA indisponível: " + result.Error;
             l.ConcurrencyStamp = Guid.NewGuid();
             db.Messages.Add(new Message { LeadId = leadId, Direction = MessageDirection.Saida, Author = MessageAuthor.Sistema, Status = MessageStatus.Recebida,
                 Text = "IA não conseguiu responder (" + result.Error + "). Conversa encaminhada para atendimento humano.", Timestamp = clock.GetUtcNow() });
@@ -112,6 +112,18 @@ public class AiResponder(CrmDbContext db, AiAgent agent, ConversationLocks locks
         if (result.Transferred) await handoff.NotifyAsync(leadId, assigned, ct);
         await hub.Clients.All.SendAsync(HubEvents.LeadChanged, leadId, ct);
         return result.Reply is null ? AiReplyOutcome.Failed : AiReplyOutcome.Replied;
+    }
+
+    /// <summary>Contexto da campanha que originou o contato (o Agente de Atendimento continua a conversa que o Disparo abriu).</summary>
+    private async Task<string?> CampaignNoteAsync(Lead lead, CancellationToken ct)
+    {
+        if (lead.OriginCampaignId is not { } cid) return null;
+        var c = await db.Campaigns.AsNoTracking().FirstOrDefaultAsync(x => x.Id == cid, ct);
+        if (c is null) return null;
+        var parts = new List<string> { $"campanha \"{c.Name}\"" };
+        if (!string.IsNullOrWhiteSpace(c.Segment)) parts.Add($"segmento {c.Segment}");
+        if (!string.IsNullOrWhiteSpace(c.Objective)) parts.Add($"objetivo: {c.Objective}");
+        return "Este contato respondeu à " + string.Join("; ", parts) + ".";
     }
 }
 
