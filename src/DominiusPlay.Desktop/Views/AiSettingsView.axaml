@@ -23,7 +23,7 @@
             <TextBlock Text="Nome de exibição da assistente" Classes="muted" />
             <TextBox Text="{Binding AssistantName}" />
             <Grid ColumnDefinitions="*,12,*">
-              <StackPanel><TextBlock Text="Limite por resposta (tokens, inclui raciocínio)" Classes="muted" /><NumericUpDown Value="{Binding MaxTokens}" Minimum="1000" Maximum="16000" Increment="500" /></StackPanel>
+              <StackPanel><TextBlock Text="Limite por resposta (tokens)" ToolTip.Tip="Inclui o raciocínio do modelo; a mensagem ao cliente continua curta" Classes="muted" /><NumericUpDown Value="{Binding MaxTokens}" Minimum="1000" Maximum="16000" Increment="500" /></StackPanel>
               <StackPanel Grid.Column="2"><TextBlock Text="Espera para agrupar mensagens (s)" Classes="muted" /><NumericUpDown Value="{Binding DebounceSeconds}" Minimum="0" Maximum="120" /></StackPanel>
             </Grid>
             <TextBlock Text="Limite diário de consumo (tokens)" Classes="muted" />
