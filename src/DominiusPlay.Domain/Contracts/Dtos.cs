@@ -75,6 +75,15 @@ public sealed record DashboardDto(
 public sealed record KnowledgeDto(Guid Id, string Category, string Title, string Content, string? SourceUrl, ApprovalStatus Approval, int Version);
 public sealed record TemplateDto(Guid Id, string Name, string Purpose, int Version, string Body, ApprovalStatus Approval, int TimesUsed);
 
+public sealed record AiSettingsDto(bool Enabled, string Model, bool HasApiKey, double Temperature, int MaxTokens, string AssistantName,
+    string Instructions, int DailyTokenLimit, int TokensUsedToday, bool TypingIndicator, int DebounceSeconds);
+public sealed record AiSettingsUpdate(bool Enabled, string Model, string? ApiKey, double Temperature, int MaxTokens, string AssistantName,
+    string Instructions, int DailyTokenLimit, bool TypingIndicator, int DebounceSeconds);
+public sealed record SimTurn(bool FromContact, string Text);
+public sealed record AiSimulateRequest(IReadOnlyList<SimTurn> Turns);
+public sealed record AiSimulateResponse(bool Ok, string? Reply, IReadOnlyList<string> Actions, bool Transferred, string? Error, int Tokens);
+public sealed record ModelsResponse(bool Ok, IReadOnlyList<string> Models, string? Error);
+
 public static class HubEvents
 {
     public const string LeadChanged = "leadChanged";

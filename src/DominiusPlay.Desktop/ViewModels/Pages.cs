@@ -170,6 +170,16 @@ public partial class ConversationsViewModel : ViewModelBase
     [RelayCommand] private Task ReturnToAi() => Act(id => _s.Api.ReturnToAiAsync(id));
     [RelayCommand] private Task Pause() => Act(id => _s.Api.PauseAsync(id, true));
 
+    /// <summary>A IA sugere uma resposta para o atendente revisar; nada é enviado automaticamente.</summary>
+    [RelayCommand]
+    private Task Suggest() => Run(async () =>
+    {
+        if (Selected is null) return;
+        var r = await _s.Api.SuggestAsync(Selected.Id);
+        if (r.Ok && r.Reply is not null) { Draft = r.Reply; Info = "Sugestão da IA no campo de mensagem. Revise antes de enviar."; }
+        else Error = r.Error ?? "A IA não gerou sugestão.";
+    });
+
     private Task Act(Func<Guid, Task<OperationResult>> f) => Run(async () =>
     {
         if (Selected is null) return;
@@ -358,7 +368,82 @@ public partial class KnowledgeViewModel(AppSession s) : ViewModelBase
 {
     public ObservableCollection<KnowledgeDto> Articles { get; } = new();
     [ObservableProperty] private KnowledgeDto? _selected;
-    public override Task OnActivatedAsync() => Run(async () => { Articles.Clear(); foreach (var a in await s.Api.KnowledgeAsync()) Articles.Add(a); Selected ??= Articles.FirstOrDefault(); });
+    public override Task OnActivatedAsync() => Run(Load);
+
+    private async Task Load()
+    {
+        var sel = Selected?.Id;
+        Articles.Clear(); foreach (var a in await s.Api.KnowledgeAsync()) Articles.Add(a);
+        Selected = Articles.FirstOrDefault(a => a.Id == sel) ?? Articles.FirstOrDefault();
+    }
+
+    [RelayCommand] private Task Approve() => Set(true);
+    [RelayCommand] private Task Unapprove() => Set(false);
+
+    private Task Set(bool approve) => Run(async () =>
+    {
+        if (Selected is null) return;
+        Info = (await s.Api.ApproveKnowledgeAsync(Selected.Id, approve)).Message;
+        await Load();
+    });
+}
+
+public partial class AiSettingsViewModel(AppSession s) : ViewModelBase
+{
+    [ObservableProperty] private bool _enabled;
+    [ObservableProperty] private string _model = "gpt-4o";
+    [ObservableProperty] private string _apiKey = "";
+    [ObservableProperty] private bool _hasApiKey;
+    [ObservableProperty] private double _temperature = 0.4;
+    [ObservableProperty] private decimal? _maxTokens = 600;
+    [ObservableProperty] private string _assistantName = "";
+    [ObservableProperty] private string _instructions = "";
+    [ObservableProperty] private decimal? _dailyTokenLimit = 500000;
+    [ObservableProperty] private int _tokensUsedToday;
+    [ObservableProperty] private bool _typing = true;
+    [ObservableProperty] private decimal? _debounceSeconds = 6;
+    [ObservableProperty] private string _testMessage = "Oi, já trabalho com Painel Sigma e tenho 350 clientes. Meu servidor cai muito.";
+    [ObservableProperty] private string? _testReply;
+    public ObservableCollection<string> Models { get; } = new() { "gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-5", "gpt-5-mini" };
+
+    public override Task OnActivatedAsync() => Run(async () =>
+    {
+        var c = await s.Api.AiSettingsAsync();
+        Enabled = c.Enabled; Model = c.Model; HasApiKey = c.HasApiKey; Temperature = c.Temperature; MaxTokens = c.MaxTokens;
+        AssistantName = c.AssistantName; Instructions = c.Instructions; DailyTokenLimit = c.DailyTokenLimit; TokensUsedToday = c.TokensUsedToday;
+        Typing = c.TypingIndicator; DebounceSeconds = c.DebounceSeconds;
+        if (!Models.Contains(Model)) Models.Insert(0, Model);
+    });
+
+    [RelayCommand]
+    private Task Save() => Run(async () =>
+    {
+        var r = await s.Api.SaveAiSettingsAsync(new AiSettingsUpdate(Enabled, Model, string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey, Temperature,
+            (int)(MaxTokens ?? 600), AssistantName, Instructions, (int)(DailyTokenLimit ?? 0), Typing, (int)(DebounceSeconds ?? 6)));
+        Info = r.Message;
+        if (!string.IsNullOrWhiteSpace(ApiKey)) { HasApiKey = true; ApiKey = ""; }
+    });
+
+    [RelayCommand]
+    private Task LoadModels() => Run(async () =>
+    {
+        var r = await s.Api.AiModelsAsync();
+        if (!r.Ok) { Error = r.Error; return; }
+        var current = Model;
+        Models.Clear(); foreach (var m in r.Models) Models.Add(m);
+        Model = Models.Contains(current) ? current : Models.FirstOrDefault() ?? current;
+        Info = $"{r.Models.Count} modelos disponíveis na sua conta.";
+    });
+
+    [RelayCommand]
+    private Task Test() => Run(async () =>
+    {
+        TestReply = null;
+        var r = await s.Api.AiSimulateAsync(new AiSimulateRequest([new SimTurn(true, TestMessage)]));
+        TestReply = r.Ok
+            ? r.Reply + (r.Actions.Count > 0 ? "\n\nAções internas: " + string.Join("; ", r.Actions) : "") + $"\n({r.Tokens} tokens · simulação: nada foi enviado ou salvo)"
+            : "Erro: " + r.Error;
+    });
 }
 
 public partial class TemplatesViewModel(AppSession s) : ViewModelBase

@@ -6,7 +6,7 @@
     <DockPanel Margin="0,0,16,0">
       <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,12">
         <TextBlock Text="Base de conhecimento" Classes="h1" />
-        <TextBlock Text="Conteúdo extraído do site em revisão. Só itens aprovados alimentam a IA (Fase 5)." Classes="muted" TextWrapping="Wrap" />
+        <TextBlock Text="Conteúdo extraído do site, em revisão. A IA só usa os itens aprovados." Classes="muted" TextWrapping="Wrap" />
         <TextBlock Text="{Binding Error}" Classes="error" />
       </StackPanel>
       <ListBox ItemsSource="{Binding Articles}" SelectedItem="{Binding Selected}" Background="Transparent">
@@ -23,6 +23,12 @@
         <TextBlock Text="{Binding Selected.Title}" Classes="h2" TextWrapping="Wrap" />
         <TextBlock Text="{Binding Selected.Content}" TextWrapping="Wrap" />
         <TextBlock Text="{Binding Selected.SourceUrl, StringFormat='Fonte: {0}'}" Classes="muted" />
+        <TextBlock Text="{Binding Selected.Approval, StringFormat='Status: {0}'}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Classes="primary" Content="Aprovar para a IA" Command="{Binding ApproveCommand}" />
+          <Button Content="Retirar da IA" Command="{Binding UnapproveCommand}" />
+        </StackPanel>
+        <TextBlock Text="{Binding Info}" Classes="ok" />
       </StackPanel>
     </Border>
   </Grid>

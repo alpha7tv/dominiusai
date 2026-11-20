@@ -123,7 +123,25 @@ public class UiTests
 
         await main.NavigateCommand.ExecuteAsync("conhecimento");
         await Pump();
+        var kb = Assert.IsType<KnowledgeViewModel>(main.Current);
+        kb.Selected = kb.Articles.First(a => a.Title == "Canais e horário");
+        await kb.ApproveCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Equal(ApprovalStatus.Aprovado, kb.Selected!.Approval);
         Shot(win, "08-base-conhecimento");
+
+        await main.NavigateCommand.ExecuteAsync("config");
+        await Pump();
+        var ai = Assert.IsType<AiSettingsViewModel>(main.Current);
+        ai.Enabled = true; ai.ApiKey = "sk-teste"; ai.AssistantName = "Lia";
+        await ai.SaveCommand.ExecuteAsync(null);
+        Assert.True(ai.HasApiKey); Assert.Equal("", ai.ApiKey);
+        f.Ai.Script.Enqueue(_ => FakeAi.Tools(("atualizar_qualificacao", """{"experiencia":"JaTrabalha","painel":"Sigma","clientes_ativos":350,"dor_principal":"QuedasServidor"}""")));
+        f.Ai.Script.Enqueue(_ => FakeAi.Text("Entendi! Essas quedas acontecem mais nos horários de pico ou o dia todo?"));
+        await ai.TestCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Contains("horários de pico", ai.TestReply);
+        Shot(win, "09-configuracoes-ia");
         win.Close();
     }
 

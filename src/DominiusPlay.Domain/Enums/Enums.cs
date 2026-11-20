@@ -61,6 +61,8 @@ public enum OutboundKind
     /// <summary>Mensagem digitada por atendente humano no CRM.</summary>
     Humana = 3,
     Teste = 4,
+    /// <summary>Última mensagem da IA ao transferir para humano ou encerrar (avisa o cliente). Só dentro da janela de 24h.</summary>
+    Transicao = 5,
 }
 
 public enum IptvExperience { NaoInformado = 0, JaTrabalha = 1, Iniciante = 2 }

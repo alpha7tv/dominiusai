@@ -41,9 +41,10 @@ public static class SendGuard
     public static GuardResult Evaluate(SendContext c)
     {
         if (c.IsOptedOut) return GuardResult.Block("Contato está na lista de descadastro/bloqueio");
-        if (c.Lead.Stage == KanbanStage.NaoTemInteresse && c.Kind != OutboundKind.Humana)
+        var bypassMode = c.Kind is OutboundKind.Humana or OutboundKind.Transicao;
+        if (c.Lead.Stage == KanbanStage.NaoTemInteresse && !bypassMode)
             return GuardResult.Block("Lead marcado como 'Não tem interesse'");
-        if (c.Lead.Mode == ConversationMode.Encerrado && c.Kind != OutboundKind.Humana)
+        if (c.Lead.Mode == ConversationMode.Encerrado && !bypassMode)
             return GuardResult.Block("Conversa encerrada");
 
         // Automação nunca fala por cima de um humano
@@ -83,6 +84,7 @@ public static class SendGuard
                 return GuardResult.Ok();
 
             case OutboundKind.Resposta:
+            case OutboundKind.Transicao:
                 // Respostas não dependem do intervalo de campanha, mas só existem dentro da janela.
                 if (!inWindow) return GuardResult.Block("Resposta fora da janela de 24h após a última mensagem do contato");
                 return GuardResult.Ok();

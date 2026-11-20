@@ -19,7 +19,8 @@ public enum InboundOutcome { Stored, Duplicate, Ignored, StatusUpdated, Connecti
 /// entrega e detecta pedidos de descadastro.
 /// </summary>
 public class InboundProcessor(CrmDbContext db, ConversationLocks locks, ConversationService conversations,
-    InstanceStatusCache status, IHubContext<CrmHub> hub, ILogger<InboundProcessor> log)
+    InstanceStatusCache status, IHubContext<CrmHub> hub, AiDispatcher ai, DominiusPlay.Infrastructure.Security.SettingsStore settings,
+    TimeProvider clock, ILogger<InboundProcessor> log)
 {
     public async Task<InboundOutcome> ProcessAsync(string json, CancellationToken ct = default)
     {
@@ -143,6 +144,11 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
         lead.UpdatedAt = DateTimeOffset.UtcNow;
         lead.ConcurrencyStamp = Guid.NewGuid();
         await db.SaveChangesAsync(ct);
+        if (!p.FromMe && lead.Mode == ConversationMode.Ia)
+        {
+            var wait = int.TryParse(await settings.GetAsync(DominiusPlay.Infrastructure.Security.SettingKeys.AiDebounceSeconds, ct), out var w) ? w : 6;
+            ai.Schedule(lead.Id, clock.GetUtcNow().AddSeconds(Math.Clamp(wait, 0, 120)));
+        }
         await hub.Clients.All.SendAsync(HubEvents.MessageAdded, lead.Id, ct);
         await hub.Clients.All.SendAsync(HubEvents.LeadChanged, lead.Id, ct);
         return InboundOutcome.Stored;

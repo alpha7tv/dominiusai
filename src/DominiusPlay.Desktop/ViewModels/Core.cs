@@ -106,7 +106,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 "campanhas" => new PendingModuleViewModel("Campanhas", "Fase 8", "Agendamento por horário e dias, instância de envio, limite por campanha, pausa/retomada/cancelamento e fila com intervalo mínimo de 5 minutos. A fila e as regras de envio já existem no servidor; falta a tela e o disparo por campanha."),
                 "relatorios" => new PendingModuleViewModel("Relatórios", "Fase 9", "Análises comerciais detalhadas, motivos de perda, conversões por plano e exportação. Os indicadores principais já estão no Dashboard."),
                 "equipe" => new PendingModuleViewModel("Equipe", "Fase 7", "Cadastro de atendentes e supervisores, perfis de permissão e distribuição de conversas. Hoje existe o administrador criado na primeira execução."),
-                "config" => new PendingModuleViewModel("Configurações", "Fase 5", "Provedor e modelo de IA, nome da assistente, horários de atendimento, regras de transferência e limites de custo."),
+                "config" => new AiSettingsViewModel(_session),
                 _ => new PendingModuleViewModel(key, "", ""),
             };
             _pages[key] = vm;

@@ -79,6 +79,13 @@ public class ApiClient
     public Task<List<KnowledgeDto>> KnowledgeAsync() => Get<List<KnowledgeDto>>("api/knowledge");
     public Task<List<TemplateDto>> TemplatesAsync() => Get<List<TemplateDto>>("api/templates");
 
+    public Task<AiSettingsDto> AiSettingsAsync() => Get<AiSettingsDto>("api/ai/settings");
+    public Task<OperationResult> SaveAiSettingsAsync(AiSettingsUpdate u) => Send<OperationResult>(HttpMethod.Put, "api/ai/settings", u);
+    public Task<ModelsResponse> AiModelsAsync() => Get<ModelsResponse>("api/ai/models");
+    public Task<AiSimulateResponse> AiSimulateAsync(AiSimulateRequest r) => Post<AiSimulateResponse>("api/ai/simulate", r);
+    public Task<AiSimulateResponse> SuggestAsync(Guid leadId) => Post<AiSimulateResponse>($"api/conversations/{leadId}/suggest", null);
+    public Task<OperationResult> ApproveKnowledgeAsync(Guid id, bool approve) => Post<OperationResult>($"api/knowledge/{id}/approve?approve={approve}", null);
+
     public Task<EvolutionSettingsDto> EvolutionSettingsAsync() => Get<EvolutionSettingsDto>("api/integrations/evolution");
     public Task<OperationResult> SaveEvolutionAsync(EvolutionSettingsUpdate u) => Send<OperationResult>(HttpMethod.Put, "api/integrations/evolution", u);
     public Task<EvolutionStatusDto> EvolutionStatusAsync() => Get<EvolutionStatusDto>("api/integrations/evolution/status");

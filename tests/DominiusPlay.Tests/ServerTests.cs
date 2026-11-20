@@ -41,10 +41,11 @@ public class FakeEvolution : IEvolutionApi
         Task.FromResult<IReadOnlyList<(string, bool, string?)>>([]);
 }
 
-public sealed class CrmFactory : WebApplicationFactory<Program>
+public sealed class CrmFactory(bool realAi = false) : WebApplicationFactory<Program>
 {
     public readonly string DataDir = Path.Combine(Path.GetTempPath(), "dpcrm-tests-" + Guid.NewGuid().ToString("N"));
     public readonly FakeEvolution Evolution = new();
+    public readonly FakeAi Ai = new();
     public readonly FakeTimeProvider Clock = new(DateTimeOffset.UtcNow);
 
     protected override void ConfigureWebHost(IWebHostBuilder b)
@@ -56,6 +57,7 @@ public sealed class CrmFactory : WebApplicationFactory<Program>
         b.ConfigureTestServices(s =>
         {
             s.AddSingleton<IEvolutionApi>(Evolution);
+            if (!realAi) s.AddSingleton<DominiusPlay.Infrastructure.Ai.IAiProvider>(Ai);
             s.AddSingleton<TimeProvider>(Clock);
         });
     }

@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using DominiusPlay.Infrastructure.Ai;
 using DominiusPlay.Infrastructure.Data;
 using DominiusPlay.Infrastructure.Evolution;
 using DominiusPlay.Infrastructure.Import;
@@ -74,10 +75,15 @@ builder.Services.AddScoped<LeadImportService>();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddScoped<InboundProcessor>();
 builder.Services.AddScoped<OutboundQueueProcessor>();
+builder.Services.AddSingleton<AiDispatcher>();
+builder.Services.AddHttpClient<IAiProvider, OpenAiClient>(c => c.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<AiAgent>();
+builder.Services.AddScoped<AiResponder>();
 if (builder.Configuration.GetValue("Workers:Enabled", true))
 {
     builder.Services.AddHostedService<OutboundQueueWorker>();
     builder.Services.AddHostedService<InstanceMonitorWorker>();
+    builder.Services.AddHostedService<AiWorker>();
 }
 
 var app = builder.Build();
@@ -93,6 +99,7 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapCrmApi();
+app.MapAiApi();
 app.MapHub<CrmHub>("/hubs/crm");
 app.Run();
 

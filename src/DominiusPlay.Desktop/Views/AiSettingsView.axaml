@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             x:Class="DominiusPlay.Desktop.Views.AiSettingsView" x:DataType="vm:AiSettingsViewModel">
+  <Grid ColumnDefinitions="520,*" Margin="24">
+    <ScrollViewer Margin="0,0,16,0">
+      <StackPanel Spacing="12">
+        <TextBlock Text="Configurações — Inteligência artificial" Classes="h1" />
+        <TextBlock Text="{Binding Info}" Classes="ok" /><TextBlock Text="{Binding Error}" Classes="error" />
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="IA atendendo as conversas" OffContent="IA desligada (só humanos respondem)" />
+            <TextBlock Text="Provedor: OpenAI (ChatGPT)" Classes="muted" />
+            <TextBlock Text="Chave de API da OpenAI" Classes="muted" />
+            <TextBox Text="{Binding ApiKey}" PasswordChar="●" Watermark="sk-... (deixe em branco para manter a atual)" />
+            <TextBlock Text="✓ Chave salva com criptografia no servidor" Classes="ok" FontSize="12" IsVisible="{Binding HasApiKey}" />
+            <TextBlock Text="Modelo" Classes="muted" />
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Content="Carregar modelos" Command="{Binding LoadModelsCommand}" Margin="8,0,0,0" />
+              <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding Model}" HorizontalAlignment="Stretch" />
+            </DockPanel>
+            <TextBlock Text="Nome de exibição da assistente" Classes="muted" />
+            <TextBox Text="{Binding AssistantName}" />
+            <TextBlock Text="{Binding Temperature, StringFormat='Criatividade (temperatura): {0:0.0} — ignorada nos modelos GPT-5'}" Classes="muted" />
+            <Slider Minimum="0" Maximum="1.2" Value="{Binding Temperature}" TickFrequency="0.1" IsSnapToTickEnabled="True" />
+            <Grid ColumnDefinitions="*,12,*">
+              <StackPanel><TextBlock Text="Tamanho máx. da resposta (tokens)" Classes="muted" /><NumericUpDown Value="{Binding MaxTokens}" Minimum="50" Maximum="4000" Increment="50" /></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="Espera para agrupar mensagens (s)" Classes="muted" /><NumericUpDown Value="{Binding DebounceSeconds}" Minimum="0" Maximum="120" /></StackPanel>
+            </Grid>
+            <TextBlock Text="Limite diário de consumo (tokens)" Classes="muted" />
+            <NumericUpDown Value="{Binding DailyTokenLimit}" Minimum="0" Increment="50000" />
+            <TextBlock Text="{Binding TokensUsedToday, StringFormat='Usado hoje: {0} tokens. Ao atingir o limite, as conversas vão para atendimento humano.'}" Classes="muted" TextWrapping="Wrap" />
+            <CheckBox IsChecked="{Binding Typing}" Content="Mostrar &quot;digitando&quot; enquanto a resposta é preparada" />
+            <TextBlock Text="Instruções comerciais adicionais" Classes="muted" />
+            <TextBox Text="{Binding Instructions}" AcceptsReturn="True" TextWrapping="Wrap" Height="120" Watermark="Ex.: sempre ofereça o teste antes da proposta; horário da equipe humana é 9h às 21h." />
+            <Button Classes="primary" Content="Salvar configurações da IA" Command="{Binding SaveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+    <Border Grid.Column="1" Classes="panel" VerticalAlignment="Top">
+      <StackPanel Spacing="10">
+        <TextBlock Text="Testar a assistente (simulação)" Classes="h2" />
+        <TextBlock Text="Nada é enviado pelo WhatsApp nem salvo no CRM." Classes="muted" />
+        <TextBox Text="{Binding TestMessage}" AcceptsReturn="True" TextWrapping="Wrap" Height="90" />
+        <Button Content="Simular resposta" Command="{Binding TestCommand}" />
+        <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+        <Border Classes="card" IsVisible="{Binding TestReply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+          <TextBlock Text="{Binding TestReply}" TextWrapping="Wrap" />
+        </Border>
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

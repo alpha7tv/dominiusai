@@ -110,3 +110,13 @@ docs/                           Este documento
 
 Autenticação: header `apikey`. Eventos assinados: `MESSAGES_UPSERT`, `MESSAGES_UPDATE`, `SEND_MESSAGE`, `CONNECTION_UPDATE`.
 Contatos com endereçamento `@lid` usam `key.remoteJidAlt` para obter o número.
+
+## 7. Inteligência artificial (Fase 5)
+
+- Provedor: **OpenAI** (Chat Completions com chamada de ferramentas). Modelo padrão `gpt-4o`, configurável na tela Configurações (lista os modelos da conta). Modelos GPT-5 não recebem temperatura.
+- A chave fica criptografada no servidor (`ai.apikey`), nunca volta ao aplicativo.
+- Fluxo: mensagem do cliente → espera configurável (padrão 6 s) para agrupar mensagens seguidas → `AiResponder` monta o contexto (regras, roteiro de qualificação, **somente planos aprovados e ativos**, base de conhecimento aprovada, memória do lead separando fato declarado de inferência, últimas 30 mensagens) → modelo chama ferramentas → resposta entra na fila como `Resposta`.
+- Ferramentas internas: `consultar_planos`, `atualizar_qualificacao`, `registrar_fato`, `sugerir_etapa` (não pode marcar Negócio fechado), `atualizar_resumo`, `transferir_para_humano`, `encerrar_conversa`.
+- Se um humano assumir ou chegar nova mensagem enquanto o modelo gera a resposta, a resposta é descartada.
+- Falha do provedor ou limite diário de tokens atingido → conversa vai para **Atendimento humano** com aviso, nunca fica sem retorno silencioso.
+- Simulação (`/api/ai/simulate`) e "Sugerir resposta" para atendentes não enviam nem salvam nada.

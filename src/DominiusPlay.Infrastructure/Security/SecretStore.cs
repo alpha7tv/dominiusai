@@ -45,6 +45,16 @@ public static class SettingKeys
     public const string MinInitialIntervalSeconds = "send.minInitialIntervalSeconds";
     public const string DailyLimit = "send.dailyLimit";
     public const string TimeZone = "app.timezone";
+    public const string AiEnabled = "ai.enabled";
+    public const string AiModel = "ai.model";
+    public const string AiApiKey = "ai.apikey";
+    public const string AiTemperature = "ai.temperature";
+    public const string AiMaxTokens = "ai.maxTokens";
+    public const string AiInstructions = "ai.instructions";
+    public const string AiDailyTokenLimit = "ai.dailyTokenLimit";
+    public const string AiTyping = "ai.typingIndicator";
+    public const string AiDebounceSeconds = "ai.debounceSeconds";
+    public static string AiUsage(DateOnly d) => $"ai.usage.{d:yyyyMMdd}";
 }
 
 public static class PasswordHasher

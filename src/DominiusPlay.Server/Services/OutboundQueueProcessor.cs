@@ -31,7 +31,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             .Where(q => q.Status == MessageStatus.NaFila)
             .ToListAsync(ct); // filtro de data em memória: compatível com SQLite e PostgreSQL
         var batch = due.Where(q => q.NotBefore <= now)
-            .OrderBy(q => q.Kind switch { OutboundKind.Humana => 0, OutboundKind.Teste => 0, OutboundKind.Resposta => 1, OutboundKind.Acompanhamento => 2, _ => 3 })
+            .OrderBy(q => q.Kind switch { OutboundKind.Humana => 0, OutboundKind.Teste => 0, OutboundKind.Resposta => 1, OutboundKind.Transicao => 1, OutboundKind.Acompanhamento => 2, _ => 3 })
             .ThenBy(q => q.NotBefore).Take(max).Select(q => q.Id).ToList();
 
         var sent = 0;
