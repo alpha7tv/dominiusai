@@ -297,6 +297,11 @@ public static class PhasesApi
             await BuildReportAsync(db, from ?? DateTimeOffset.UtcNow.AddDays(-30), to ?? DateTimeOffset.UtcNow))
             .RequireAuthorization(Api.SupervisorPolicy);
 
+        // Relatório de mensagens enviadas: por período, campanha e atendente/IA, com status de entrega
+        api.MapGet("/reports/sent-messages", async (DateTimeOffset? from, DateTimeOffset? to, string? campaign, string? author, CrmDbContext db) =>
+            await SentMessagesReport.BuildAsync(db, from ?? DateTimeOffset.UtcNow.AddDays(-30), to ?? DateTimeOffset.UtcNow, campaign, author))
+            .RequireAuthorization(Api.SupervisorPolicy);
+
         api.MapGet("/export/leads.csv", async (CrmDbContext db, ClaimsPrincipal user) =>
         {
             var leads = await db.Leads.Include(l => l.AssignedUser).AsNoTracking().OrderBy(l => l.CreatedAt).ToListAsync();
@@ -317,14 +322,18 @@ public static class PhasesApi
             var f = from ?? DateTimeOffset.UtcNow.AddDays(-30); var t = to ?? DateTimeOffset.UtcNow;
             var leads = await db.Leads.AsNoTracking().ToDictionaryAsync(l => l.Id, l => (l.Name, l.Phone));
             var users = await db.Users.AsNoTracking().ToDictionaryAsync(u => u.Id, u => u.DisplayName);
+            var campaigns = await db.Campaigns.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name);
             var msgs = (await db.Messages.AsNoTracking().ToListAsync()).Where(m => m.Timestamp >= f && m.Timestamp <= t).OrderBy(m => m.Timestamp).ToList();
             var sb = new StringBuilder();
-            Row(sb, "Data/hora", "Contato", "WhatsApp", "Direção", "Autor", "Atendente", "Status", "Texto", "Erro");
+            Row(sb, "Data/hora", "Contato", "WhatsApp", "Direção", "Autor", "Atendente", "Campanha", "Status", "Status de entrega", "Texto", "Erro");
             foreach (var m in msgs)
             {
                 var (name, phone) = leads.TryGetValue(m.LeadId, out var x) ? x : ("", "");
+                var delivery = m.Direction == MessageDirection.Saida && m.Status is not (MessageStatus.Recebida or MessageStatus.NaFila or MessageStatus.Cancelada)
+                    ? SentMessagesReport.Bucket(m.Status) : "";
                 Row(sb, D(m.Timestamp), name, phone, m.Direction.ToString(), m.Author.ToString(),
-                    m.SentByUserId is { } u && users.TryGetValue(u, out var n) ? n : null, m.Status.ToString(), m.Text, m.Error);
+                    m.SentByUserId is { } u && users.TryGetValue(u, out var n) ? n : null,
+                    m.CampaignId is { } cid && campaigns.TryGetValue(cid, out var cn) ? cn : null, m.Status.ToString(), delivery, m.Text, m.Error);
             }
             db.AuditLogs.Add(new AuditLog { Actor = Actor(user), Action = "export.messages", EntityType = "Message", Details = $"{msgs.Count} linhas" });
             await db.SaveChangesAsync();

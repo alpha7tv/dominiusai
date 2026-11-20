@@ -86,7 +86,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             var msg = new Message
             {
                 LeadId = item.LeadId, Direction = MessageDirection.Saida, Text = item.Text, ExternalId = result.MessageId, InstanceName = cfg.InstanceName,
-                Author = item.Kind switch { OutboundKind.Humana => MessageAuthor.Atendente, OutboundKind.Teste => MessageAuthor.Sistema, _ => MessageAuthor.Ia },
+                Author = AuthorOf(item.Kind),
                 Status = EvolutionWebhookParser.MapStatus(result.Status) ?? MessageStatus.Pendente, SentByUserId = item.RequestedByUserId,
                 CampaignId = item.CampaignId, TemplateVersionId = item.TemplateVersionId, Timestamp = now,
             };
@@ -114,13 +114,18 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
         else
         {
             Finish(item, MessageStatus.Falhou, result.Error, now);
+            // Falha fica como nota do Sistema (não entra no histórico da IA), mas guarda a campanha para o relatório de mensagens enviadas
             db.Messages.Add(new Message { LeadId = item.LeadId, Direction = MessageDirection.Saida, Author = MessageAuthor.Sistema, Text = item.Text,
-                Status = MessageStatus.Falhou, Error = result.Error, InstanceName = cfg.InstanceName, Timestamp = now, SentByUserId = item.RequestedByUserId });
+                Status = MessageStatus.Falhou, Error = result.Error, InstanceName = cfg.InstanceName, Timestamp = now, SentByUserId = item.RequestedByUserId,
+                CampaignId = item.CampaignId, TemplateVersionId = item.TemplateVersionId });
         }
         await db.SaveChangesAsync(ct);
         await hub.Clients.All.SendAsync(HubEvents.MessageAdded, item.LeadId, ct);
         return false;
     }
+
+    private static MessageAuthor AuthorOf(OutboundKind kind) =>
+        kind switch { OutboundKind.Humana => MessageAuthor.Atendente, OutboundKind.Teste => MessageAuthor.Sistema, _ => MessageAuthor.Ia };
 
     private async Task<SendContext> BuildContextAsync(OutboundQueueItem item, EvolutionConfig cfg, DateTimeOffset now, CancellationToken ct)
     {

@@ -119,6 +119,14 @@ public sealed record ReportDto(DateTimeOffset From, DateTimeOffset To, int NewLe
     IReadOnlyList<ReportRow> MessagesByStatus, IReadOnlyList<ReportRow> Templates, IReadOnlyList<ReportRow> ByAttendant, IReadOnlyList<ReportRow> Sources);
 public sealed record ReportRow(string Label, int Value, string? Detail = null);
 
+/// <summary>Linha do relatório de mensagens enviadas. Cada mensagem conta só no seu status atual (uma mensagem lida conta em Lido, não em Entregue).</summary>
+public sealed record SentMessagesRow(string Key, string Label, int Total, int Sent, int Delivered, int Read, int Failed);
+public sealed record FilterOption(string Key, string Label);
+/// <summary>Relatório de mensagens enviadas: por período, campanha e atendente/IA, com status de entrega.</summary>
+public sealed record SentMessagesReportDto(DateTimeOffset From, DateTimeOffset To, string Grouping, SentMessagesRow Totals, int QueuedNow,
+    IReadOnlyList<SentMessagesRow> ByPeriod, IReadOnlyList<SentMessagesRow> ByCampaign, IReadOnlyList<SentMessagesRow> ByAuthor,
+    IReadOnlyList<ReportRow> FailureReasons, IReadOnlyList<FilterOption> CampaignOptions, IReadOnlyList<FilterOption> AuthorOptions);
+
 public sealed record AiSettingsDto(bool Enabled, string Model, string AdvancedModel, bool HasApiKey, int MaxTokens, string AssistantName,
     string Instructions, int DailyTokenLimit, int TokensUsedToday, bool TypingIndicator, int DebounceSeconds);
 public sealed record AiSettingsUpdate(bool Enabled, string Model, string AdvancedModel, string? ApiKey, int MaxTokens, string AssistantName,

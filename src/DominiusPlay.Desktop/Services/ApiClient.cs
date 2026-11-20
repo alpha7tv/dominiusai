@@ -121,6 +121,10 @@ public class ApiClient
     // Fase 9
     public Task<ReportDto> ReportAsync(DateTimeOffset from, DateTimeOffset to) =>
         Get<ReportDto>($"api/reports?from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(to.ToString("o"))}");
+    public Task<SentMessagesReportDto> SentMessagesReportAsync(DateTimeOffset from, DateTimeOffset to, string? campaign, string? author) =>
+        Get<SentMessagesReportDto>($"api/reports/sent-messages?from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(to.ToString("o"))}"
+            + (string.IsNullOrEmpty(campaign) ? "" : "&campaign=" + Uri.EscapeDataString(campaign))
+            + (string.IsNullOrEmpty(author) ? "" : "&author=" + Uri.EscapeDataString(author)));
     public async Task<byte[]> DownloadAsync(string url)
     {
         var res = await Wrap(() => _http.GetAsync(url));

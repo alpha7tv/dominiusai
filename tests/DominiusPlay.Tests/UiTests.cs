@@ -10,6 +10,7 @@ using DominiusPlay.Desktop.Views;
 using DominiusPlay.Domain.Contracts;
 using DominiusPlay.Domain.Entities;
 using DominiusPlay.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
 
 [assembly: AvaloniaTestApplication(typeof(DominiusPlay.Tests.TestAppBuilder))]
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
@@ -226,6 +227,41 @@ public class UiTests
         Assert.Equal(8, rep.Sections.Count);
         Assert.Equal(5, rep.Kpis.Count);
         Shot(win, "13-relatorios");
+
+        // Relatório de mensagens enviadas: envia a campanha e simula entregas, leituras e uma falha
+        var calls = 0;
+        f.Evolution.Behavior = _ => ++calls == 3
+            ? new DominiusPlay.Infrastructure.Evolution.EvolutionSendResult(false, null, null, "Número não existe no WhatsApp", 400)
+            : new DominiusPlay.Infrastructure.Evolution.EvolutionSendResult(true, "WA" + Guid.NewGuid().ToString("N")[..10], "SERVER_ACK", null, 201);
+        for (var i = 0; i < 5; i++) { await f.RunQueueAsync(); f.Clock.Advance(TimeSpan.FromMinutes(6)); }
+        await f.WithDb(async db =>
+        {
+            var sent = await db.Messages.Where(m => m.CampaignId != null && m.Status == MessageStatus.EnviadaServidor).ToListAsync();
+            for (var i = 0; i < sent.Count; i++)
+            {
+                sent[i].Status = i < 2 ? MessageStatus.Lida : i == 2 ? MessageStatus.Entregue : MessageStatus.EnviadaServidor;
+                sent[i].Timestamp = DateTimeOffset.UtcNow.AddDays(-i); // espalha pelos últimos dias
+            }
+            var failed = await db.Messages.Where(m => m.Status == MessageStatus.Falhou).ToListAsync();
+            foreach (var m in failed) m.Timestamp = DateTimeOffset.UtcNow.AddDays(-1);
+            return await db.SaveChangesAsync();
+        });
+        rep.Tab = 1;
+        await rep.RefreshCommand.ExecuteAsync(null);
+        await Pump(400);
+        Assert.Null(rep.Sent.Error);
+        Assert.True(rep.Sent.Totals!.Model.Total >= 5);
+        Assert.Equal(1, rep.Sent.Totals.Model.Failed);
+        Assert.Contains(rep.Sent.ByCampaign, r => r.Label == "Revendedores novembro" && r.Model.Total == 5);
+        Assert.Contains(rep.Sent.ByAuthor, r => r.Label == "IA (assistente virtual)");
+        Assert.Equal(31, rep.Sent.Chart.Count);
+        win.Height = 1750; await Pump(400); // captura a aba inteira
+        Shot(win, "14-relatorio-mensagens-enviadas");
+        win.Height = 880; await Pump();
+        rep.Sent.Campaign = rep.Sent.CampaignOptions.First(o => o.Label == "Revendedores novembro");
+        await Pump(400);
+        Assert.Equal(5, rep.Sent.Totals!.Model.Total);
+        Assert.Equal("Revendedores novembro", rep.Sent.Campaign!.Label);
         win.Close();
     }
 
