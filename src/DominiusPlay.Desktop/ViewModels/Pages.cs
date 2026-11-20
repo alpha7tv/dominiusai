@@ -66,12 +66,19 @@ public partial class KanbanViewModel : ViewModelBase
     private readonly AppSession _s;
     public ObservableCollection<KanbanColumnVm> Columns { get; } = new();
     [ObservableProperty] private string _filter = "";
+    /// <summary>Popup com a conversa do WhatsApp do card clicado.</summary>
+    public ChatPopupViewModel Chat { get; }
 
     public KanbanViewModel(AppSession s)
     {
         _s = s;
+        Chat = new ChatPopupViewModel(s);
+        Chat.LeadUpdated += () => _ = Refresh();
         s.Realtime.LeadChanged += id => Dispatcher.UIThread.Post(() => { _ = Refresh(); });
     }
+
+    /// <summary>Clique no card: abre a conversa em popup, sem sair do Kanban.</summary>
+    public Task OpenChatAsync(Guid leadId) => Chat.OpenAsync(leadId);
 
     public override Task OnActivatedAsync() => Refresh();
 

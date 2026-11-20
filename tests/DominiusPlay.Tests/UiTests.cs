@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using Avalonia.Threading;
 using DominiusPlay.Desktop;
 using DominiusPlay.Desktop.Services;
@@ -73,6 +75,37 @@ public class UiTests
         Assert.Equal(["Primeiro contato", "Em fase de teste", "Em negociação", "Negócio fechado", "Em dúvidas", "Não tem interesse"], kanban.Columns.Select(c => c.Title));
         Shot(win, "02-kanban");
 
+        // clique no card abre a conversa do WhatsApp em popup, sem sair do Kanban
+        var joaoCard = kanban.Columns.SelectMany(c => c.Cards).First(c => c.Name == "João (exemplo)");
+        var cardBorder = win.GetVisualDescendants().OfType<Border>().First(b => b.Name == "Card" && b.Tag is Guid g && g == joaoCard.Id);
+        var at = cardBorder.TranslatePoint(new Point(20, 20), win)!.Value;
+        win.MouseDown(at, MouseButton.Left);
+        win.MouseUp(at, MouseButton.Left);
+        await Pump(500);
+        Assert.True(kanban.Chat.IsOpen);
+        Assert.Same(kanban, main.Current);
+        Assert.Equal(joaoCard.Id, kanban.Chat.LeadId);
+        Assert.Equal(7, kanban.Chat.Messages.Count);
+        Assert.False(kanban.Chat.IsHuman);
+        Assert.False(kanban.Chat.SendCommand.CanExecute(null) && kanban.Chat.IsHuman);
+        Shot(win, "02b-kanban-conversa-popup");
+        await kanban.Chat.TakeOverCommand.ExecuteAsync(null);
+        await Pump(400);
+        Assert.True(kanban.Chat.IsHuman);
+        kanban.Chat.Draft = "Oi! Vou te enviar agora os requisitos do apontamento.";
+        await kanban.Chat.SendCommand.ExecuteAsync(null);
+        await Pump(400);
+        Assert.Null(kanban.Chat.Error);
+        Assert.Equal("", kanban.Chat.Draft);
+        Assert.Contains("fila de envio", kanban.Chat.Info);
+        Assert.Equal(1, await f.WithDb(db => Task.FromResult(db.OutboundQueue.Count(q => q.LeadId == joaoCard.Id && q.Text.StartsWith("Oi! Vou te enviar agora")))));
+        Shot(win, "02c-kanban-conversa-popup-atendimento");
+        win.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        await Pump();
+        Assert.False(kanban.Chat.IsOpen);
+        await kanban.Chat.ReturnToAiCommand.ExecuteAsync(null); // devolve para o restante do fluxo seguir igual
+        await Pump(300);
+
         // movimentação via o mesmo método usado pelo arrastar-e-soltar
         var card = kanban.Columns[0].Cards.First(c => c.Name == "Contato 001");
         await kanban.MoveAsync(card.Id, KanbanStage.EmDuvidas);
@@ -87,7 +120,7 @@ public class UiTests
         var conv = Assert.IsType<ConversationsViewModel>(main.Current);
         conv.Selected = conv.Contacts.First(c => c.Name == "João (exemplo)");
         await Pump(500);
-        Assert.Equal(7, conv.Messages.Count);
+        Assert.Equal(7, conv.Messages.Count(m => !m.IsSystem)); // + avisos de sistema de assumir/devolver feitos no popup
         Assert.Contains("Apontamento Sigma 600", conv.RecommendationText);
         Assert.Equal(350m, conv.QClients);
         conv.QClients = 400; conv.QNextAction = "Enviar requisitos e agendar teste";
