@@ -599,7 +599,12 @@ public partial class AiSettingsViewModel(AppSession s) : ViewModelBase
     [ObservableProperty] private bool _hasApiKey;
     [ObservableProperty] private decimal? _maxTokens = 4000;
     [ObservableProperty] private string _assistantName = "";
-    [ObservableProperty] private string _instructions = "";
+    /// <summary>Script de atendimento (tom, produtos, abordagem, regras de transferência). Sem limite de tamanho.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(ScriptInfo))] private string _instructions = "";
+    /// <summary>Prompt de sistema (base da IA). Começa com o padrão do sistema; o administrador pode personalizar.</summary>
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(SystemPromptInfo))] private string _systemPrompt = "";
+    [ObservableProperty] private string _defaultSystemPrompt = "";
+    [ObservableProperty] private string _fixedRules = "";
     [ObservableProperty] private decimal? _dailyTokenLimit = 500000;
     [ObservableProperty] private int _tokensUsedToday;
     [ObservableProperty] private bool _typing = true;
@@ -608,12 +613,21 @@ public partial class AiSettingsViewModel(AppSession s) : ViewModelBase
     [ObservableProperty] private string? _testReply;
     public ObservableCollection<string> Models { get; } = new() { "claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5" };
 
+    public bool IsCustomSystemPrompt => !string.IsNullOrWhiteSpace(SystemPrompt) && SystemPrompt.Trim() != DefaultSystemPrompt.Trim();
+    public string ScriptInfo => string.IsNullOrWhiteSpace(Instructions)
+        ? "Nenhum script escrito: a IA segue só o prompt de sistema."
+        : $"{Instructions.Length:N0} caracteres (~{Instructions.Length / 4:N0} tokens por resposta). Sem limite de tamanho.";
+    public string SystemPromptInfo => (IsCustomSystemPrompt ? "Personalizado" : "Padrão do sistema") + $" · {SystemPrompt.Length:N0} caracteres";
+
     public override Task OnActivatedAsync() => Run(async () =>
     {
         var c = await s.Api.AiSettingsAsync();
         Enabled = c.Enabled; Model = c.Model; AdvancedModel = c.AdvancedModel; HasApiKey = c.HasApiKey; MaxTokens = c.MaxTokens;
         AssistantName = c.AssistantName; Instructions = c.Instructions; DailyTokenLimit = c.DailyTokenLimit; TokensUsedToday = c.TokensUsedToday;
         Typing = c.TypingIndicator; DebounceSeconds = c.DebounceSeconds;
+        DefaultSystemPrompt = c.DefaultSystemPrompt; FixedRules = c.FixedRules;
+        SystemPrompt = string.IsNullOrWhiteSpace(c.SystemPrompt) ? c.DefaultSystemPrompt : c.SystemPrompt;
+        OnPropertyChanged(nameof(SystemPromptInfo));
         if (!Models.Contains(Model)) Models.Insert(0, Model);
         if (!Models.Contains(AdvancedModel)) Models.Add(AdvancedModel);
     });
@@ -622,10 +636,19 @@ public partial class AiSettingsViewModel(AppSession s) : ViewModelBase
     private Task Save() => Run(async () =>
     {
         var r = await s.Api.SaveAiSettingsAsync(new AiSettingsUpdate(Enabled, Model, AdvancedModel, string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey,
-            (int)(MaxTokens ?? 4000), AssistantName, Instructions, (int)(DailyTokenLimit ?? 0), Typing, (int)(DebounceSeconds ?? 6)));
+            (int)(MaxTokens ?? 4000), AssistantName, Instructions, (int)(DailyTokenLimit ?? 0), Typing, (int)(DebounceSeconds ?? 6),
+            SystemPrompt ?? ""));
         Info = r.Message;
         if (!string.IsNullOrWhiteSpace(ApiKey)) { HasApiKey = true; ApiKey = ""; }
     });
+
+    /// <summary>Volta o prompt de sistema para o padrão (só no editor; vale depois de salvar).</summary>
+    [RelayCommand]
+    private void RestoreDefaultSystemPrompt()
+    {
+        SystemPrompt = DefaultSystemPrompt;
+        Info = "Prompt de sistema padrão restaurado no editor. Clique em Salvar para aplicar.";
+    }
 
     [RelayCommand]
     private Task LoadModels() => Run(async () =>

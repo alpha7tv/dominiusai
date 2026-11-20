@@ -50,7 +50,8 @@ public static class SettingKeys
     public const string AiApiKey = "ai.apikey";
     public const string AiModelAdvanced = "ai.modelAdvanced";
     public const string AiMaxTokens = "ai.maxTokens";
-    public const string AiInstructions = "ai.instructions";
+    public const string AiInstructions = "ai.instructions"; // script de atendimento escrito pelo administrador
+    public const string AiSystemPrompt = "ai.systemPrompt"; // vazio = prompt de sistema padrão
     public const string AiDailyTokenLimit = "ai.dailyTokenLimit";
     public const string AiTyping = "ai.typingIndicator";
     public const string AiDebounceSeconds = "ai.debounceSeconds";

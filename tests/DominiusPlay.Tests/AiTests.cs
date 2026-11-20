@@ -70,6 +70,53 @@ public class AiTests
     }
 
     [Fact]
+    public async Task Script_de_atendimento_e_prompt_de_sistema_vao_no_prompt_sem_limite_de_tamanho()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        await EnableAi(f, c);
+
+        // padrão: prompt de sistema do sistema, regras fixas e nenhum script
+        var s0 = await c.GetFromJsonAsync<AiSettingsDto>("/api/ai/settings");
+        Assert.Equal("", s0!.SystemPrompt);
+        Assert.Contains("{nome_assistente}", s0.DefaultSystemPrompt);
+        Assert.Contains("REGRAS FIXAS DO SISTEMA", s0.FixedRules);
+
+        // script grande (sem limite de caracteres) e prompt de sistema personalizado
+        var script = "TOM: descontraído, sempre chame de parceiro.\nOFERTA: comece pelo Mensalista 50.\n" + string.Concat(Enumerable.Repeat("Objeção de preço: explique o custo por cliente ativo. ", 3000));
+        Assert.True(script.Length > 150_000);
+        var custom = "Você é {nome_assistente}, consultora da Dominius Play. Fale sempre em frases curtas.";
+        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", null, 4000, "Lia", script, 10_000_000, false, 0, custom))).EnsureSuccessStatusCode();
+        var s1 = await c.GetFromJsonAsync<AiSettingsDto>("/api/ai/settings");
+        Assert.Equal(script, s1!.Instructions); // salvo inteiro, sem corte
+        Assert.Equal(custom, s1.SystemPrompt);
+
+        var id = await Inbound(f, "S1", "oi");
+        Assert.Equal(AiReplyOutcome.Replied, await Respond(f, id));
+        var system = f.Ai.Requests[0].System;
+        Assert.StartsWith("Você é Lia, consultora da Dominius Play.", system); // placeholder trocado pelo nome
+        Assert.DoesNotContain("ROTEIRO DE DIAGNÓSTICO", system); // prompt padrão substituído
+        Assert.Contains("REGRAS FIXAS DO SISTEMA", system); // regras fixas continuam
+        Assert.Contains("transferir_para_humano", system);
+        Assert.Contains("SCRIPT DE ATENDIMENTO DA EMPRESA", system);
+        Assert.Contains(script.Trim(), system);
+        Assert.True(system.IndexOf("SCRIPT DE ATENDIMENTO", StringComparison.Ordinal) < system.IndexOf("PLANOS APROVADOS E ATIVOS", StringComparison.Ordinal));
+
+        // sem enviar SystemPrompt (app antigo) mantém o atual; texto vazio volta ao padrão
+        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", null, 4000, "Lia", "Script curto.", 10_000_000, false, 0))).EnsureSuccessStatusCode();
+        Assert.Equal(custom, (await c.GetFromJsonAsync<AiSettingsDto>("/api/ai/settings"))!.SystemPrompt);
+        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", null, 4000, "Lia", "Script curto.", 10_000_000, false, 0, ""))).EnsureSuccessStatusCode();
+        Assert.Equal("", (await c.GetFromJsonAsync<AiSettingsDto>("/api/ai/settings"))!.SystemPrompt);
+        f.Ai.Requests.Clear();
+        // a simulação da tela de IA usa a mesma configuração salva
+        (await c.PostAsJsonAsync("/api/ai/simulate", new AiSimulateRequest([new SimTurn(true, "tudo bem?")]))).EnsureSuccessStatusCode();
+        system = f.Ai.Requests[0].System;
+        Assert.StartsWith("Você é \"Lia\", ASSISTENTE VIRTUAL", system);
+        Assert.Contains("ROTEIRO DE DIAGNÓSTICO", system);
+        Assert.Contains("Script curto.", system);
+    }
+
+    [Fact]
     public async Task IA_conversa_com_lead_importado_so_com_numero()
     {
         using var f = new CrmFactory();

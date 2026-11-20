@@ -30,24 +30,61 @@
             <NumericUpDown Value="{Binding DailyTokenLimit}" Minimum="0" Increment="50000" />
             <TextBlock Text="{Binding TokensUsedToday, StringFormat='Usado hoje: {0} tokens. Ao atingir o limite, as conversas vão para atendimento humano.'}" Classes="muted" TextWrapping="Wrap" />
             <CheckBox IsChecked="{Binding Typing}" Content="Mostrar &quot;digitando&quot; enquanto a resposta é preparada" />
-            <TextBlock Text="Instruções comerciais adicionais" Classes="muted" />
-            <TextBox Text="{Binding Instructions}" AcceptsReturn="True" TextWrapping="Wrap" Height="120" Watermark="Ex.: sempre ofereça o teste antes da proposta; horário da equipe humana é 9h às 21h." />
             <Button Classes="primary" Content="Salvar configurações da IA" Command="{Binding SaveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
           </StackPanel>
         </Border>
       </StackPanel>
     </ScrollViewer>
-    <Border Grid.Column="1" Classes="panel" VerticalAlignment="Top">
-      <StackPanel Spacing="10">
-        <TextBlock Text="Testar a assistente (simulação)" Classes="h2" />
-        <TextBlock Text="Nada é enviado pelo WhatsApp nem salvo no CRM." Classes="muted" />
-        <TextBox Text="{Binding TestMessage}" AcceptsReturn="True" TextWrapping="Wrap" Height="90" />
-        <Button Content="Simular resposta" Command="{Binding TestCommand}" />
-        <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
-        <Border Classes="card" IsVisible="{Binding TestReply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-          <TextBlock Text="{Binding TestReply}" TextWrapping="Wrap" />
+    <ScrollViewer Grid.Column="1">
+      <StackPanel Spacing="12">
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Script de atendimento" Classes="h2" />
+            <TextBlock Classes="muted" TextWrapping="Wrap"
+                       Text="Escreva aqui como a IA deve atender: tom de voz, apresentação, produtos e ofertas, perguntas que deve fazer, respostas para objeções e quando transferir para um humano. O texto vai junto em toda resposta da IA." />
+            <TextBox x:Name="ScriptBox" Text="{Binding Instructions}" AcceptsReturn="True" AcceptsTab="True" TextWrapping="Wrap" Height="340"
+                     VerticalContentAlignment="Top" FontFamily="Consolas,Menlo,monospace" FontSize="13"
+                     Watermark="Ex.:&#10;TOM: simpático e direto, trate por você.&#10;APRESENTAÇÃO: diga que é a Lia, assistente virtual da Dominius Play.&#10;OFERTA PRINCIPAL: comece pelo Mensalista 50 para quem está começando.&#10;OBJEÇÃO &quot;está caro&quot;: explique o custo por cliente ativo.&#10;TRANSFERIR PARA HUMANO: quando pedir teste, pagamento ou proposta formal.&#10;HORÁRIO DA EQUIPE: 9h às 21h." />
+            <TextBlock Text="{Binding ScriptInfo}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+            <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                       Text="Preços continuam vindo só da tela Planos. Se o script citar um valor que não está aprovado lá, a IA não usa." />
+          </StackPanel>
+        </Border>
+        <Border Classes="panel">
+          <Expander Header="Prompt de sistema (avançado)" HorizontalAlignment="Stretch">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="muted" TextWrapping="Wrap"
+                         Text="É a base da IA: identidade, objetivo, regras de conversa e roteiro de diagnóstico. Já vem preenchido com o padrão do sistema. Use {nome_assistente} para o nome de exibição." />
+              <TextBox x:Name="SystemPromptBox" Text="{Binding SystemPrompt}" AcceptsReturn="True" TextWrapping="Wrap" Height="300"
+                       VerticalContentAlignment="Top" FontFamily="Consolas,Menlo,monospace" FontSize="12" />
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Restaurar padrão" Command="{Binding RestoreDefaultSystemPromptCommand}" />
+                <TextBlock Text="{Binding SystemPromptInfo}" Classes="muted" FontSize="12" VerticalAlignment="Center" />
+              </DockPanel>
+              <Expander Header="Regras fixas do sistema (não editáveis)" HorizontalAlignment="Stretch">
+                <StackPanel Spacing="6">
+                  <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                             Text="Sempre vão junto, depois do prompt e antes do script: identificação como assistente virtual, preços só dos planos aprovados, transferência para humano, uso das ferramentas do CRM e contatos sem nome." />
+                  <SelectableTextBlock Text="{Binding FixedRules}" TextWrapping="Wrap" FontSize="12" />
+                </StackPanel>
+              </Expander>
+            </StackPanel>
+          </Expander>
+        </Border>
+        <Button Classes="primary" Content="Salvar script e prompt" Command="{Binding SaveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+        <Border Classes="panel">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Testar a assistente (simulação)" Classes="h2" />
+            <TextBlock Text="Usa o script e o prompt salvos. Nada é enviado pelo WhatsApp nem salvo no CRM." Classes="muted" TextWrapping="Wrap" />
+            <TextBox Text="{Binding TestMessage}" AcceptsReturn="True" TextWrapping="Wrap" Height="90" />
+            <Button Content="Simular resposta" Command="{Binding TestCommand}" />
+            <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" />
+            <Border Classes="card" IsVisible="{Binding TestReply, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <TextBlock Text="{Binding TestReply}" TextWrapping="Wrap" />
+            </Border>
+          </StackPanel>
         </Border>
       </StackPanel>
-    </Border>
+    </ScrollViewer>
   </Grid>
 </UserControl>
