@@ -90,6 +90,44 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Tela_de_automacoes_valida_e_testa_sem_enviar()
+    {
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        using var f = new CrmFactory();
+        await f.AdminAsync();
+        var api = new ApiClient("http://localhost", f.Server.CreateHandler());
+        await api.LoginAsync("carlos", "SenhaForte123");
+        var main = new MainWindowViewModel();
+        var win = new MainWindow { DataContext = main, Width = 1440, Height = 880 };
+        win.Show();
+        await main.StartSessionAsync(new AppSession(api, new Realtime()));
+        await main.NavigateCommand.ExecuteAsync("automacoes");
+        await Pump(500);
+        var vm = Assert.IsType<AutomationsViewModel>(main.Current);
+        Assert.Null(vm.Error);
+        Assert.Equal(6, vm.Blocks.Count); // exemplo inicial
+        await vm.TestCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Empty(vm.Problems);
+        Assert.Contains("Adicionar tag: quer-preco", vm.Actions);
+        Shot(win, "17-automacoes");
+
+        // cria um ciclo sem espera: validação recusa
+        vm.Blocks.Single(b => b.Id == "5").Next = "3";
+        await vm.TestCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Contains(vm.Problems, p => p.Contains("circular"));
+        vm.Blocks.Single(b => b.Id == "5").Next = "9";
+        vm.Name = "Pedido de preço"; vm.Active = true;
+        await vm.SaveCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(vm.Error);
+        Assert.Single(vm.Flows);
+        Assert.True(vm.Flows[0].Active);
+        Assert.Equal(0, await f.WithDb(db => db.OutboundQueue.CountAsync()));
+    }
+
+    [AvaloniaFact]
     public async Task Tela_de_agentes_de_disparo_e_campanha()
     {
         System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");

@@ -1,0 +1,108 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.AutomationsView" x:DataType="vm:AutomationsViewModel">
+  <Grid ColumnDefinitions="220,*,360" RowDefinitions="Auto,*" Margin="24">
+    <StackPanel Grid.ColumnSpan="3" Spacing="4" Margin="0,0,0,12">
+      <TextBlock Text="Automações" Classes="h1" />
+      <TextBlock Text="Monte fluxos com blocos. Cada mensagem recebida roda os fluxos ativos (depois das regras fixas de descadastro e pedido de humano). Fluxos circulares sem 'Aguardar resposta' e ações conflitantes são recusados. Teste antes de ativar: o teste não grava nem envia nada." Classes="muted" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Info}" Classes="ok" /><TextBlock Text="{Binding Error}" Classes="error" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <!-- fluxos -->
+    <DockPanel Grid.Row="1" Margin="0,0,12,0">
+      <Button DockPanel.Dock="Top" Classes="primary" Content="+ Novo fluxo" Command="{Binding NewCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,0,8" />
+      <ListBox ItemsSource="{Binding Flows}" SelectedItem="{Binding Selected}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="c:AutomationFlowDto">
+            <StackPanel Spacing="2" Margin="0,4">
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="ativo" Classes="ok" IsVisible="{Binding Active}" />
+                <TextBlock Text="inativo" Classes="muted" IsVisible="{Binding !Active}" />
+                <TextBlock Text="{Binding Version, StringFormat='· v{0}'}" Classes="muted" />
+                <TextBlock Text="{Binding Runs, StringFormat='· {0} execuções'}" Classes="muted" />
+              </StackPanel>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+
+    <!-- editor -->
+    <Border Grid.Row="1" Grid.Column="1" Classes="panel" Margin="0,0,12,0" Padding="0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="16,12,16,8">
+          <Grid ColumnDefinitions="*,8,200,8,Auto">
+            <TextBox Text="{Binding Name}" Watermark="Nome do fluxo" />
+            <ComboBox Grid.Column="2" ItemsSource="{x:Static vm:AutomationsViewModel.Triggers}" SelectedIndex="{Binding TriggerIndex}" HorizontalAlignment="Stretch" />
+            <CheckBox Grid.Column="4" Content="Ativo" IsChecked="{Binding Active}" />
+          </Grid>
+          <TextBox Text="{Binding Description}" Watermark="Descrição (opcional)" />
+        </StackPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="16,8,16,12">
+          <Button Classes="primary" Content="Salvar" Command="{Binding SaveCommand}" IsEnabled="{Binding IsAdmin}" />
+          <Button Classes="danger" Content="Excluir" Command="{Binding DeleteCommand}" IsEnabled="{Binding IsAdmin}" />
+          <ComboBox ItemsSource="{x:Static vm:BlockRow.Types}" SelectedIndex="{Binding AddTypeIndex}" Width="230" />
+          <Button Content="+ Bloco" Command="{Binding AddBlockCommand}" />
+        </StackPanel>
+        <ScrollViewer Padding="16,0">
+          <ItemsControl ItemsSource="{Binding Blocks}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:BlockRow">
+                <StackPanel>
+                  <Border Classes="card" BorderBrush="{Binding Color}" BorderThickness="3,0,0,0" Margin="0,0,0,2">
+                    <Grid ColumnDefinitions="54,210,*,Auto" RowDefinitions="Auto,Auto,Auto">
+                      <TextBox Text="{Binding Id}" Width="46" HorizontalAlignment="Left" ToolTip.Tip="Identificador do bloco" />
+                      <ComboBox Grid.Column="1" ItemsSource="{x:Static vm:BlockRow.Types}" SelectedIndex="{Binding TypeIndex}" HorizontalAlignment="Stretch" Margin="0,0,8,0" />
+                      <TextBox Grid.Column="2" Text="{Binding Param}" Watermark="{Binding Hint}" IsVisible="{Binding HasParam}" ToolTip.Tip="{Binding Hint}" />
+                      <Button Grid.Column="3" Content="✕" Padding="8,2" Margin="8,0,0,0" Command="{Binding $parent[UserControl].((vm:AutomationsViewModel)DataContext).RemoveBlockCommand}" CommandParameter="{Binding}" />
+                      <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                        <TextBlock Text="{Binding NextLabel}" VerticalAlignment="Center" Classes="muted" />
+                        <TextBox Text="{Binding Next}" Width="60" Watermark="id" />
+                        <TextBlock Text="Se não →" VerticalAlignment="Center" Classes="muted" IsVisible="{Binding IsDecision}" Margin="10,0,0,0" />
+                        <TextBox Text="{Binding NextNo}" Width="60" Watermark="id" IsVisible="{Binding IsDecision}" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                  <TextBlock Text="↓" HorizontalAlignment="Center" Classes="muted" Margin="0,0,0,2" />
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+
+    <!-- modo de teste -->
+    <Border Grid.Row="1" Grid.Column="2" Classes="panel">
+      <ScrollViewer>
+        <StackPanel Spacing="6">
+          <TextBlock Text="Testar fluxo" Classes="h2" />
+          <TextBlock Text="Simula um contato fictício. Nada é salvo nem enviado." Classes="muted" TextWrapping="Wrap" />
+          <TextBlock Text="Mensagem do contato" Classes="muted" /><TextBox Text="{Binding TestMessage}" />
+          <CheckBox Content="Tem consentimento válido" IsChecked="{Binding TestConsent}" />
+          <TextBlock Text="Etapa atual" Classes="muted" />
+          <ComboBox ItemsSource="{x:Static vm:AutomationsViewModel.Stages}" SelectedIndex="{Binding TestStageIndex}" HorizontalAlignment="Stretch" />
+          <TextBlock Text="Tags (vírgula)" Classes="muted" /><TextBox Text="{Binding TestTags}" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="Pontuação" VerticalAlignment="Center" /><NumericUpDown Value="{Binding TestScore}" Minimum="0" Maximum="100" Width="120" FormatString="0" />
+          </StackPanel>
+          <Button Classes="primary" Content="Validar e testar" Command="{Binding TestCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          <TextBlock Text="{Binding TestSummary}" TextWrapping="Wrap" FontWeight="SemiBold" />
+          <ItemsControl ItemsSource="{Binding Problems}">
+            <ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" Classes="error" TextWrapping="Wrap" Margin="0,2" /></DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="Caminho percorrido" Classes="muted" IsVisible="{Binding !!Trace.Count}" />
+          <ItemsControl ItemsSource="{Binding Trace}">
+            <ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String"><TextBlock Text="{Binding}" TextWrapping="Wrap" FontSize="12" Margin="0,2" /></DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="Ações que seriam aplicadas" Classes="muted" IsVisible="{Binding !!Actions.Count}" />
+          <ItemsControl ItemsSource="{Binding Actions}">
+            <ItemsControl.ItemTemplate><DataTemplate x:DataType="x:String"><TextBlock Text="{Binding StringFormat='• {0}'}" TextWrapping="Wrap" Foreground="{StaticResource AccentBrush}" Margin="0,2" /></DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

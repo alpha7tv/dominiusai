@@ -62,6 +62,15 @@ public sealed record AgentsDashboardDto(int Imported, int Eligible, int ActiveCa
     int Qualified, int Handoffs, int Proposals, int Sales, int OptOuts, int Errors, long AiTokens, IReadOnlyList<CampaignConversionDto> ByCampaign, string Note);
 public sealed record CampaignConversionDto(Guid Id, string Name, int Sent, int Replied, int Qualified, int Sales, double ResponseRate, double ConversionRate);
 
+public sealed record AutomationFlowDto(Guid Id, string Name, string Description, DominiusPlay.Domain.Services.AutomationTrigger Trigger, bool Active,
+    IReadOnlyList<DominiusPlay.Domain.Services.AutomationBlock> Blocks, int Version, string UpdatedBy, DateTimeOffset UpdatedAt, int Runs);
+public sealed record AutomationFlowUpsert(string Name, string? Description, DominiusPlay.Domain.Services.AutomationTrigger Trigger, bool Active,
+    IReadOnlyList<DominiusPlay.Domain.Services.AutomationBlock> Blocks);
+public sealed record AutomationTestRequest(IReadOnlyList<DominiusPlay.Domain.Services.AutomationBlock> Blocks, string Message, bool ConsentValid = true,
+    bool OptedOut = false, KanbanStage Stage = KanbanStage.Respondeu, string? Tags = null, int Score = 0, ConversationMode Mode = ConversationMode.Ia,
+    string? Segment = null, string? Campaign = null, bool RepliedToCampaign = true);
+public sealed record AutomationTestResponse(bool Valid, IReadOnlyList<string> Problems, string Intent, IReadOnlyList<string> Trace, IReadOnlyList<string> Actions, bool AiWouldReply);
+
 public sealed record KanbanStageDto(KanbanStage Stage, string Title, int Order, bool Visible, string DefaultTitle);
 
 public sealed record MessageDto(Guid Id, MessageDirection Direction, MessageAuthor Author, string Text, MessageStatus Status,

@@ -91,6 +91,7 @@ builder.Services.AddScoped<CampaignService>();
 builder.Services.AddScoped<AgentResolver>();
 builder.Services.AddScoped<ApproachGenerator>();
 builder.Services.AddScoped<HandoffService>();
+builder.Services.AddScoped<AutomationService>();
 builder.Services.AddScoped<IntentRouter>();
 builder.Services.AddSingleton<AgentTestSessions>();
 builder.Services.AddSingleton(new DataPaths(dataDir));
@@ -121,6 +122,7 @@ app.MapAiApi();
 app.MapPhasesApi();
 app.MapAgentsApi();
 app.MapDashboardApi();
+app.MapAutomationsApi();
 app.MapHub<CrmHub>("/hubs/crm");
 app.Run();
 

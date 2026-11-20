@@ -50,6 +50,11 @@ public class ApiClient
         Get<AgentsDashboardDto>("api/dashboard/agents?" + string.Join("&", new[] {
             from is { } f ? "from=" + Uri.EscapeDataString(f.ToString("O")) : null, agentId is { } a ? $"agentId={a}" : null, campaignId is { } c ? $"campaignId={c}" : null }.Where(x => x is not null)));
     public Task<List<KanbanColumn>> KanbanAsync() => Get<List<KanbanColumn>>("api/kanban");
+    public Task<List<AutomationFlowDto>> AutomationsAsync() => Get<List<AutomationFlowDto>>("api/automations");
+    public Task<AutomationFlowDto> CreateAutomationAsync(AutomationFlowUpsert f) => Post<AutomationFlowDto>("api/automations", f);
+    public Task<AutomationFlowDto> UpdateAutomationAsync(Guid id, AutomationFlowUpsert f) => Send<AutomationFlowDto>(HttpMethod.Put, $"api/automations/{id}", f);
+    public Task<OperationResult> DeleteAutomationAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/automations/{id}", null);
+    public Task<AutomationTestResponse> TestAutomationAsync(AutomationTestRequest r) => Post<AutomationTestResponse>("api/automations/test", r);
     public Task<List<KanbanStageDto>> KanbanStagesAsync() => Get<List<KanbanStageDto>>("api/kanban/stages");
     public Task<OperationResult> SaveKanbanStagesAsync(List<KanbanStageDto> s) => Send<OperationResult>(HttpMethod.Put, "api/kanban/stages", s);
     public Task<MoveCardResponse> MoveAsync(Guid id, KanbanStage to, string? reason, bool confirm) => Post<MoveCardResponse>($"api/kanban/{id}/move", new MoveCardRequest(to, reason, confirm));

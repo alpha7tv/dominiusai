@@ -20,7 +20,7 @@ public enum InboundOutcome { Stored, Duplicate, Ignored, StatusUpdated, Connecti
 /// </summary>
 public class InboundProcessor(CrmDbContext db, ConversationLocks locks, ConversationService conversations,
     InstanceStatusCache status, IHubContext<CrmHub> hub, AiDispatcher ai, DominiusPlay.Infrastructure.Security.SettingsStore settings,
-    IntentRouter intents, HandoffService handoff, TimeProvider clock, ILogger<InboundProcessor> log)
+    IntentRouter intents, HandoffService handoff, AutomationService automations, TimeProvider clock, ILogger<InboundProcessor> log)
 {
     public async Task<InboundOutcome> ProcessAsync(string json, CancellationToken ct = default)
     {
@@ -102,6 +102,7 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
         var ts = p.Timestamp ?? DateTimeOffset.UtcNow;
         var firstInbound = !p.FromMe && !await db.Messages.AnyAsync(m => m.LeadId == lead.Id && m.Direction == MessageDirection.Entrada, ct);
         string? handedTo = null;
+        var suppressAi = false;
         var message = new Message
         {
             LeadId = lead.Id, ExternalId = p.MessageId, InstanceName = p.Instance, Text = p.Text ?? "", Timestamp = ts,
@@ -137,6 +138,7 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
             }
             else
             {
+                var repliedToCampaign = lead.Mode == ConversationMode.Prospeccao;
                 ConversationStateMachine.Apply(lead, ConversationTrigger.ContatoRespondeu); // Disparo → Atendimento: só um agente fala
                 KanbanRules.AutoAdvance(lead, KanbanStage.Respondeu, "Contato respondeu à abordagem");
                 // respondeu = acompanhamentos automáticos pendentes são interrompidos (o SendGuard também bloqueia)
@@ -144,6 +146,13 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
                 foreach (var q in followUps) { q.Status = MessageStatus.Cancelada; q.LastError = "Contato respondeu"; q.UpdatedAt = clock.GetUtcNow(); }
                 // intenção com fluxo próprio (ex.: pedido de humano transfere na hora, sem depender da IA)
                 handedTo = await intents.RouteAsync(lead, message.Intent, ct);
+                // fluxos do construtor de automações (depois das regras fixas: descadastro e pedido de humano têm prioridade)
+                if (handedTo is null)
+                {
+                    var auto = await automations.OnInboundAsync(lead, message, repliedToCampaign, ct);
+                    suppressAi = auto.SuppressAi;
+                    handedTo = auto.HandedTo;
+                }
             }
             // Classificação inicial de dores (inferência — a IA da Fase 5 refina)
             foreach (var pain in PainClassifier.Classify(p.Text ?? ""))
@@ -157,7 +166,7 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
         lead.UpdatedAt = DateTimeOffset.UtcNow;
         lead.ConcurrencyStamp = Guid.NewGuid();
         await db.SaveChangesAsync(ct);
-        if (!p.FromMe && lead.Mode == ConversationMode.Ia)
+        if (!p.FromMe && lead.Mode == ConversationMode.Ia && !suppressAi)
         {
             var wait = int.TryParse(await settings.GetAsync(DominiusPlay.Infrastructure.Security.SettingKeys.AiDebounceSeconds, ct), out var w) ? w : 6;
             ai.Schedule(lead.Id, clock.GetUtcNow().AddSeconds(Math.Clamp(wait, 0, 120)));

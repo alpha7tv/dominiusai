@@ -28,6 +28,7 @@ public class CrmDbContext(DbContextOptions<CrmDbContext> options) : DbContext(op
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<AgentProfile> AgentProfiles => Set<AgentProfile>();
     public DbSet<QualificationQuestion> QualificationQuestions => Set<QualificationQuestion>();
+    public DbSet<AutomationFlow> AutomationFlows => Set<AutomationFlow>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {

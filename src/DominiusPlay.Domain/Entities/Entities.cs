@@ -364,3 +364,16 @@ public class QualificationQuestion : Entity
     public string ScoringHint { get; set; } = "";
     public bool Active { get; set; } = true;
 }
+
+/// <summary>Fluxo do construtor visual de automações. Blocos em JSON (ver AutomationEngine); só roda se ativo e válido.</summary>
+public class AutomationFlow : Entity
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public DominiusPlay.Domain.Services.AutomationTrigger Trigger { get; set; }
+    public bool Active { get; set; }
+    public string BlocksJson { get; set; } = "[]";
+    public int Version { get; set; } = 1;
+    public string UpdatedBy { get; set; } = "";
+    public int Runs { get; set; }
+}

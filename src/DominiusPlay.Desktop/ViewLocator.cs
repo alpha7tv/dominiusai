@@ -24,6 +24,7 @@ public class ViewLocator : IDataTemplate
         ReportsViewModel => new ReportsView(),
         TeamViewModel => new TeamView(),
         AgentsViewModel => new AgentsView(),
+        AutomationsViewModel => new AutomationsView(),
         PendingModuleViewModel => new PendingModuleView(),
         _ => new TextBlock { Text = "Tela não encontrada: " + data?.GetType().Name },
     };

@@ -41,9 +41,10 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     public static readonly NavItem[] Menu =
     [
-        new("dashboard", "▦", "Dashboard"), new("atendimento", "🤖", "Atendimento IA"), new("disparo", "🚀", "Disparo IA"), new("conversas", "💬", "Conversas"), new("kanban", "▥", "Kanban"),
-        new("leads", "👥", "Leads"), new("campanhas", "📣", "Campanhas"), new("mensagens", "✉", "Mensagens"),
-        new("planos", "💲", "Planos"), new("conhecimento", "📚", "Base de conhecimento"), new("relatorios", "📊", "Relatórios"),
+        new("dashboard", "▦", "Visão geral"), new("disparo", "🚀", "Agentes de disparo"), new("atendimento", "🤖", "Agentes de atendimento"),
+        new("campanhas", "📣", "Campanhas"), new("leads", "👥", "Contatos"), new("conversas", "💬", "Caixa de entrada"), new("automacoes", "⚡", "Automações"),
+        new("kanban", "▥", "CRM Kanban"), new("conhecimento", "📚", "Base de conhecimento"), new("mensagens", "✉", "Mensagens"),
+        new("planos", "💲", "Planos"), new("relatorios", "📊", "Relatórios"),
         new("equipe", "👤", "Equipe"), new("integracoes", "🔌", "Integrações"), new("config", "⚙", "Configurações"),
     ];
 
@@ -109,6 +110,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 "config" => new AiSettingsViewModel(_session),
                 "atendimento" => new AgentsViewModel(_session, AgentKind.Atendimento),
                 "disparo" => new AgentsViewModel(_session, AgentKind.Disparo),
+                "automacoes" => new AutomationsViewModel(_session),
                 _ => new PendingModuleViewModel(key, "", ""),
             };
             _pages[key] = vm;
