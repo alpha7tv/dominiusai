@@ -48,6 +48,48 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Tela_de_agentes_de_atendimento_e_Testar_Agente()
+    {
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        using var f = new CrmFactory();
+        var http = await f.AdminAsync();
+        await f.ConfigureEvolutionAsync(http);
+        (await System.Net.Http.Json.HttpClientJsonExtensions.PutAsJsonAsync(http, "/api/ai/settings",
+            new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", "sk-ant-teste-123", 4000, "Lia", "", 100000, false, 0))).EnsureSuccessStatusCode();
+        var api = new ApiClient("http://localhost", f.Server.CreateHandler());
+        await api.LoginAsync("carlos", "SenhaForte123");
+        var main = new MainWindowViewModel();
+        var win = new MainWindow { DataContext = main, Width = 1440, Height = 880 };
+        win.Show();
+        await main.StartSessionAsync(new AppSession(api, new Realtime()));
+        await main.NavigateCommand.ExecuteAsync("atendimento");
+        await Pump(600);
+        var vm = Assert.IsType<AgentsViewModel>(main.Current);
+        Assert.Null(vm.Error);
+        Assert.Equal("Atendimento IPTV (padrão)", Assert.Single(vm.Agents).Name);
+        Assert.Equal(6, vm.Questions.Count);
+        Assert.Equal(11, vm.Intents.Count);
+        Shot(win, "15-agentes-atendimento");
+
+        f.Ai.Script.Enqueue(_ => FakeAi.Tools(("registrar_resposta_qualificacao", """{"chave":"ja_revende","resposta":"já revende há 2 anos","atende_criterio":true}""")));
+        f.Ai.Script.Enqueue(_ => FakeAi.Text("Que bom! Hoje você tem quantos clientes ativos, mais ou menos?"));
+        vm.TestInput = "Oi, já revendo IPTV faz 2 anos";
+        await vm.SendTestCommand.ExecuteAsync(null);
+        f.Ai.Script.Enqueue(_ => FakeAi.Text("Entendo, travamento derruba a renovação. Você usa qual painel hoje?"));
+        vm.TestInput = "uns 120, mas o servidor atual trava muito";
+        await vm.SendTestCommand.ExecuteAsync(null);
+        vm.TestInput = "quero falar com uma pessoa";
+        await vm.SendTestCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(vm.Error);
+        Assert.Equal(7, vm.TestLines.Count); // 3 do cliente, 3 do agente, 1 ficha
+        Assert.Contains("FICHA DA TRANSFERÊNCIA", vm.TestLines.Last().Text);
+        Assert.Equal("Qualificação: 15/100", vm.TestScore);
+        Assert.Equal(0, await f.WithDb(db => db.Messages.CountAsync()));
+        Shot(win, "15b-testar-agente");
+    }
+
+    [AvaloniaFact]
     public async Task Fluxo_completo_das_telas()
     {
         System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");

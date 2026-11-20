@@ -41,7 +41,7 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     public static readonly NavItem[] Menu =
     [
-        new("dashboard", "▦", "Dashboard"), new("conversas", "💬", "Conversas"), new("kanban", "▥", "Kanban"),
+        new("dashboard", "▦", "Dashboard"), new("atendimento", "🤖", "Atendimento IA"), new("conversas", "💬", "Conversas"), new("kanban", "▥", "Kanban"),
         new("leads", "👥", "Leads"), new("campanhas", "📣", "Campanhas"), new("mensagens", "✉", "Mensagens"),
         new("planos", "💲", "Planos"), new("conhecimento", "📚", "Base de conhecimento"), new("relatorios", "📊", "Relatórios"),
         new("equipe", "👤", "Equipe"), new("integracoes", "🔌", "Integrações"), new("config", "⚙", "Configurações"),
@@ -107,6 +107,7 @@ public partial class MainWindowViewModel : ViewModelBase
                 "relatorios" => new ReportsViewModel(_session),
                 "equipe" => new TeamViewModel(_session),
                 "config" => new AiSettingsViewModel(_session),
+                "atendimento" => new AgentsViewModel(_session, AgentKind.Atendimento),
                 _ => new PendingModuleViewModel(key, "", ""),
             };
             _pages[key] = vm;

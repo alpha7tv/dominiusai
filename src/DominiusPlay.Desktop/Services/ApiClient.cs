@@ -87,6 +87,17 @@ public class ApiClient
     public Task<ModelsResponse> AiModelsAsync() => Get<ModelsResponse>("api/ai/models");
     public Task<AiSimulateResponse> AiSimulateAsync(AiSimulateRequest r) => Post<AiSimulateResponse>("api/ai/simulate", r);
     public Task<AiSimulateResponse> SuggestAsync(Guid leadId) => Post<AiSimulateResponse>($"api/conversations/{leadId}/suggest", null);
+    public Task<List<AgentDto>> AgentsAsync(AgentKind kind) => Get<List<AgentDto>>($"api/agents?kind={kind}");
+    public Task<AgentDto> CreateAgentAsync(AgentUpsert a) => Post<AgentDto>("api/agents", a);
+    public Task<AgentDto> UpdateAgentAsync(Guid id, AgentUpsert a) => Send<AgentDto>(HttpMethod.Put, $"api/agents/{id}", a);
+    public Task<OperationResult> DeleteAgentAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/agents/{id}", null);
+    public Task<List<IntentInfo>> IntentsAsync() => Get<List<IntentInfo>>("api/agents/intents");
+    public Task<AgentTestResponse> TestAgentAsync(Guid? agentId, AgentTestRequest r) => Post<AgentTestResponse>(agentId is { } id ? $"api/agents/{id}/test" : "api/agents/global/test", r);
+    public Task<List<QualificationQuestionDto>> QuestionsAsync(Guid? agentId) => Get<List<QualificationQuestionDto>>("api/qualification-questions" + (agentId is { } id ? "?agentId=" + id : ""));
+    public Task<QualificationQuestionDto> CreateQuestionAsync(QualificationQuestionUpsert q) => Post<QualificationQuestionDto>("api/qualification-questions", q);
+    public Task<QualificationQuestionDto> UpdateQuestionAsync(Guid id, QualificationQuestionUpsert q) => Send<QualificationQuestionDto>(HttpMethod.Put, $"api/qualification-questions/{id}", q);
+    public Task<OperationResult> DeleteQuestionAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/qualification-questions/{id}", null);
+    public Task<OperationResult> HandoffAsync(Guid leadId, string? reason) => Post<OperationResult>($"api/leads/{leadId}/handoff", new HandoffRequest(reason));
     public Task<OperationResult> ApproveKnowledgeAsync(Guid id, bool approve) => Post<OperationResult>($"api/knowledge/{id}/approve?approve={approve}", null);
 
     public Task<EvolutionSettingsDto> EvolutionSettingsAsync() => Get<EvolutionSettingsDto>("api/integrations/evolution");
