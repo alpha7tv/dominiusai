@@ -113,8 +113,15 @@ Contatos com endereçamento `@lid` usam `key.remoteJidAlt` para obter o número.
 
 ## 7. Inteligência artificial (Fase 5)
 
-- Provedor: **OpenAI** (Chat Completions com chamada de ferramentas). Modelo padrão `gpt-4o`, configurável na tela Configurações (lista os modelos da conta). Modelos GPT-5 não recebem temperatura.
-- A chave fica criptografada no servidor (`ai.apikey`), nunca volta ao aplicativo.
+- Provedor: **Anthropic (Claude)**, pelo SDK oficial `Anthropic` para .NET (Messages API com ferramentas). Não há dependência da OpenAI.
+- Modelos (configuráveis na tela Configurações, que também lista os modelos da conta):
+  - atendimento: `claude-haiku-5-5` (padrão; rápido e econômico, esforço de raciocínio baixo);
+  - negociação: `claude-sonnet-5-5` (padrão), usado automaticamente quando o lead está na etapa **Em negociação** (esforço médio).
+- Sem temperatura (os modelos atuais não aceitam). O limite por resposta (padrão 4000 tokens) inclui o raciocínio do modelo; a mensagem enviada ao cliente continua curta pelas regras do prompt.
+- O prompt de sistema usa cache (`cache_control`), o que reduz custo nas conversas seguidas.
+- Os blocos de raciocínio assinados são reenviados sem alteração entre as rodadas de ferramentas; a conversa enviada sempre termina com o cliente.
+- Recusa do modelo, erro HTTP ou de rede viram falha controlada: a conversa vai para atendimento humano.
+- A chave da Anthropic (`sk-ant-...`) fica criptografada no servidor (`ai.apikey`), nunca volta ao aplicativo e nunca é lida de variável de ambiente da máquina.
 - Fluxo: mensagem do cliente → espera configurável (padrão 6 s) para agrupar mensagens seguidas → `AiResponder` monta o contexto (regras, roteiro de qualificação, **somente planos aprovados e ativos**, base de conhecimento aprovada, memória do lead separando fato declarado de inferência, últimas 30 mensagens) → modelo chama ferramentas → resposta entra na fila como `Resposta`.
 - Ferramentas internas: `consultar_planos`, `atualizar_qualificacao`, `registrar_fato`, `sugerir_etapa` (não pode marcar Negócio fechado), `atualizar_resumo`, `transferir_para_humano`, `encerrar_conversa`.
 - Se um humano assumir ou chegar nova mensagem enquanto o modelo gera a resposta, a resposta é descartada.

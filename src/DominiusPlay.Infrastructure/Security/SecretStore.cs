@@ -48,7 +48,7 @@ public static class SettingKeys
     public const string AiEnabled = "ai.enabled";
     public const string AiModel = "ai.model";
     public const string AiApiKey = "ai.apikey";
-    public const string AiTemperature = "ai.temperature";
+    public const string AiModelAdvanced = "ai.modelAdvanced";
     public const string AiMaxTokens = "ai.maxTokens";
     public const string AiInstructions = "ai.instructions";
     public const string AiDailyTokenLimit = "ai.dailyTokenLimit";

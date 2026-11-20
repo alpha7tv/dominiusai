@@ -76,7 +76,7 @@ builder.Services.AddScoped<ConversationService>();
 builder.Services.AddScoped<InboundProcessor>();
 builder.Services.AddScoped<OutboundQueueProcessor>();
 builder.Services.AddSingleton<AiDispatcher>();
-builder.Services.AddHttpClient<IAiProvider, OpenAiClient>(c => c.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddHttpClient<IAiProvider, AnthropicAiClient>(c => c.Timeout = TimeSpan.FromSeconds(90));
 builder.Services.AddScoped<AiAgent>();
 builder.Services.AddScoped<AiResponder>();
 builder.Services.AddScoped<CampaignService>();

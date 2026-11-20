@@ -103,9 +103,9 @@ public sealed record ReportDto(DateTimeOffset From, DateTimeOffset To, int NewLe
     IReadOnlyList<ReportRow> MessagesByStatus, IReadOnlyList<ReportRow> Templates, IReadOnlyList<ReportRow> ByAttendant, IReadOnlyList<ReportRow> Sources);
 public sealed record ReportRow(string Label, int Value, string? Detail = null);
 
-public sealed record AiSettingsDto(bool Enabled, string Model, bool HasApiKey, double Temperature, int MaxTokens, string AssistantName,
+public sealed record AiSettingsDto(bool Enabled, string Model, string AdvancedModel, bool HasApiKey, int MaxTokens, string AssistantName,
     string Instructions, int DailyTokenLimit, int TokensUsedToday, bool TypingIndicator, int DebounceSeconds);
-public sealed record AiSettingsUpdate(bool Enabled, string Model, string? ApiKey, double Temperature, int MaxTokens, string AssistantName,
+public sealed record AiSettingsUpdate(bool Enabled, string Model, string AdvancedModel, string? ApiKey, int MaxTokens, string AssistantName,
     string Instructions, int DailyTokenLimit, bool TypingIndicator, int DebounceSeconds);
 public sealed record SimTurn(bool FromContact, string Text);
 public sealed record AiSimulateRequest(IReadOnlyList<SimTurn> Turns);

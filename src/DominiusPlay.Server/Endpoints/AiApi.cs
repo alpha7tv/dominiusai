@@ -20,18 +20,22 @@ public static class AiApi
         ai.MapGet("/settings", async (AiAgent agent, SettingsStore s) =>
         {
             var c = await agent.LoadConfigAsync();
-            return new AiSettingsDto(c.Enabled, c.Model, !string.IsNullOrWhiteSpace(c.ApiKey), c.Temperature, c.MaxTokens, c.AssistantName,
+            return new AiSettingsDto(c.Enabled, c.Model, c.AdvancedModel, !string.IsNullOrWhiteSpace(c.ApiKey), c.MaxTokens, c.AssistantName,
                 c.Instructions, c.DailyTokenLimit, await agent.TokensUsedTodayAsync(), c.Typing, c.DebounceSeconds);
         });
 
         ai.MapPut("/settings", async (AiSettingsUpdate r, SettingsStore s, CrmDbContext db, ClaimsPrincipal user) =>
         {
             if (string.IsNullOrWhiteSpace(r.Model)) return Results.BadRequest(new OperationResult(false, "Informe o modelo"));
-            if (r.MaxTokens is < 50 or > 4000) return Results.BadRequest(new OperationResult(false, "Tamanho máximo da resposta deve ficar entre 50 e 4000 tokens"));
+            if (!r.Model.Trim().StartsWith("claude-") || (!string.IsNullOrWhiteSpace(r.AdvancedModel) && !r.AdvancedModel.Trim().StartsWith("claude-")))
+                return Results.BadRequest(new OperationResult(false, "Use um modelo Claude (ex.: claude-haiku-5-5)"));
+            if (r.MaxTokens is < 1000 or > 16000) return Results.BadRequest(new OperationResult(false, "Limite de tokens por resposta deve ficar entre 1000 e 16000 (inclui o raciocínio do modelo)"));
+            if (!string.IsNullOrWhiteSpace(r.ApiKey) && !r.ApiKey.Trim().StartsWith("sk-ant-"))
+                return Results.BadRequest(new OperationResult(false, "A chave da Anthropic começa com sk-ant-"));
             await s.SetAsync(SettingKeys.AiEnabled, r.Enabled ? "true" : "false");
             await s.SetAsync(SettingKeys.AiModel, r.Model.Trim());
             if (!string.IsNullOrWhiteSpace(r.ApiKey)) await s.SetAsync(SettingKeys.AiApiKey, r.ApiKey.Trim(), secret: true);
-            await s.SetAsync(SettingKeys.AiTemperature, Math.Clamp(r.Temperature, 0, 1.5).ToString(CultureInfo.InvariantCulture));
+            await s.SetAsync(SettingKeys.AiModelAdvanced, string.IsNullOrWhiteSpace(r.AdvancedModel) ? AiConfig.DefaultAdvancedModel : r.AdvancedModel.Trim());
             await s.SetAsync(SettingKeys.AiMaxTokens, r.MaxTokens.ToString());
             await s.SetAsync(SettingKeys.AssistantName, string.IsNullOrWhiteSpace(r.AssistantName) ? "Assistente Dominius Play" : r.AssistantName.Trim());
             await s.SetAsync(SettingKeys.AiInstructions, r.Instructions ?? "");
@@ -39,7 +43,7 @@ public static class AiApi
             await s.SetAsync(SettingKeys.AiTyping, r.TypingIndicator ? "true" : "false");
             await s.SetAsync(SettingKeys.AiDebounceSeconds, Math.Clamp(r.DebounceSeconds, 0, 120).ToString());
             db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "ai.settings", EntityType = "Setting",
-                Details = $"{(r.Enabled ? "ativada" : "desativada")}, modelo {r.Model}" + (string.IsNullOrWhiteSpace(r.ApiKey) ? "" : " (chave alterada)") });
+                Details = $"{(r.Enabled ? "ativada" : "desativada")}, modelo {r.Model}, negociação {r.AdvancedModel}" + (string.IsNullOrWhiteSpace(r.ApiKey) ? "" : " (chave alterada)") });
             await db.SaveChangesAsync();
             return Results.Ok(new OperationResult(true, r.Enabled ? "IA ativada. Ela responderá às conversas no modo IA." : "Configuração salva (IA desativada)."));
         }).RequireAuthorization(Api.AdminPolicy);
@@ -47,7 +51,7 @@ public static class AiApi
         ai.MapGet("/models", async (AiAgent agent, IAiProvider provider) =>
         {
             var c = await agent.LoadConfigAsync();
-            if (string.IsNullOrWhiteSpace(c.ApiKey)) return new ModelsResponse(false, [], "Salve a chave da OpenAI primeiro");
+            if (string.IsNullOrWhiteSpace(c.ApiKey)) return new ModelsResponse(false, [], "Salve a chave da Anthropic primeiro");
             var (ok, models, err) = await provider.ListModelsAsync(c.ApiKey);
             return new ModelsResponse(ok, models, err);
         });

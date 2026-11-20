@@ -488,11 +488,11 @@ public partial class KnowledgeViewModel(AppSession s) : ViewModelBase
 public partial class AiSettingsViewModel(AppSession s) : ViewModelBase
 {
     [ObservableProperty] private bool _enabled;
-    [ObservableProperty] private string _model = "gpt-4o";
+    [ObservableProperty] private string _model = "claude-haiku-5-5";
+    [ObservableProperty] private string _advancedModel = "claude-sonnet-5-5";
     [ObservableProperty] private string _apiKey = "";
     [ObservableProperty] private bool _hasApiKey;
-    [ObservableProperty] private double _temperature = 0.4;
-    [ObservableProperty] private decimal? _maxTokens = 600;
+    [ObservableProperty] private decimal? _maxTokens = 4000;
     [ObservableProperty] private string _assistantName = "";
     [ObservableProperty] private string _instructions = "";
     [ObservableProperty] private decimal? _dailyTokenLimit = 500000;
@@ -501,22 +501,23 @@ public partial class AiSettingsViewModel(AppSession s) : ViewModelBase
     [ObservableProperty] private decimal? _debounceSeconds = 6;
     [ObservableProperty] private string _testMessage = "Oi, já trabalho com Painel Sigma e tenho 350 clientes. Meu servidor cai muito.";
     [ObservableProperty] private string? _testReply;
-    public ObservableCollection<string> Models { get; } = new() { "gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-5", "gpt-5-mini" };
+    public ObservableCollection<string> Models { get; } = new() { "claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5" };
 
     public override Task OnActivatedAsync() => Run(async () =>
     {
         var c = await s.Api.AiSettingsAsync();
-        Enabled = c.Enabled; Model = c.Model; HasApiKey = c.HasApiKey; Temperature = c.Temperature; MaxTokens = c.MaxTokens;
+        Enabled = c.Enabled; Model = c.Model; AdvancedModel = c.AdvancedModel; HasApiKey = c.HasApiKey; MaxTokens = c.MaxTokens;
         AssistantName = c.AssistantName; Instructions = c.Instructions; DailyTokenLimit = c.DailyTokenLimit; TokensUsedToday = c.TokensUsedToday;
         Typing = c.TypingIndicator; DebounceSeconds = c.DebounceSeconds;
         if (!Models.Contains(Model)) Models.Insert(0, Model);
+        if (!Models.Contains(AdvancedModel)) Models.Add(AdvancedModel);
     });
 
     [RelayCommand]
     private Task Save() => Run(async () =>
     {
-        var r = await s.Api.SaveAiSettingsAsync(new AiSettingsUpdate(Enabled, Model, string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey, Temperature,
-            (int)(MaxTokens ?? 600), AssistantName, Instructions, (int)(DailyTokenLimit ?? 0), Typing, (int)(DebounceSeconds ?? 6)));
+        var r = await s.Api.SaveAiSettingsAsync(new AiSettingsUpdate(Enabled, Model, AdvancedModel, string.IsNullOrWhiteSpace(ApiKey) ? null : ApiKey,
+            (int)(MaxTokens ?? 4000), AssistantName, Instructions, (int)(DailyTokenLimit ?? 0), Typing, (int)(DebounceSeconds ?? 6)));
         Info = r.Message;
         if (!string.IsNullOrWhiteSpace(ApiKey)) { HasApiKey = true; ApiKey = ""; }
     });
@@ -526,9 +527,10 @@ public partial class AiSettingsViewModel(AppSession s) : ViewModelBase
     {
         var r = await s.Api.AiModelsAsync();
         if (!r.Ok) { Error = r.Error; return; }
-        var current = Model;
+        var current = Model; var adv = AdvancedModel;
         Models.Clear(); foreach (var m in r.Models) Models.Add(m);
         Model = Models.Contains(current) ? current : Models.FirstOrDefault() ?? current;
+        AdvancedModel = Models.Contains(adv) ? adv : Model;
         Info = $"{r.Models.Count} modelos disponíveis na sua conta.";
     });
 

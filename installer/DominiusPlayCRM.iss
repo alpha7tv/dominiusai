@@ -1,7 +1,7 @@
 ; Instalador Windows do DOMINIUS PLAY AI CRM (Inno Setup 6)
 ; Compilar no Windows:  ISCC.exe installer\DominiusPlayCRM.iss   (após executar installer\build.ps1)
 #define AppName "DOMINIUS PLAY AI CRM"
-#define AppVersion "0.2.0"
+#define AppVersion "0.3.0"
 #define Publisher "Dominius Play"
 
 [Setup]

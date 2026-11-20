@@ -12,10 +12,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DominiusPlay.Server.Services;
 
-public sealed record AiConfig(bool Enabled, string Model, string? ApiKey, double Temperature, int MaxTokens, string AssistantName,
+public sealed record AiConfig(bool Enabled, string Model, string AdvancedModel, string? ApiKey, int MaxTokens, string AssistantName,
     string Instructions, int DailyTokenLimit, bool Typing, int DebounceSeconds)
 {
-    public const string DefaultModel = "gpt-4o";
+    public const string DefaultModel = AnthropicAiClient.DefaultModel;
+    public const string DefaultAdvancedModel = AnthropicAiClient.DefaultAdvancedModel;
+    public const int DefaultMaxTokens = 4000;
+
+    /// <summary>Modelo usado para o lead: o avançado na etapa Em negociação, o padrão nas demais.</summary>
+    public string ModelFor(Lead lead) => lead.Stage == KanbanStage.EmNegociacao && !string.IsNullOrWhiteSpace(AdvancedModel) ? AdvancedModel : Model;
 }
 
 public sealed class AgentResult
@@ -26,6 +31,7 @@ public sealed class AgentResult
     public bool Closed { get; set; }
     public int Tokens { get; set; }
     public string? Error { get; set; }
+    public string? Model { get; set; }
 }
 
 /// <summary>
@@ -44,9 +50,9 @@ public class AiAgent(CrmDbContext db, SettingsStore settings, IAiProvider provid
         return new AiConfig(
             Enabled: (await G(SettingKeys.AiEnabled)) == "true",
             Model: await G(SettingKeys.AiModel) is { Length: > 0 } m ? m : AiConfig.DefaultModel,
+            AdvancedModel: await G(SettingKeys.AiModelAdvanced) is { Length: > 0 } am ? am : AiConfig.DefaultAdvancedModel,
             ApiKey: await G(SettingKeys.AiApiKey),
-            Temperature: double.TryParse(await G(SettingKeys.AiTemperature), NumberStyles.Float, CultureInfo.InvariantCulture, out var t) ? t : 0.4,
-            MaxTokens: int.TryParse(await G(SettingKeys.AiMaxTokens), out var mt) ? mt : 600,
+            MaxTokens: int.TryParse(await G(SettingKeys.AiMaxTokens), out var mt) ? mt : AiConfig.DefaultMaxTokens,
             AssistantName: await G(SettingKeys.AssistantName) is { Length: > 0 } n ? n : "Assistente Dominius Play",
             Instructions: await G(SettingKeys.AiInstructions) ?? "",
             DailyTokenLimit: int.TryParse(await G(SettingKeys.AiDailyTokenLimit), out var dl) ? dl : 500_000,
@@ -72,36 +78,45 @@ public class AiAgent(CrmDbContext db, SettingsStore settings, IAiProvider provid
     public async Task<AgentResult> RunAsync(Lead lead, IReadOnlyList<Message> history, AiConfig cfg, bool trackUsage = true, CancellationToken ct = default)
     {
         var result = new AgentResult();
-        if (string.IsNullOrWhiteSpace(cfg.ApiKey)) { result.Error = "Chave da OpenAI não configurada"; return result; }
+        if (string.IsNullOrWhiteSpace(cfg.ApiKey)) { result.Error = "Chave de API da Anthropic (Claude) não configurada"; return result; }
         if (trackUsage && await TokensUsedTodayAsync(ct) >= cfg.DailyTokenLimit) { result.Error = "Limite diário de consumo da IA atingido"; return result; }
 
         var plans = (await db.Plans.AsNoTracking().ToListAsync(ct)).Where(p => p.IsActiveAt(clock.GetUtcNow())).OrderBy(p => p.SortOrder).ToList();
         var knowledge = await db.KnowledgeArticles.AsNoTracking().Where(k => k.Approval == ApprovalStatus.Aprovado).ToListAsync(ct);
 
-        var messages = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = BuildSystemPrompt(cfg, plans, knowledge, lead) } };
+        var system = BuildSystemPrompt(cfg, plans, knowledge, lead);
+        var turns = new List<AiTurn>();
         foreach (var m in history.Where(m => m.Author != MessageAuthor.Sistema && !string.IsNullOrWhiteSpace(m.Text)).OrderBy(m => m.Timestamp).TakeLast(30))
-            messages.Add(new JsonObject
-            {
-                ["role"] = m.Direction == MessageDirection.Entrada ? "user" : "assistant",
-                ["content"] = m.Author == MessageAuthor.Atendente || m.Author == MessageAuthor.ManualNoAparelho ? "[Mensagem do atendente humano] " + m.Text : m.Text,
-            });
+        {
+            if (m.Direction == MessageDirection.Entrada) turns.Add(new AiUserText(m.Text!));
+            else turns.Add(new AiAssistantText(m.Author == MessageAuthor.Atendente || m.Author == MessageAuthor.ManualNoAparelho ? "[Mensagem do atendente humano] " + m.Text : m.Text!));
+        }
 
+        // a conversa enviada ao modelo sempre termina com o cliente (o Claude não aceita continuar uma resposta já iniciada)
+        if (turns.Count == 0 || turns[^1] is not AiUserText)
+            turns.Add(new AiUserText("[Sistema: o cliente ainda não respondeu à última mensagem. Escreva a próxima mensagem adequada para o cliente, sem repetir o que já foi dito.]"));
+
+        var model = cfg.ModelFor(lead);
+        var tools = Tools();
         for (var round = 0; round <= MaxToolRounds; round++)
         {
-            var tools = round < MaxToolRounds ? Tools() : null; // última rodada força resposta em texto
-            var c = await provider.CompleteAsync(cfg.ApiKey!, cfg.Model, messages, tools, cfg.Temperature, cfg.MaxTokens, ct);
-            result.Tokens += c.PromptTokens + c.CompletionTokens;
+            // última rodada: ferramentas continuam declaradas (exigência da API), mas o modelo é obrigado a responder em texto
+            var c = await provider.CompleteAsync(new AiRequest(cfg.ApiKey!, model, system, turns, tools, cfg.MaxTokens, AllowTools: round < MaxToolRounds), ct);
+            result.Tokens += c.InputTokens + c.OutputTokens;
             if (!c.Ok) { result.Error = c.Error; break; }
             if (c.ToolCalls.Count == 0) { result.Reply = Clean(c.Content); break; }
-            messages.Add(c.RawAssistantMessage!);
+            turns.Add(c.AsTurn());
+            var outputs = new List<AiToolResult>();
             foreach (var call in c.ToolCalls)
             {
                 string output;
                 try { output = await ExecuteToolAsync(call, lead, plans, knowledge, result, ct); }
                 catch (Exception ex) { output = JsonSerializer.Serialize(new { erro = ex.Message }); log.LogWarning(ex, "Ferramenta {Tool} falhou", call.Name); }
-                messages.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = call.Id, ["content"] = output });
+                outputs.Add(new AiToolResult(call.Id, output));
             }
+            turns.Add(new AiToolResults(outputs));
         }
+        result.Model = model;
         if (trackUsage) await AddUsageAsync(result.Tokens, ct);
         return result;
     }
@@ -181,20 +196,13 @@ public class AiAgent(CrmDbContext db, SettingsStore settings, IAiProvider provid
 
     // ------------------------------------------------------------------ ferramentas
 
-    private static JsonObject Fn(string name, string description, JsonObject properties, params string[] required) => new()
-    {
-        ["type"] = "function",
-        ["function"] = new JsonObject
-        {
-            ["name"] = name, ["description"] = description,
-            ["parameters"] = new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = new JsonArray(required.Select(r => (JsonNode)r).ToArray()) },
-        },
-    };
+    private static AiToolDef Fn(string name, string description, JsonObject properties, params string[] required) =>
+        new(name, description, new JsonObject { ["type"] = "object", ["properties"] = properties, ["required"] = new JsonArray(required.Select(r => (JsonNode)r).ToArray()) });
 
     private static JsonObject Str(string d) => new() { ["type"] = "string", ["description"] = d };
     private static JsonObject Enum(string d, IEnumerable<string> values) => new() { ["type"] = "string", ["description"] = d, ["enum"] = new JsonArray(values.Select(v => (JsonNode)v).ToArray()) };
 
-    public static JsonArray Tools() =>
+    public static IReadOnlyList<AiToolDef> Tools() =>
     [
         Fn("consultar_planos", "Retorna os planos comerciais aprovados e ativos com preços e condições.", new JsonObject()),
         Fn("atualizar_qualificacao", "Atualiza os dados de qualificação do lead com o que o cliente informou.", new JsonObject

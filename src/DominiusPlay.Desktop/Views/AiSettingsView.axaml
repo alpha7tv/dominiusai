@@ -9,21 +9,21 @@
         <Border Classes="panel">
           <StackPanel Spacing="8">
             <ToggleSwitch IsChecked="{Binding Enabled}" OnContent="IA atendendo as conversas" OffContent="IA desligada (só humanos respondem)" />
-            <TextBlock Text="Provedor: OpenAI (ChatGPT)" Classes="muted" />
-            <TextBlock Text="Chave de API da OpenAI" Classes="muted" />
-            <TextBox Text="{Binding ApiKey}" PasswordChar="●" Watermark="sk-... (deixe em branco para manter a atual)" />
+            <TextBlock Text="Provedor: Anthropic (Claude)" Classes="muted" />
+            <TextBlock Text="Chave de API da Anthropic" Classes="muted" />
+            <TextBox Text="{Binding ApiKey}" PasswordChar="●" Watermark="sk-ant-... (deixe em branco para manter a atual)" />
             <TextBlock Text="✓ Chave salva com criptografia no servidor" Classes="ok" FontSize="12" IsVisible="{Binding HasApiKey}" />
-            <TextBlock Text="Modelo" Classes="muted" />
+            <TextBlock Text="Modelo do atendimento (padrão: claude-haiku-5-5, rápido e econômico)" Classes="muted" TextWrapping="Wrap" />
             <DockPanel>
               <Button DockPanel.Dock="Right" Content="Carregar modelos" Command="{Binding LoadModelsCommand}" Margin="8,0,0,0" />
               <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding Model}" HorizontalAlignment="Stretch" />
             </DockPanel>
+            <TextBlock Text="Modelo da negociação (etapa Em negociação; padrão: claude-sonnet-5-5)" Classes="muted" TextWrapping="Wrap" />
+            <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding AdvancedModel}" HorizontalAlignment="Stretch" />
             <TextBlock Text="Nome de exibição da assistente" Classes="muted" />
             <TextBox Text="{Binding AssistantName}" />
-            <TextBlock Text="{Binding Temperature, StringFormat='Criatividade (temperatura): {0:0.0} — ignorada nos modelos GPT-5'}" Classes="muted" />
-            <Slider Minimum="0" Maximum="1.2" Value="{Binding Temperature}" TickFrequency="0.1" IsSnapToTickEnabled="True" />
             <Grid ColumnDefinitions="*,12,*">
-              <StackPanel><TextBlock Text="Tamanho máx. da resposta (tokens)" Classes="muted" /><NumericUpDown Value="{Binding MaxTokens}" Minimum="50" Maximum="4000" Increment="50" /></StackPanel>
+              <StackPanel><TextBlock Text="Limite por resposta (tokens, inclui raciocínio)" Classes="muted" /><NumericUpDown Value="{Binding MaxTokens}" Minimum="1000" Maximum="16000" Increment="500" /></StackPanel>
               <StackPanel Grid.Column="2"><TextBlock Text="Espera para agrupar mensagens (s)" Classes="muted" /><NumericUpDown Value="{Binding DebounceSeconds}" Minimum="0" Maximum="120" /></StackPanel>
             </Grid>
             <TextBlock Text="Limite diário de consumo (tokens)" Classes="muted" />

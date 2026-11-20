@@ -15,35 +15,30 @@ namespace DominiusPlay.Tests;
 /// <summary>Provedor de IA roteirizado: cada chamada devolve o próximo passo da fila.</summary>
 public class FakeAi : IAiProvider
 {
-    public readonly Queue<Func<JsonArray, AiCompletion>> Script = new();
-    public readonly List<JsonArray> Requests = [];
-    public readonly List<string> Models = [];
+    public readonly Queue<Func<AiRequest, AiCompletion>> Script = new();
+    public readonly List<AiRequest> Requests = [];
+    public List<string> Models => Requests.Select(r => r.Model).ToList();
 
-    public static AiCompletion Text(string t) => new(true, t, [], new JsonObject { ["role"] = "assistant", ["content"] = t }, 100, 20, null, 200);
-    public static AiCompletion Tools(params (string Name, string Args)[] calls)
-    {
-        var tc = new JsonArray(calls.Select((c, i) => (JsonNode)new JsonObject
-        { ["id"] = "call_" + i, ["type"] = "function", ["function"] = new JsonObject { ["name"] = c.Name, ["arguments"] = c.Args } }).ToArray());
-        return new(true, null, calls.Select((c, i) => new AiToolCall("call_" + i, c.Name, c.Args)).ToList(),
-            new JsonObject { ["role"] = "assistant", ["content"] = null, ["tool_calls"] = tc }, 120, 30, null, 200);
-    }
+    public static AiCompletion Text(string t) => new(true, t, [], null, 100, 20, null, 200, "end_turn");
+    public static AiCompletion Tools(params (string Name, string Args)[] calls) =>
+        new(true, null, calls.Select((c, i) => new AiToolCall("toolu_" + i, c.Name, c.Args)).ToList(), null, 120, 30, null, 200, "tool_use");
 
-    public Task<AiCompletion> CompleteAsync(string apiKey, string model, JsonArray messages, JsonArray? tools, double? temperature, int maxTokens, CancellationToken ct = default)
+    public Task<AiCompletion> CompleteAsync(AiRequest request, CancellationToken ct = default)
     {
-        Requests.Add((JsonArray)messages.DeepClone()); Models.Add(model);
-        return Task.FromResult(Script.Count > 0 ? Script.Dequeue()(messages) : Text("ok"));
+        Requests.Add(request with { Turns = request.Turns.ToList() });
+        return Task.FromResult(Script.Count > 0 ? Script.Dequeue()(request) : Text("ok"));
     }
 
     public Task<(bool Ok, IReadOnlyList<string> Models, string? Error)> ListModelsAsync(string apiKey, CancellationToken ct = default) =>
-        Task.FromResult<(bool, IReadOnlyList<string>, string?)>((true, ["gpt-4o", "gpt-5"], null));
+        Task.FromResult<(bool, IReadOnlyList<string>, string?)>((true, ["claude-haiku-5-5", "claude-sonnet-5-5"], null));
 }
 
 public class AiTests
 {
-    private static async Task EnableAi(CrmFactory f, HttpClient c, string model = "gpt-4o")
+    private static async Task EnableAi(CrmFactory f, HttpClient c, string model = "claude-haiku-5-5")
     {
         await f.ConfigureEvolutionAsync(c);
-        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, model, "sk-teste-123", 0.4, 600, "Lia", "", 100000, false, 0))).EnsureSuccessStatusCode();
+        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, model, "claude-sonnet-5-5", "sk-ant-teste-123", 4000, "Lia", "", 100000, false, 0))).EnsureSuccessStatusCode();
     }
 
     private static async Task<Guid> Inbound(CrmFactory f, string id, string text)
@@ -62,7 +57,7 @@ public class AiTests
     }
 
     [Fact]
-    public async Task Chave_da_OpenAI_criptografada_e_nunca_retornada()
+    public async Task Chave_da_Anthropic_criptografada_e_nunca_retornada()
     {
         using var f = new CrmFactory();
         var c = await f.AdminAsync();
@@ -96,10 +91,15 @@ public class AiTests
         Assert.Contains(lead.Facts, x => x.Key == "sugestao_etapa" && x.Source == FactSource.InferidoPelaIa);
 
         // o prompt recebeu os planos aprovados e a identificação como assistente virtual
-        var system = f.Ai.Requests[0][0]!["content"]!.GetValue<string>();
+        var system = f.Ai.Requests[0].System;
         Assert.Contains("ASSISTENTE VIRTUAL", system);
         Assert.Contains("R$ 250,00", system);
-        Assert.Equal("gpt-4o", f.Ai.Models[0]);
+        Assert.Equal("claude-haiku-5-5", f.Ai.Models[0]); // atendimento usa o modelo rápido
+        Assert.All(f.Ai.Requests, r => Assert.Equal(7, r.Tools!.Count));
+        Assert.True(f.Ai.Requests[0].AllowTools);
+        // segunda chamada reenviou a resposta com ferramentas e os resultados, nessa ordem
+        Assert.IsType<AiAssistantToolCalls>(f.Ai.Requests[1].Turns[^2]);
+        Assert.Equal(4, Assert.IsType<AiToolResults>(f.Ai.Requests[1].Turns[^1]).Results.Count);
 
         Assert.Equal(1, await f.RunQueueAsync());
         Assert.Equal("Entendi! Podemos avaliar o Apontamento Sigma 600. Quer conhecer os requisitos?", f.Evolution.Sent.Single().Text);
@@ -153,7 +153,7 @@ public class AiTests
         Assert.Equal(AiReplyOutcome.Disabled, await Respond(f, id));
 
         await EnableAi(f, c);
-        f.Ai.Script.Enqueue(_ => new AiCompletion(false, null, [], null, 0, 0, "OpenAI HTTP 429: quota", 429));
+        f.Ai.Script.Enqueue(_ => new AiCompletion(false, null, [], null, 0, 0, "Anthropic HTTP 429: rate limit", 429));
         Assert.Equal(AiReplyOutcome.Failed, await Respond(f, id));
         var lead = await f.WithDb(db => db.Leads.AsNoTracking().SingleAsync());
         Assert.Equal(ConversationMode.AtendimentoHumano, lead.Mode); // não deixa o cliente sem retorno: vai para humano
@@ -166,7 +166,7 @@ public class AiTests
         using var f = new CrmFactory();
         var c = await f.AdminAsync();
         await f.ConfigureEvolutionAsync(c);
-        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "gpt-4o", "sk-x", 0.4, 600, "Lia", "", 100, false, 0))).EnsureSuccessStatusCode();
+        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", "sk-ant-x", 4000, "Lia", "", 100, false, 0))).EnsureSuccessStatusCode();
         var id = await Inbound(f, "M1", "Oi");
         f.Ai.Script.Enqueue(_ => FakeAi.Text("Olá!")); // consome 120 tokens > limite 100
         Assert.Equal(AiReplyOutcome.Replied, await Respond(f, id));
@@ -178,18 +178,16 @@ public class AiTests
     }
 
     [Fact]
-    public async Task Simulacao_nao_salva_nada_e_modelo_gpt5_sem_temperatura()
+    public async Task Simulacao_nao_salva_nada()
     {
         using var f = new CrmFactory();
         var c = await f.AdminAsync();
-        await EnableAi(f, c, "gpt-5");
+        await EnableAi(f, c);
         f.Ai.Script.Enqueue(_ => FakeAi.Tools(("atualizar_qualificacao", """{"experiencia":"Iniciante"}""")));
         f.Ai.Script.Enqueue(_ => FakeAi.Text("Que bom! Você já conhece como funciona um painel de revenda?"));
         var r = await (await c.PostAsJsonAsync("/api/ai/simulate", new AiSimulateRequest([new SimTurn(true, "Quero começar a revender")]))).Content.ReadFromJsonAsync<AiSimulateResponse>();
         Assert.True(r!.Ok); Assert.Contains("painel", r.Reply);
         Assert.Equal(0, await f.WithDb(db => db.Leads.CountAsync()));
-        Assert.False(OpenAiClient.SupportsTemperature("gpt-5"));
-        Assert.True(OpenAiClient.SupportsTemperature("gpt-4o"));
     }
 
     [Fact]
@@ -201,33 +199,121 @@ public class AiTests
         var kb = await c.GetFromJsonAsync<List<KnowledgeDto>>("/api/knowledge");
         var art = kb!.First(k => k.Title == "Canais e horário");
         await c.PostAsJsonAsync("/api/ai/simulate", new AiSimulateRequest([new SimTurn(true, "Oi")]));
-        Assert.DoesNotContain("98815-9045", f.Ai.Requests.Last()[0]!["content"]!.GetValue<string>());
+        Assert.DoesNotContain("98815-9045", f.Ai.Requests.Last().System);
         (await c.PostAsync($"/api/knowledge/{art.Id}/approve?approve=true", null)).EnsureSuccessStatusCode();
         await c.PostAsJsonAsync("/api/ai/simulate", new AiSimulateRequest([new SimTurn(true, "Oi")]));
-        Assert.Contains("98815-9045", f.Ai.Requests.Last()[0]!["content"]!.GetValue<string>());
+        Assert.Contains("98815-9045", f.Ai.Requests.Last().System);
     }
 
     [Fact]
-    public async Task OpenAiClient_monta_requisicao_e_le_ferramentas()
+    public async Task Negociacao_usa_modelo_avancado_e_ultima_rodada_sem_ferramentas()
     {
-        var handler = new CaptureHandler("""{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"c1","type":"function","function":{"name":"consultar_planos","arguments":"{}"}}]}}],"usage":{"prompt_tokens":10,"completion_tokens":5}}""");
-        var r = await new OpenAiClient(new HttpClient(handler)).CompleteAsync("sk-abc", "gpt-5", [new JsonObject { ["role"] = "user", ["content"] = "oi" }], AiAgent.Tools(), 0.7, 300);
-        Assert.True(r.Ok); Assert.Equal("consultar_planos", r.ToolCalls.Single().Name); Assert.Equal(15, r.PromptTokens + r.CompletionTokens);
-        Assert.Equal("https://api.openai.com/v1/chat/completions", handler.Url);
-        Assert.Equal("Bearer sk-abc", handler.Auth);
-        var body = JsonNode.Parse(handler.Body!)!;
-        Assert.Null(body["temperature"]); // gpt-5 não aceita temperatura
-        Assert.Equal(300, body["max_completion_tokens"]!.GetValue<int>());
-        Assert.Equal(7, body["tools"]!.AsArray().Count);
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        await EnableAi(f, c);
+        var id = await Inbound(f, "M1", "Quero fechar o Sigma 600");
+        await f.WithDb(async db => { var l = await db.Leads.SingleAsync(); l.Stage = KanbanStage.EmNegociacao; return await db.SaveChangesAsync(); });
+        for (var i = 0; i < AiAgent.MaxToolRounds; i++) f.Ai.Script.Enqueue(_ => FakeAi.Tools(("consultar_planos", "{}")));
+        f.Ai.Script.Enqueue(_ => FakeAi.Text("Perfeito, vou te passar para a equipe."));
+        Assert.Equal(AiReplyOutcome.Replied, await Respond(f, id));
+        Assert.All(f.Ai.Models, m => Assert.Equal("claude-sonnet-5-5", m));
+        Assert.Equal(AiAgent.MaxToolRounds + 1, f.Ai.Requests.Count);
+        Assert.False(f.Ai.Requests[^1].AllowTools); // última rodada obriga resposta em texto
     }
 
-    private sealed class CaptureHandler(string response) : HttpMessageHandler
+    [Fact]
+    public async Task Configuracao_aceita_so_modelos_claude_e_chave_anthropic()
     {
-        public string? Url, Auth, Body;
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        var bad1 = await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "gpt-4o", "claude-sonnet-5-5", null, 4000, "Lia", "", 1000, false, 0));
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, bad1.StatusCode);
+        var bad2 = await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", "sk-proj-abc", 4000, "Lia", "", 1000, false, 0));
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, bad2.StatusCode);
+        var s0 = await c.GetFromJsonAsync<AiSettingsDto>("/api/ai/settings");
+        Assert.False(s0!.HasApiKey);
+        Assert.Equal(("claude-haiku-5-5", "claude-sonnet-5-5"), (s0.Model, s0.AdvancedModel)); // padrões
+        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-opus-5-5", "sk-ant-segredo-xyz", 4000, "Lia", "", 1000, false, 0))).EnsureSuccessStatusCode();
+        var s1 = await c.GetFromJsonAsync<AiSettingsDto>("/api/ai/settings");
+        Assert.True(s1!.HasApiKey); Assert.Equal("claude-opus-5-5", s1.AdvancedModel);
+        // a chave fica criptografada no banco e nunca volta para o app
+        var raw = await f.WithDb(db => db.Settings.AsNoTracking().SingleAsync(x => x.Key == SettingKeys.AiApiKey));
+        Assert.DoesNotContain("segredo", raw.Value);
+        Assert.DoesNotContain("segredo", await c.GetStringAsync("/api/ai/settings"));
+    }
+
+    [Fact]
+    public async Task AnthropicClient_monta_requisicao_e_preserva_raciocinio()
+    {
+        var handler = new CaptureHandler("""
+        {"id":"msg_1","type":"message","role":"assistant","model":"claude-haiku-5-5","stop_reason":"tool_use","stop_sequence":null,
+         "content":[{"type":"thinking","thinking":"pensando","signature":"sig123"},{"type":"tool_use","id":"toolu_1","name":"consultar_planos","input":{}}],
+         "usage":{"input_tokens":10,"output_tokens":5,"cache_read_input_tokens":3,"cache_creation_input_tokens":0}}
+        """);
+        var client = new AnthropicAiClient(new HttpClient(handler));
+        var req = new AiRequest("sk-ant-abc", "claude-haiku-5-5", "SISTEMA", [new AiUserText("oi"), new AiAssistantText("Olá!"), new AiUserText("preço?")], AiAgent.Tools(), 4000);
+        var r = await client.CompleteAsync(req);
+        Assert.True(r.Ok, r.Error); Assert.Equal("consultar_planos", r.ToolCalls.Single().Name); Assert.Equal(18, r.InputTokens + r.OutputTokens);
+        Assert.Equal("https://api.anthropic.com/v1/messages", handler.Url);
+        Assert.True(handler.ApiKey == "sk-ant-abc" || handler.Auth == "Bearer sk-ant-abc", $"{handler.ApiKey}|{handler.Auth?[..Math.Min(20, handler.Auth.Length)]}");
+        var body = JsonNode.Parse(handler.Body!)!;
+        Assert.Equal("claude-haiku-5-5", body["model"]!.GetValue<string>());
+        Assert.Equal("SISTEMA", body["system"]![0]!["text"]!.GetValue<string>());
+        Assert.Equal("ephemeral", body["system"]![0]!["cache_control"]!["type"]!.GetValue<string>());
+        Assert.Equal("low", body["output_config"]!["effort"]!.GetValue<string>());
+        Assert.Null(body["temperature"]); Assert.Null(body["tool_choice"]);
+        Assert.Equal(7, body["tools"]!.AsArray().Count);
+        Assert.Equal("object", body["tools"]![1]!["input_schema"]!["type"]!.GetValue<string>());
+        Assert.Equal(["user", "assistant", "user"], body["messages"]!.AsArray().Select(m => m!["role"]!.GetValue<string>()));
+
+        // segunda rodada: reenvia raciocínio assinado + tool_use sem alterar, resultados no turno do cliente; ferramentas bloqueadas
+        handler.Response = """
+        {"id":"msg_2","type":"message","role":"assistant","model":"claude-sonnet-5-5","stop_reason":"end_turn","stop_sequence":null,
+         "content":[{"type":"text","text":"O Mensalista 50 custa R$ 50."}],"usage":{"input_tokens":20,"output_tokens":8}}
+        """;
+        var r2 = await client.CompleteAsync(req with
+        {
+            Model = "claude-sonnet-5-5", AllowTools = false,
+            Turns = [.. req.Turns, r.AsTurn(), new AiToolResults([new AiToolResult("toolu_1", "[]")])],
+        });
+        Assert.True(r2.Ok); Assert.Equal("O Mensalista 50 custa R$ 50.", r2.Content);
+        body = JsonNode.Parse(handler.Body!)!;
+        Assert.Equal("medium", body["output_config"]!["effort"]!.GetValue<string>());
+        Assert.Equal("none", body["tool_choice"]!["type"]!.GetValue<string>());
+        var msgs = body["messages"]!.AsArray();
+        Assert.Equal(5, msgs.Count);
+        Assert.Equal("sig123", msgs[3]!["content"]![0]!["signature"]!.GetValue<string>());
+        Assert.Equal("tool_use", msgs[3]!["content"]![1]!["type"]!.GetValue<string>());
+        Assert.Equal("toolu_1", msgs[4]!["content"]![0]!["tool_use_id"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task AnthropicClient_erros_e_recusa_viram_falha_controlada()
+    {
+        var handler = new CaptureHandler("""{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}""", System.Net.HttpStatusCode.Unauthorized);
+        var client = new AnthropicAiClient(new HttpClient(handler));
+        var req = new AiRequest("sk-ant-errada", "claude-haiku-5-5", "S", [new AiUserText("oi")], null, 1000);
+        var r = await client.CompleteAsync(req);
+        Assert.False(r.Ok); Assert.Equal(401, r.HttpStatus); Assert.Contains("Anthropic HTTP 401", r.Error);
+
+        handler.Status = System.Net.HttpStatusCode.OK;
+        handler.Response = """{"id":"m","type":"message","role":"assistant","model":"claude-haiku-5-5","stop_reason":"refusal","stop_sequence":null,"content":[],"usage":{"input_tokens":5,"output_tokens":0}}""";
+        r = await client.CompleteAsync(req);
+        Assert.False(r.Ok); Assert.Equal("refusal", r.StopReason);
+    }
+
+    private sealed class CaptureHandler(string response, System.Net.HttpStatusCode status = System.Net.HttpStatusCode.OK) : HttpMessageHandler
+    {
+        public string Response = response;
+        public System.Net.HttpStatusCode Status = status;
+        public string? Url, ApiKey, Auth, Body;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
-            Url = r.RequestUri!.AbsoluteUri; Auth = r.Headers.Authorization?.ToString(); Body = await r.Content!.ReadAsStringAsync(ct);
-            return new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(response, Encoding.UTF8, "application/json") };
+            Url = r.RequestUri!.GetLeftPart(UriPartial.Path);
+            ApiKey = r.Headers.TryGetValues("x-api-key", out var v) ? v.Single() : null;
+            Auth = r.Headers.Authorization?.ToString();
+            Body = r.Content is null ? null : await r.Content.ReadAsStringAsync(ct);
+            return new HttpResponseMessage(Status) { Content = new StringContent(Response, Encoding.UTF8, "application/json") };
         }
     }
 }

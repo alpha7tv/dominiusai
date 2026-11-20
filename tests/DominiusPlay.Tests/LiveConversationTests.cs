@@ -9,13 +9,13 @@ using Microsoft.Extensions.DependencyInjection;
 namespace DominiusPlay.Tests;
 
 /// <summary>
-/// Conversas simuladas com o modelo REAL da OpenAI (sem WhatsApp real: a Evolution é simulada).
-/// Só roda quando OPENAI_API_KEY está definida; grava as transcrições em conversas-simuladas.md.
+/// Conversas simuladas com o modelo REAL da Anthropic (Claude) (sem WhatsApp real: a Evolution é simulada).
+/// Só roda quando ANTHROPIC_API_KEY está definida; grava as transcrições em conversas-simuladas.md.
 /// </summary>
 public class LiveConversationTests
 {
-    private static readonly string? Key = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
-    private static readonly string Model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4o";
+    private static readonly string? Key = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+    private static readonly string Model = Environment.GetEnvironmentVariable("ANTHROPIC_MODEL") ?? "claude-haiku-5-5";
 
     public static IEnumerable<object[]> Scenarios() =>
     [
@@ -35,7 +35,7 @@ public class LiveConversationTests
         using var f = new CrmFactory(realAi: true);
         var c = await f.AdminAsync();
         await f.ConfigureEvolutionAsync(c);
-        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, Model, Key, 0.4, 500, "Lia", "", 1_000_000, false, 0))).EnsureSuccessStatusCode();
+        (await c.PutAsJsonAsync("/api/ai/settings", new AiSettingsUpdate(true, Model, "claude-sonnet-5-5", Key, 4000, "Lia", "", 1_000_000, false, 0))).EnsureSuccessStatusCode();
         var token = await f.WebhookTokenAsync();
         var log = new StringBuilder($"\n## {title}\n\n");
         var i = 0;
@@ -50,7 +50,8 @@ public class LiveConversationTests
             using (var scope = f.Services.CreateScope())
             {
                 var outcome = await scope.ServiceProvider.GetRequiredService<AiResponder>().RespondAsync(leadId);
-                if (outcome != AiReplyOutcome.Replied) log.AppendLine($"_(IA não respondeu: {outcome})_  ");
+                if (outcome != AiReplyOutcome.Replied)
+                    log.AppendLine($"_(IA não respondeu: {outcome}{(outcome == AiReplyOutcome.Failed ? " — " + await f.WithDb(db => db.Leads.Where(l => l.Id == leadId).Select(l => l.NextAction).SingleAsync()) : "")})_  ");
             }
             var before = f.Evolution.Sent.Count;
             await f.RunQueueAsync();

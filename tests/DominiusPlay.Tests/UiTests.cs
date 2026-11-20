@@ -139,7 +139,7 @@ public class UiTests
         await main.NavigateCommand.ExecuteAsync("config");
         await Pump();
         var ai = Assert.IsType<AiSettingsViewModel>(main.Current);
-        ai.Enabled = true; ai.ApiKey = "sk-teste"; ai.AssistantName = "Lia";
+        ai.Enabled = true; ai.ApiKey = "sk-ant-teste"; ai.AssistantName = "Lia";
         await ai.SaveCommand.ExecuteAsync(null);
         Assert.True(ai.HasApiKey); Assert.Equal("", ai.ApiKey);
         f.Ai.Script.Enqueue(_ => FakeAi.Tools(("atualizar_qualificacao", """{"experiencia":"JaTrabalha","painel":"Sigma","clientes_ativos":350,"dor_principal":"QuedasServidor"}""")));
