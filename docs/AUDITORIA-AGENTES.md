@@ -128,3 +128,57 @@ Menu novo "Agentes de atendimento" e "Agentes de disparo" (lista + editor + pain
 
 - Prospecção em escala pelo Baileys tem risco de bloqueio do número; a recomendação é a Cloud API oficial (modo WHATSAPP-BUSINESS da Evolution). O código suporta os dois e respeita as regras de template no modo oficial.
 - Treinamento com o material do canal @evolua-ia: será incorporado ao script/base de conhecimento quando a pesquisa paralela terminar, sem copiar texto proprietário literal.
+
+## 5. Entrega (v0.4.0)
+
+Tudo abaixo está implementado no código e coberto por testes. Base: PR #5 (v0.3.4, 107 testes). Resultado: **177 testes passando** (`dotnet test`), incluindo telas headless.
+
+### 5.1 Funcionalidades implementadas
+
+| Área | O que faz | Onde |
+|---|---|---|
+| Agentes de atendimento | Vários agentes com nome, nome com o cliente, empresa, personalidade, tom, objetivo, prompt, produtos, respostas permitidas, restrições, critérios de transferência, horário/dias/fuso, modelo, estado | `AgentProfile`, `/api/agents`, tela "Agentes de atendimento" |
+| Qualificação | Perguntas editáveis (globais ou por agente) com peso; pontuação 0–100 explicável; seis perguntas de revenda IPTV de exemplo | `QualificationQuestion`, `QualificationScorer`, ferramenta `registrar_resposta_qualificacao` |
+| Intenções | 11 categorias; cada uma dispara uma ação configurável (continuar, transferir, priorizar, encerrar) | `IntentDetector`, `IntentRouter` |
+| Transferência | Pausa a IA, cancela envios automáticos, atribui o atendente com menos conversas, ficha com resumo, produtos, objeções e pendências, horário, notificação; atendente devolve à IA | `HandoffService` |
+| Segurança da IA | Regras fixas: sem preço inventado, sem desconto não autorizado, sem dados de outros clientes, sem operação financeira, sem revelar prompt/credenciais, ignora instruções maliciosas | `AiAgent.FixedRules` |
+| Memória | Fatos por contato, resumo automático acima de 30 mensagens | `AiAgent` |
+| Testar Agente | Conversa simulada de vários turnos por agente, mostra intenção, pontuação, ações e ficha; nada é gravado ou enviado | `/api/agents/{id}/test` |
+| Agentes de disparo | Vários agentes com número/instância, horário, fuso, limite diário, intervalo, agente de atendimento vinculado | `AgentProfile` (Kind = Disparo) |
+| Contatos | Empresa, segmento, finalidade do consentimento na importação CSV/XLSX | `LeadImport` |
+| Abordagens por IA | Personalização opcional sobre o modelo aprovado, validador (empresa, opção SAIR, sem preço/link/relação inventados) e alerta de similaridade; desligada no modo oficial | `ApproachGenerator`, `ApproachValidator` |
+| Campanhas | Agente, segmento, prompt, data de início, acompanhamento em etapas, pausa automática por % de falhas/descadastros, validar e pré-visualizar | `CampaignService` |
+| Integração | Máquina de estados explícita (Prospecção → IA → Humano → Encerrado); só quem tem a palavra envia; o atendimento recebe o contexto da campanha | `ConversationStateMachine`, `SendGuard` |
+| CRM Kanban | 9 etapas do funil + "Em fase de teste"; nome, ordem e visibilidade configuráveis; avanço automático auditado; card com empresa, campanha, agente, pontuação e tags | `KanbanBoardConfig`, `KanbanRules.AutoAdvance` |
+| Painel | Indicadores com filtro por período, agente e campanha; conversão por campanha | `/api/dashboard/agents` |
+| Automações | Editor de blocos com sim/não, validação de ciclos e conflitos, modo de teste, execução em cada mensagem recebida | `AutomationEngine`, `AutomationService`, tela "Automações" |
+| LGPD | Anonimização, retenção configurável com worker diário, exportação e exclusão (já existiam) | `LgpdService` |
+
+### 5.2 Migrações
+
+Não há migrações EF: o banco é criado por `EnsureCreated` e atualizado pelo `SchemaUpgrader`, que só **adiciona** tabelas e colunas (SQLite e PostgreSQL) e nunca apaga nada. Novas tabelas: `AgentProfiles`, `QualificationQuestions`, `AutomationFlows`. Novas colunas em `Leads`, `Messages`, `Campaigns` e `OutboundQueue`. Novos valores de enum (etapas 7–11, modo `Prospeccao = 5`) são aditivos. Para desfazer basta voltar o executável: as colunas novas são ignoradas pela versão anterior.
+
+### 5.3 Dependências e variáveis de ambiente
+
+Nenhuma dependência nova. Nenhuma variável de ambiente nova: chaves (Anthropic, Evolution) continuam criptografadas em Configurações. Ajustes novos ficam na tabela de configurações: `kanban.stages`, `lgpd.retention.days`, `qualification.seeded`.
+
+### 5.4 Configuração
+
+1. Atualize o servidor e o app (instalador 0.4.0). O banco é atualizado sozinho na primeira execução.
+2. **Agentes de atendimento**: revise o agente "Atendimento IPTV (padrão)", ajuste as perguntas de qualificação e use **Testar Agente**.
+3. **Agentes de disparo**: crie um agente com o número/instância, horário e limites, e vincule o agente de atendimento.
+4. **Mensagens**: aprove a abordagem e as 3 versões de "Acompanhamento revenda (3 etapas)".
+5. **Campanhas**: escolha o agente, valide, pré-visualize e inicie.
+6. **CRM Kanban → Etapas**: renomeie (ex.: "Novo contato", "Venda concluída") ou oculte etapas.
+7. **Automações**: crie fluxos, teste e ative.
+8. **Contatos**: retenção LGPD em `PUT /api/lgpd/retention?days=N` (0 desliga, mínimo 30).
+
+### 5.5 Pendências e limites
+
+- Prospecção em volume pelo Baileys arrisca bloqueio do número; a recomendação continua sendo a Cloud API oficial (modo WHATSAPP-BUSINESS).
+- Similaridade usa comparação de palavras (Jaccard), não embeddings.
+- Tokens de IA são contados por dia para o sistema todo, não por agente ou campanha; custo em reais não é estimado.
+- "Aguardar resposta" nas automações encerra a execução; o fluxo recomeça do início na próxima mensagem (não guarda a posição).
+- Nomes de etapa personalizados aparecem no quadro; outras telas mostram o nome padrão.
+- A retenção LGPD ainda não tem tela própria (só a API).
+- Os roteiros de venda IPTV seguem os princípios do canal @evolua-ia, mas os vídeos não traziam scripts prontos; revise os textos do agente padrão.
