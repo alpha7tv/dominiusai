@@ -145,6 +145,64 @@ public static class Api
             return Results.Ok(new OperationResult(true, "Lead e dados associados excluídos"));
         }).RequireAuthorization(SupervisorPolicy);
 
+        // ---------- Ações em lote (seleção na lista ou todos com uma tag) ----------
+        api.MapPost("/leads/bulk", async (BulkLeadRequest r, CrmDbContext db, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
+        {
+            var actor = user.Identity?.Name ?? "";
+            if (r.Action == BulkLeadAction.Excluir) return Results.BadRequest(new BulkLeadResponse(0, 0, "Use a exclusão em lote (supervisor)."));
+            var (leads, error) = await LoadBulkTargets(db, r);
+            if (error is not null) return Results.BadRequest(new BulkLeadResponse(0, 0, error));
+            int affected = 0, skipped = 0;
+            if (r.Action == BulkLeadAction.Autorizar)
+            {
+                if (string.IsNullOrWhiteSpace(r.ConsentSource))
+                    return Results.BadRequest(new BulkLeadResponse(0, 0, "Informe como esses contatos autorizaram receber mensagens (origem do consentimento)."));
+                var source = r.ConsentSource.Trim();
+                var phones = leads.Select(l => l.Phone).ToList();
+                var blocked = (await db.OptOuts.Where(o => phones.Contains(o.Phone)).Select(o => o.Phone).ToListAsync()).ToHashSet();
+                var at = DateTimeOffset.UtcNow;
+                foreach (var l in leads)
+                {
+                    if (blocked.Contains(l.Phone) || l.ConsentStatus == ConsentStatus.Revogado) { skipped++; continue; }
+                    if (l.ConsentStatus == ConsentStatus.Valido) { skipped++; continue; }
+                    l.ConsentStatus = ConsentStatus.Valido; l.ConsentAt = at; l.ConsentSource = source; l.UpdatedAt = at;
+                    db.ConsentRecords.Add(new ConsentRecord { LeadId = l.Id, Status = ConsentStatus.Valido, Source = source, GrantedAt = at, RegisteredBy = actor });
+                    affected++;
+                }
+                db.AuditLogs.Add(new AuditLog { Actor = actor, Action = "lead.consent.bulk", EntityType = "Lead", EntityId = "", Details = $"{affected} autorizados; origem: {source}" + (r.ByTag is null ? "" : $"; tag: {r.ByTag}") });
+                await db.SaveChangesAsync();
+                await hub.Clients.All.SendAsync(HubEvents.LeadChanged, Guid.Empty);
+                var msg = $"{affected} leads autorizados";
+                if (skipped > 0) msg += $" · {skipped} ignorados (já autorizados ou descadastrados)";
+                return Results.Ok(new BulkLeadResponse(affected, skipped, msg));
+            }
+            // remover tag
+            var tag = (r.Tag ?? "").Trim().ToLowerInvariant();
+            if (tag.Length == 0) return Results.BadRequest(new BulkLeadResponse(0, 0, "Informe a tag a remover."));
+            foreach (var l in leads)
+            {
+                var tags = SplitTags(l.Tags);
+                if (!tags.Remove(tag)) { skipped++; continue; }
+                l.Tags = string.Join(",", tags); l.UpdatedAt = DateTimeOffset.UtcNow;
+                affected++;
+            }
+            db.AuditLogs.Add(new AuditLog { Actor = actor, Action = "lead.tag.remove.bulk", EntityType = "Lead", EntityId = "", Details = $"tag {tag} removida de {affected} leads" });
+            await db.SaveChangesAsync();
+            await hub.Clients.All.SendAsync(HubEvents.LeadChanged, Guid.Empty);
+            return Results.Ok(new BulkLeadResponse(affected, skipped, $"Tag \"{tag}\" removida de {affected} leads" + (skipped > 0 ? $" · {skipped} não tinham a tag" : "")));
+        });
+
+        api.MapPost("/leads/bulk-delete", async (BulkLeadRequest r, CrmDbContext db, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
+        {
+            var (leads, error) = await LoadBulkTargets(db, r);
+            if (error is not null) return Results.BadRequest(new BulkLeadResponse(0, 0, error));
+            db.Leads.RemoveRange(leads); // exclusão (LGPD) — remove mensagens, fatos e histórico em cascata
+            db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "lead.delete.bulk", EntityType = "Lead", EntityId = "", Details = $"{leads.Count} leads excluídos" });
+            await db.SaveChangesAsync();
+            await hub.Clients.All.SendAsync(HubEvents.LeadChanged, Guid.Empty);
+            return Results.Ok(new BulkLeadResponse(leads.Count, 0, $"{leads.Count} leads excluídos com mensagens e histórico"));
+        }).RequireAuthorization(SupervisorPolicy);
+
         // ---------- Importação ----------
         api.MapPost("/import/file", async (IFormFile file, [FromForm] string? source, [FromForm] string? tags, [FromForm] string? consentSource, LeadImportService svc, ClaimsPrincipal user) =>
         {
@@ -373,6 +431,27 @@ public static class Api
     private static ImportResponse ToResponse(ImportResult r) => new(r.BatchId, r.Total, r.Created, r.Updated, r.Duplicates, r.Invalid, r.Blocked, r.WithConsent,
         r.Rows.Where(x => x.Outcome is ImportRowOutcome.Invalid or ImportRowOutcome.DuplicateInFile or ImportRowOutcome.Blocked)
             .Take(500).Select(x => new ImportRowDto(x.Line, x.RawPhone, x.Outcome.ToString(), x.Message)).ToList());
+
+    private static List<string> SplitTags(string? tags) =>
+        (tags ?? "").Split([',', ';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(t => t.ToLowerInvariant()).Distinct().ToList();
+
+    /// <summary>Leads alvo de uma ação em lote: por tag (todos que têm a tag exata) ou pela lista de ids.</summary>
+    private static async Task<(List<Lead> Leads, string? Error)> LoadBulkTargets(CrmDbContext db, BulkLeadRequest r)
+    {
+        if (!string.IsNullOrWhiteSpace(r.ByTag))
+        {
+            var tag = r.ByTag.Trim().ToLowerInvariant();
+            var candidates = await db.Leads.Where(l => l.Tags.Contains(tag)).ToListAsync();
+            var byTag = candidates.Where(l => SplitTags(l.Tags).Contains(tag)).ToList();
+            return byTag.Count == 0 ? (byTag, $"Nenhum lead com a tag \"{tag}\".") : (byTag, null);
+        }
+        var ids = (r.Ids ?? []).Distinct().ToList();
+        if (ids.Count == 0) return ([], "Selecione pelo menos um lead.");
+        var leads = new List<Lead>(ids.Count);
+        foreach (var chunk in ids.Chunk(500)) leads.AddRange(await db.Leads.Where(l => chunk.Contains(l.Id)).ToListAsync());
+        return (leads, null);
+    }
 
     private static void Apply(Lead l, LeadUpsert r)
     {

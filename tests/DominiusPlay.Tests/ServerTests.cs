@@ -192,6 +192,45 @@ public class ServerTests
     }
 
     [Fact]
+    public async Task Acoes_em_lote_autorizar_por_selecao_e_por_tag_remover_tag_e_excluir()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        var imp = await (await c.PostAsJsonAsync("/api/import/paste", new PasteImportRequest("11 98888-0001\n11 98888-0002\n11 98888-0003\n11 98888-0004", "Grupos", "iptv"))).Content.ReadFromJsonAsync<ImportResponse>();
+        Assert.Equal(4, imp!.Created);
+        await c.PostAsJsonAsync("/api/import/paste", new PasteImportRequest("21 97777-0001", "Outra", "iptvplus"));
+        await c.PostAsJsonAsync("/api/import/optouts", new OptOutImportRequest("11 98888-0004", "pediu para sair"));
+        var leads = (await c.GetFromJsonAsync<List<LeadCard>>("/api/leads"))!;
+        var iptv = leads.Where(l => l.Tags == "iptv").OrderBy(l => l.Phone).ToList();
+
+        // sem origem do consentimento não autoriza
+        var semOrigem = await c.PostAsJsonAsync("/api/leads/bulk", new BulkLeadRequest(BulkLeadAction.Autorizar, [iptv[0].Id]));
+        Assert.Equal(HttpStatusCode.BadRequest, semOrigem.StatusCode);
+
+        // seleção: 1 lead
+        var r1 = await (await c.PostAsJsonAsync("/api/leads/bulk", new BulkLeadRequest(BulkLeadAction.Autorizar, [iptv[0].Id], ConsentSource: "Pediram informações nos grupos"))).Content.ReadFromJsonAsync<BulkLeadResponse>();
+        Assert.Equal(1, r1!.Affected);
+
+        // por tag: os 2 restantes; o já autorizado e o descadastrado são ignorados; "iptvplus" não entra
+        var r2 = await (await c.PostAsJsonAsync("/api/leads/bulk", new BulkLeadRequest(BulkLeadAction.Autorizar, null, ByTag: "IPTV", ConsentSource: "Pediram informações nos grupos"))).Content.ReadFromJsonAsync<BulkLeadResponse>();
+        Assert.Equal((2, 2), (r2!.Affected, r2.Skipped));
+        var validos = (await c.GetFromJsonAsync<List<LeadCard>>("/api/leads?consent=Valido"))!;
+        Assert.Equal(3, validos.Count);
+        Assert.All(validos, l => Assert.Equal("iptv", l.Tags));
+        Assert.Equal(3, await f.WithDb(db => db.ConsentRecords.CountAsync(x => x.Source == "Pediram informações nos grupos")));
+
+        // remover tag dos selecionados
+        var r3 = await (await c.PostAsJsonAsync("/api/leads/bulk", new BulkLeadRequest(BulkLeadAction.RemoverTag, [iptv[0].Id, iptv[1].Id], Tag: "iptv"))).Content.ReadFromJsonAsync<BulkLeadResponse>();
+        Assert.Equal(2, r3!.Affected);
+        Assert.Equal("", (await c.GetFromJsonAsync<LeadDetail>($"/api/leads/{iptv[0].Id}"))!.Tags);
+
+        // excluir selecionados
+        var r4 = await (await c.PostAsJsonAsync("/api/leads/bulk-delete", new BulkLeadRequest(BulkLeadAction.Excluir, [iptv[0].Id, iptv[1].Id]))).Content.ReadFromJsonAsync<BulkLeadResponse>();
+        Assert.Equal(2, r4!.Affected);
+        Assert.Equal(3, (await c.GetFromJsonAsync<List<LeadCard>>("/api/leads"))!.Count);
+    }
+
+    [Fact]
     public async Task Kanban_move_e_negocio_fechado_exige_confirmacao()
     {
         using var f = new CrmFactory();
