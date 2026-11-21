@@ -119,6 +119,7 @@ Contatos com endereçamento `@lid` usam `key.remoteJidAlt` para obter o número.
   - negociação: `claude-sonnet-5-5` (padrão), usado automaticamente quando o lead está na etapa **Em negociação** (esforço médio).
 - Sem temperatura (os modelos atuais não aceitam). O limite por resposta (padrão 4000 tokens) inclui o raciocínio do modelo; a mensagem enviada ao cliente continua curta pelas regras do prompt.
 - O prompt de sistema usa cache (`cache_control`), o que reduz custo nas conversas seguidas.
+- Montagem do prompt (v0.3.4), na ordem: **prompt de sistema** (padrão do código ou versão personalizada em Configurações de IA, chave `ai.systemPrompt`; `{nome_assistente}` vira o nome de exibição) → **regras fixas do sistema** (não editáveis: assistente virtual, preços só dos planos aprovados, transferência para humano, ferramentas, contato sem nome) → **script de atendimento** escrito pelo administrador (chave `ai.instructions`, sem limite de tamanho) → planos aprovados → base de conhecimento → memória do lead. Em conflito, as regras fixas valem.
 - Os blocos de raciocínio assinados são reenviados sem alteração entre as rodadas de ferramentas; a conversa enviada sempre termina com o cliente.
 - Recusa do modelo, erro HTTP ou de rede viram falha controlada: a conversa vai para atendimento humano.
 - A chave da Anthropic (`sk-ant-...`) fica criptografada no servidor (`ai.apikey`), nunca volta ao aplicativo e nunca é lida de variável de ambiente da máquina.

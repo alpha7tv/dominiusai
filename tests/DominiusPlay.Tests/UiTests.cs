@@ -200,14 +200,25 @@ public class UiTests
         await Pump();
         var ai = Assert.IsType<AiSettingsViewModel>(main.Current);
         ai.Enabled = true; ai.ApiKey = "sk-ant-teste"; ai.AssistantName = "Lia";
+        Assert.Contains("ROTEIRO DE DIAGNÓSTICO", ai.SystemPrompt); // editor já vem com o prompt padrão
+        Assert.False(ai.IsCustomSystemPrompt);
+        ai.Instructions = "TOM: simpático e direto, trate por você.\nAPRESENTAÇÃO: diga que é a Lia, assistente virtual da Dominius Play.\nOFERTA PRINCIPAL: para quem está começando, Mensalista 50.\nOBJEÇÃO \"está caro\": explique o custo por cliente ativo.\nTRANSFERIR PARA HUMANO: quando pedir teste, pagamento ou proposta formal.\nHORÁRIO DA EQUIPE: 9h às 21h.";
         await ai.SaveCommand.ExecuteAsync(null);
         Assert.True(ai.HasApiKey); Assert.Equal("", ai.ApiKey);
+        Assert.Contains("caracteres", ai.ScriptInfo);
+        Assert.Contains("OFERTA PRINCIPAL", (await f.WithDb(db => db.Settings.AsNoTracking().SingleAsync(x => x.Key == DominiusPlay.Infrastructure.Security.SettingKeys.AiInstructions))).Value);
         f.Ai.Script.Enqueue(_ => FakeAi.Tools(("atualizar_qualificacao", """{"experiencia":"JaTrabalha","painel":"Sigma","clientes_ativos":350,"dor_principal":"QuedasServidor"}""")));
         f.Ai.Script.Enqueue(_ => FakeAi.Text("Entendi! Essas quedas acontecem mais nos horários de pico ou o dia todo?"));
         await ai.TestCommand.ExecuteAsync(null);
         await Pump();
         Assert.Contains("horários de pico", ai.TestReply);
         Shot(win, "09-configuracoes-ia");
+        var promptExp = win.GetVisualDescendants().OfType<Expander>().First(e => (e.Header as string)?.StartsWith("Prompt de sistema") == true);
+        promptExp.IsExpanded = true;
+        await Pump();
+        promptExp.BringIntoView();
+        await Pump();
+        Shot(win, "09b-configuracoes-ia-prompt-sistema");
 
         // Fase 7: equipe
         await main.NavigateCommand.ExecuteAsync("equipe");

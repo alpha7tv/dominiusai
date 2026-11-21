@@ -21,7 +21,8 @@ public static class AiApi
         {
             var c = await agent.LoadConfigAsync();
             return new AiSettingsDto(c.Enabled, c.Model, c.AdvancedModel, !string.IsNullOrWhiteSpace(c.ApiKey), c.MaxTokens, c.AssistantName,
-                c.Instructions, c.DailyTokenLimit, await agent.TokensUsedTodayAsync(), c.Typing, c.DebounceSeconds);
+                c.Instructions, c.DailyTokenLimit, await agent.TokensUsedTodayAsync(), c.Typing, c.DebounceSeconds,
+                c.SystemPrompt, AiAgent.DefaultSystemPrompt, AiAgent.FixedRules);
         });
 
         ai.MapPut("/settings", async (AiSettingsUpdate r, SettingsStore s, CrmDbContext db, ClaimsPrincipal user) =>
@@ -38,12 +39,20 @@ public static class AiApi
             await s.SetAsync(SettingKeys.AiModelAdvanced, string.IsNullOrWhiteSpace(r.AdvancedModel) ? AiConfig.DefaultAdvancedModel : r.AdvancedModel.Trim());
             await s.SetAsync(SettingKeys.AiMaxTokens, r.MaxTokens.ToString());
             await s.SetAsync(SettingKeys.AssistantName, string.IsNullOrWhiteSpace(r.AssistantName) ? "Assistente Dominius Play" : r.AssistantName.Trim());
-            await s.SetAsync(SettingKeys.AiInstructions, r.Instructions ?? "");
+            await s.SetAsync(SettingKeys.AiInstructions, r.Instructions ?? ""); // script de atendimento (sem limite de tamanho)
+            if (r.SystemPrompt is not null)
+            {
+                // igual ao padrão = guarda vazio, para receber melhorias do padrão em versões futuras
+                var sp = r.SystemPrompt.Trim();
+                await s.SetAsync(SettingKeys.AiSystemPrompt, sp == AiAgent.DefaultSystemPrompt.Trim() ? "" : sp);
+            }
             await s.SetAsync(SettingKeys.AiDailyTokenLimit, Math.Max(0, r.DailyTokenLimit).ToString());
             await s.SetAsync(SettingKeys.AiTyping, r.TypingIndicator ? "true" : "false");
             await s.SetAsync(SettingKeys.AiDebounceSeconds, Math.Clamp(r.DebounceSeconds, 0, 120).ToString());
             db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "ai.settings", EntityType = "Setting",
-                Details = $"{(r.Enabled ? "ativada" : "desativada")}, modelo {r.Model}, negociação {r.AdvancedModel}" + (string.IsNullOrWhiteSpace(r.ApiKey) ? "" : " (chave alterada)") });
+                Details = $"{(r.Enabled ? "ativada" : "desativada")}, modelo {r.Model}, negociação {r.AdvancedModel}, script {(r.Instructions ?? "").Length} caracteres"
+                    + (r.SystemPrompt is null ? "" : string.IsNullOrWhiteSpace(r.SystemPrompt) ? ", prompt de sistema padrão" : ", prompt de sistema personalizado")
+                    + (string.IsNullOrWhiteSpace(r.ApiKey) ? "" : " (chave alterada)") });
             await db.SaveChangesAsync();
             return Results.Ok(new OperationResult(true, r.Enabled ? "IA ativada. Ela responderá às conversas no modo IA." : "Configuração salva (IA desativada)."));
         }).RequireAuthorization(Api.AdminPolicy);

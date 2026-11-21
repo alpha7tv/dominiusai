@@ -128,9 +128,11 @@ public sealed record SentMessagesReportDto(DateTimeOffset From, DateTimeOffset T
     IReadOnlyList<ReportRow> FailureReasons, IReadOnlyList<FilterOption> CampaignOptions, IReadOnlyList<FilterOption> AuthorOptions);
 
 public sealed record AiSettingsDto(bool Enabled, string Model, string AdvancedModel, bool HasApiKey, int MaxTokens, string AssistantName,
-    string Instructions, int DailyTokenLimit, int TokensUsedToday, bool TypingIndicator, int DebounceSeconds);
+    string Instructions, int DailyTokenLimit, int TokensUsedToday, bool TypingIndicator, int DebounceSeconds,
+    string SystemPrompt = "", string DefaultSystemPrompt = "", string FixedRules = "");
 public sealed record AiSettingsUpdate(bool Enabled, string Model, string AdvancedModel, string? ApiKey, int MaxTokens, string AssistantName,
-    string Instructions, int DailyTokenLimit, bool TypingIndicator, int DebounceSeconds);
+    string Instructions, int DailyTokenLimit, bool TypingIndicator, int DebounceSeconds,
+    string? SystemPrompt = null); // Instructions = script de atendimento; SystemPrompt null = mantém o atual, "" = volta ao padrão
 public sealed record SimTurn(bool FromContact, string Text);
 public sealed record AiSimulateRequest(IReadOnlyList<SimTurn> Turns);
 public sealed record AiSimulateResponse(bool Ok, string? Reply, IReadOnlyList<string> Actions, bool Transferred, string? Error, int Tokens);
