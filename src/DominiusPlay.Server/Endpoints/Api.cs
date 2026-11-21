@@ -146,7 +146,7 @@ public static class Api
         }).RequireAuthorization(SupervisorPolicy);
 
         // ---------- Importação ----------
-        api.MapPost("/import/file", async (IFormFile file, [FromForm] string? source, [FromForm] string? tags, LeadImportService svc, ClaimsPrincipal user) =>
+        api.MapPost("/import/file", async (IFormFile file, [FromForm] string? source, [FromForm] string? tags, [FromForm] string? consentSource, LeadImportService svc, ClaimsPrincipal user) =>
         {
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             await using var s = file.OpenReadStream();
@@ -161,8 +161,8 @@ public static class Api
                 };
             }
             catch (Exception ex) { return Results.BadRequest(new OperationResult(false, "Não foi possível ler o arquivo", ex.Message)); }
-            if (rows.Count == 0) return Results.BadRequest(new OperationResult(false, "Nenhuma linha encontrada. Verifique se há uma coluna 'telefone' ou 'whatsapp'."));
-            var r = await svc.ImportAsync(rows, new(file.FileName, ext.TrimStart('.').ToUpperInvariant(), user.Identity?.Name ?? "", source, tags));
+            if (rows.Count == 0) return Results.BadRequest(new OperationResult(false, "Nenhum número encontrado no arquivo. Use uma coluna com os números de WhatsApp (com DDD), um por linha."));
+            var r = await svc.ImportAsync(rows, new(file.FileName, ext.TrimStart('.').ToUpperInvariant(), user.Identity?.Name ?? "", source, tags, BatchConsentSource: consentSource));
             return Results.Ok(ToResponse(r));
         }).DisableAntiforgery();
 
@@ -170,7 +170,7 @@ public static class Api
         {
             var rows = LeadFileParser.ParsePaste(r.Text);
             if (rows.Count == 0) return Results.BadRequest(new OperationResult(false, "Nada para importar"));
-            var res = await svc.ImportAsync(rows, new("Copiar/colar", "COLAR", user.Identity?.Name ?? "", r.Source, r.Tags));
+            var res = await svc.ImportAsync(rows, new("Copiar/colar", "COLAR", user.Identity?.Name ?? "", r.Source, r.Tags, BatchConsentSource: r.ConsentSource));
             return Results.Ok(ToResponse(res));
         });
 
@@ -376,7 +376,7 @@ public static class Api
 
     private static void Apply(Lead l, LeadUpsert r)
     {
-        l.Name = r.Name.Trim(); l.City = r.City; l.State = r.State?.ToUpperInvariant(); l.Source = r.Source ?? l.Source; l.Notes = r.Notes;
+        l.Name = (r.Name ?? "").Trim(); // nome é opcional: sem nome, o lead aparece pelo número l.City = r.City; l.State = r.State?.ToUpperInvariant(); l.Source = r.Source ?? l.Source; l.Notes = r.Notes;
         l.Tags = LeadImportService.MergeTags(r.Tags); l.Experience = r.Experience; l.PanelUsed = r.PanelUsed; l.ActiveClients = r.ActiveClients;
         l.MainPain = r.MainPain; l.InterestPlanCode = r.InterestPlanCode; l.InvestmentRange = r.InvestmentRange; l.Priority = r.Priority; l.NextAction = r.NextAction;
     }

@@ -62,15 +62,16 @@ public class ApiClient
     public Task<OperationResult> ReturnToAiAsync(Guid id) => Post<OperationResult>($"api/conversations/{id}/return-to-ai", null);
     public Task<OperationResult> PauseAsync(Guid id, bool pause) => Post<OperationResult>($"api/conversations/{id}/pause?pause={pause}", null);
     public Task<SendMessageResponse> SendAsync(Guid id, string text) => Post<SendMessageResponse>($"api/conversations/{id}/send", new SendMessageRequest(text));
-    public Task<ImportResponse> ImportPasteAsync(string text, string? source, string? tags) => Post<ImportResponse>("api/import/paste", new PasteImportRequest(text, source, tags));
+    public Task<ImportResponse> ImportPasteAsync(string text, string? source, string? tags, string? consentSource = null) => Post<ImportResponse>("api/import/paste", new PasteImportRequest(text, source, tags, consentSource));
     public Task<OperationResult> ImportOptOutsAsync(string text, string reason) => Post<OperationResult>("api/import/optouts", new OptOutImportRequest(text, reason));
 
-    public async Task<ImportResponse> ImportFileAsync(string path, string? source, string? tags)
+    public async Task<ImportResponse> ImportFileAsync(string path, string? source, string? tags, string? consentSource = null)
     {
         await using var fs = File.OpenRead(path);
         using var form = new MultipartFormDataContent { { new StreamContent(fs), "file", Path.GetFileName(path) } };
         if (source is not null) form.Add(new StringContent(source), "source");
         if (tags is not null) form.Add(new StringContent(tags), "tags");
+        if (consentSource is not null) form.Add(new StringContent(consentSource), "consentSource");
         return await Read<ImportResponse>(await _http.PostAsync("api/import/file", form));
     }
 

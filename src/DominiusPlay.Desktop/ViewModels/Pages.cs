@@ -311,6 +311,8 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     [ObservableProperty] private string _pasteText = "";
     [ObservableProperty] private string _importSource = "";
     [ObservableProperty] private string _importTags = "";
+    /// <summary>Origem da autorização da lista inteira. Vazio = os números ficam em Pendências.</summary>
+    [ObservableProperty] private string _importConsentSource = "";
     [ObservableProperty] private string? _importSummary;
     [ObservableProperty] private string _newName = "";
     [ObservableProperty] private string _newPhone = "";
@@ -338,23 +340,24 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     [RelayCommand]
     private Task ImportPaste() => Run(async () =>
     {
-        if (string.IsNullOrWhiteSpace(PasteText)) { Error = "Cole os contatos (um por linha)."; return; }
-        Show(await s.Api.ImportPasteAsync(PasteText, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags)));
+        if (string.IsNullOrWhiteSpace(PasteText)) { Error = "Cole os números (um por linha)."; return; }
+        Show(await s.Api.ImportPasteAsync(PasteText, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource)));
         PasteText = "";
         await RefreshCore();
     });
 
     public Task ImportFile(string path) => Run(async () =>
     {
-        Show(await s.Api.ImportFileAsync(path, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags)));
+        Show(await s.Api.ImportFileAsync(path, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource)));
         await RefreshCore();
     });
 
     [RelayCommand]
     private Task AddManual() => Run(async () =>
     {
-        await s.Api.CreateLeadAsync(new LeadUpsert(NewName, NewPhone, null, null, NullIfEmpty(NewSource), null, null, IptvExperience.NaoInformado, null, null, PainCategory.Nenhuma, null, null, Domain.Enums.Priority.Normal, null));
-        Info = $"Lead {NewName} cadastrado (sem autorização de mensagens até registrar o consentimento).";
+        if (string.IsNullOrWhiteSpace(NewPhone)) { Error = "Informe o número do WhatsApp com DDD."; return; }
+        await s.Api.CreateLeadAsync(new LeadUpsert(NewName.Trim(), NewPhone, null, null, NullIfEmpty(NewSource), null, null, IptvExperience.NaoInformado, null, null, PainCategory.Nenhuma, null, null, Domain.Enums.Priority.Normal, null));
+        Info = $"Lead {(string.IsNullOrWhiteSpace(NewName) ? NewPhone.Trim() : NewName.Trim())} cadastrado (sem autorização de mensagens até registrar o consentimento).";
         NewName = ""; NewPhone = "";
         await RefreshCore();
     });
@@ -401,7 +404,7 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
 
     private void Show(ImportResponse r)
     {
-        ImportSummary = $"{r.Total} linhas · {r.Created} novos · {r.Updated} já existiam · {r.Duplicates} duplicados · {r.Invalid} inválidos · {r.Blocked} bloqueados · {r.WithConsent} com consentimento registrado";
+        ImportSummary = $"{r.Total} números · {r.Created} novos · {r.Updated} já existiam · {r.Duplicates} duplicados · {r.Invalid} inválidos · {r.Blocked} bloqueados · {r.WithConsent} com consentimento registrado";
         Problems.Clear();
         foreach (var p in r.Problems) Problems.Add(p);
     }
