@@ -150,11 +150,11 @@ server {
 NGINX
   ln -sf /etc/nginx/sites-available/$SVC /etc/nginx/sites-enabled/$SVC
   nginx -t -q && systemctl reload nginx
-  if [ ! -d "/etc/letsencrypt/live/$DOMINIO" ]; then
-    if [ -n "$EMAIL_SSL" ]; then EM=(-m "$EMAIL_SSL"); else EM=(--register-unsafely-without-email); fi
-    certbot --nginx -d "$DOMINIO" --non-interactive --agree-tos --redirect "${EM[@]}" \
-      || echo "!! Certificado não emitido. Confira se o DNS de $DOMINIO aponta para este IP e rode o script de novo."
-  fi
+  # Sempre roda o certbot: o arquivo do site acabou de ser reescrito só com a porta 80, então o bloco HTTPS
+  # precisa ser reinstalado. --keep-until-expiring reaproveita o certificado existente (não emite outro).
+  if [ -n "$EMAIL_SSL" ]; then EM=(-m "$EMAIL_SSL"); else EM=(--register-unsafely-without-email); fi
+  certbot --nginx -d "$DOMINIO" --non-interactive --agree-tos --redirect --keep-until-expiring "${EM[@]}" \
+    || echo "!! Certificado não instalado. Confira se o DNS de $DOMINIO aponta para este IP e rode o script de novo."
   if [ -d "/etc/letsencrypt/live/$DOMINIO" ]; then URL="https://$DOMINIO"; else URL="http://$DOMINIO"; fi
 else
   URL="http://$(curl -fs4 https://api.ipify.org || hostname -I | awk '{print $1}'):$PORTA"
