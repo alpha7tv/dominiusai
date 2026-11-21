@@ -23,20 +23,23 @@
           <TextBlock Text="{Binding UserName}" FontWeight="SemiBold" />
           <Button Content="Sair" Command="{Binding LogoutCommand}" Padding="10,4" />
         </StackPanel>
-        <ItemsControl x:Name="NavList" ItemsSource="{x:Static vm:MainWindowViewModel.Menu}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:NavItem">
-              <Button Classes="nav" Margin="0,1"
-                      Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).NavigateCommand}"
-                      CommandParameter="{Binding Key}">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                  <TextBlock Text="{Binding Icon}" Width="20" />
-                  <TextBlock Text="{Binding Title}" />
-                </StackPanel>
-              </Button>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <!-- Rolagem: em telas baixas o menu não cabe e os últimos itens ficavam escondidos -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+          <ItemsControl x:Name="NavList" ItemsSource="{x:Static vm:MainWindowViewModel.Menu}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:NavItem">
+                <Button Classes="nav" Margin="0,1"
+                        Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).NavigateCommand}"
+                        CommandParameter="{Binding Key}">
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding Icon}" Width="20" />
+                    <TextBlock Text="{Binding Title}" />
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
       </DockPanel>
     </Border>
     <ContentControl Grid.Column="1" Grid.ColumnSpan="1" Content="{Binding Current}" Margin="0" />
