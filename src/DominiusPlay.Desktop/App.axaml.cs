@@ -14,6 +14,8 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             desktop.MainWindow = new MainWindow { DataContext = new MainWindowViewModel() };
+        else if (ApplicationLifetime is ISingleViewApplicationLifetime single) // navegador
+            single.MainView = new MainView { DataContext = new MainWindowViewModel() };
         base.OnFrameworkInitializationCompleted();
     }
 }

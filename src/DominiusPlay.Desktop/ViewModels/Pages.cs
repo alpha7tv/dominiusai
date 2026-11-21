@@ -537,6 +537,12 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
         await RefreshCore();
     });
 
+    public Task ImportFile(Stream stream, string fileName) => Run(async () =>
+    {
+        Show(await s.Api.ImportFileAsync(stream, fileName, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource)));
+        await RefreshCore();
+    });
+
     [RelayCommand]
     private Task AddManual() => Run(async () =>
     {

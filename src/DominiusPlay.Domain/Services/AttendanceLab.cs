@@ -163,10 +163,10 @@ public static class AttendanceLab
         {
             var r = KnowledgeRenderer.Render(match.Entry.Answer, cfg, plans);
             alerts.AddRange(r.Warnings);
-            reply = r.Text;
+            reply = string.IsNullOrWhiteSpace(r.Text) ? null : r.Text; // resposta da base vazia (editada): cai na resposta padrão abaixo
             // já respondida nesta conversa: não repete o texto inteiro, só a parte que responde à nova pergunta
-            if (mem.AnsweredCodes.Contains(match.Entry.Code)) reply = BestSentence(reply, message) is { } best ? "Como te expliquei: " + best : "Reforçando: " + reply;
-            if (match.Entry.NeedsConfirmation) { alerts.Add("Resposta depende de confirmação da equipe"); reply += " Se quiser, peço para a equipe confirmar os detalhes para você."; }
+            if (reply is not null && mem.AnsweredCodes.Contains(match.Entry.Code)) reply = BestSentence(reply, message) is { } best ? "Como te expliquei: " + best : "Reforçando: " + reply;
+            if (reply is not null && match.Entry.NeedsConfirmation) { alerts.Add("Resposta depende de confirmação da equipe"); reply += " Se quiser, peço para a equipe confirmar os detalhes para você."; }
             if (match.Entry.Code == DominiusKnowledge.Code(72)) mem.OffersMade.Add(CommercialTrigger.AmigoInteressado);
         }
         if (trigger == CommercialTrigger.InformaPagamento) { handoff = true; alerts.Add("Pagamento informado pelo cliente: confirmar somente pelo sistema financeiro"); }
@@ -197,7 +197,7 @@ public static class AttendanceLab
         }
         if (mem.Profile == SalesProfile.Indefinido && !mem.AskedQuestions.Contains(QuestionStart) && !reply.TrimEnd().EndsWith('?') && !mem.WantsToBuy)
         { reply += " " + QuestionStart; mem.AskedQuestions.Add(QuestionStart); }
-        if (mem.Name is not null && steps0(mem) && !reply.Contains(mem.Name)) reply = $"{mem.Name}, " + char.ToLowerInvariant(reply[0]) + reply[1..];
+        if (mem.Name is not null && reply.Length > 0 && steps0(mem) && !reply.Contains(mem.Name)) reply = $"{mem.Name}, " + char.ToLowerInvariant(reply[0]) + reply[1..];
 
         alerts.AddRange(ReplySafetyGuard.Check(reply, cfg));
         if (match is not null) mem.AnsweredCodes.Add(match.Entry.Code);
