@@ -39,6 +39,8 @@ if ! tem_sdk10; then
   export PATH="$DOTNET_DIR:$PATH" DOTNET_ROOT="$DOTNET_DIR"
 fi
 tem_sdk10 || { echo "Não consegui instalar o .NET 10 SDK"; exit 1; }
+# Ferramentas para compilar as telas do CRM para o navegador (WebAssembly)
+dotnet workload list 2>/dev/null | grep -q wasm-tools || dotnet workload install wasm-tools >/dev/null
 export DOTNET_CLI_TELEMETRY_OPTOUT=1
 
 echo "==> Código-fonte ($BRANCH)"
@@ -52,6 +54,11 @@ case "$(uname -m)" in aarch64|arm64) RID=linux-arm64 ;; *) RID=linux-x64 ;; esac
 echo "==> Compilando servidor ($RID)"
 rm -rf /tmp/dominius-pub
 dotnet publish "$SRC_DIR/src/DominiusPlay.Server" -c Release -r "$RID" --self-contained true -o /tmp/dominius-pub -v quiet -nologo
+
+echo "==> Compilando as telas para o navegador (pode levar alguns minutos)"
+rm -rf /tmp/dominius-web
+dotnet publish "$SRC_DIR/src/DominiusPlay.Web" -c Release -o /tmp/dominius-web -v quiet -nologo
+cp -a /tmp/dominius-web/wwwroot /tmp/dominius-pub/wwwroot
 
 echo "==> Usuário e pastas"
 id -u dominius >/dev/null 2>&1 || useradd --system --home "$DATA_DIR" --shell /usr/sbin/nologin dominius
@@ -170,8 +177,9 @@ cat <<FIM
  Endereço do servidor:  $URL
  Dados (banco, chaves): $DATA_DIR   <- faça backup desta pasta
 
- No aplicativo Windows, na tela de login, troque o servidor para:
+ Abra no navegador (Chrome, Edge ou Firefox):
    $URL
+ No primeiro acesso ele pede para criar o usuário administrador.
  Em Integrações, use como "URL pública deste servidor":
    $URL
 

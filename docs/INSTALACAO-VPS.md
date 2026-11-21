@@ -5,14 +5,17 @@ O CRM tem duas partes:
 | Parte | Onde roda |
 |---|---|
 | **Servidor** (API, banco, IA, filas, webhook do WhatsApp) | Na VPS Linux, 24 horas por dia |
-| **Aplicativo** (as telas) | No(s) computador(es) Windows dos atendentes, conectado ao servidor pela internet |
+| **Telas no navegador** | Servidas pela própria VPS: abra `https://crm.seudominio.com` no Chrome, Edge ou Firefox. Não precisa instalar nada no computador |
+| **Aplicativo Windows** (opcional) | As mesmas telas como programa do Windows, apontando para o mesmo servidor |
+
+As telas do navegador são o mesmo código do aplicativo Windows compilado para WebAssembly (projeto `src/DominiusPlay.Web`). O primeiro acesso baixa cerca de 7 MB; depois fica em cache.
 
 A **Evolution API** (WhatsApp) é um sistema separado. Se você já tem uma Evolution rodando, não precisa instalar outra: o CRM só precisa da URL, da instância e da chave dela.
 
 ## Requisitos
 
 - VPS com **Ubuntu 22.04, Ubuntu 24.04 ou Debian 12**, 64 bits (x64 ou ARM).
-- Mínimo **1 vCPU e 2 GB de RAM** (a compilação usa ~1,5 GB; o servidor rodando usa ~200 MB). 20 GB de disco.
+- Mínimo **2 vCPU e 2 GB de RAM** (a compilação usa ~1,5 GB; o servidor rodando usa ~200 MB). 20 GB de disco livres (SDK + ferramentas de WebAssembly ocupam ~3 GB).
 - Acesso **root por SSH**.
 - Recomendado: um **subdomínio** (ex.: `crm.seudominio.com`) com registro **A** apontando para o IP da VPS. Com domínio o script coloca **HTTPS grátis** (Let's Encrypt). Sem domínio funciona por `http://IP:5080`, sem criptografia.
 
@@ -46,8 +49,8 @@ sudo bash instalar.sh
 
 O script (5 a 10 minutos na primeira vez):
 
-1. Instala as dependências e o .NET 10 SDK.
-2. Baixa o código e compila o servidor para Linux.
+1. Instala as dependências, o .NET 10 SDK e as ferramentas de WebAssembly.
+2. Baixa o código, compila o servidor para Linux e as telas para o navegador.
 3. Cria o usuário de sistema `dominius` e a pasta de dados `/var/lib/dominius-crm`.
 4. Cria o serviço `dominius-crm` (systemd): sobe junto com a VPS e reinicia sozinho se cair.
 5. Com domínio: instala o **nginx** como proxy reverso (com suporte ao tempo real/SignalR) e emite o certificado HTTPS. O servidor fica escutando só em `127.0.0.1:5080`, e a internet entra pelo nginx (portas 80/443).
@@ -61,12 +64,13 @@ Alguns provedores (AWS, Oracle, Google Cloud, Hostinger, Contabo com firewall) t
 - Com domínio: portas **80** e **443** (TCP).
 - Sem domínio: porta **5080** (TCP).
 
-## 3. Conectar o aplicativo Windows
+## 3. Abrir o CRM no navegador
 
-1. Abra o DOMINIUS PLAY AI CRM no Windows.
-2. Na tela de login, no campo **Servidor**, coloque `https://crm.seudominio.com` (ou `http://IP:5080`).
-3. No primeiro acesso ele pede para criar o **usuário administrador** (o banco da VPS começa vazio).
-4. Os outros atendentes usam o mesmo endereço, cada um com seu usuário (tela Equipe).
+1. Abra `https://crm.seudominio.com` (ou `http://IP:5080`) no navegador.
+2. No primeiro acesso ele pede para criar o **usuário administrador** (o banco da VPS começa vazio).
+3. Os outros atendentes usam o mesmo endereço, cada um com seu usuário (tela Equipe).
+
+Quem preferir o aplicativo Windows: na tela de login, no campo **Servidor**, coloque o mesmo endereço.
 
 > Se você já usa o CRM instalado no Windows e quer **levar os dados**, veja "Migrar dados do Windows" abaixo antes de criar o administrador.
 

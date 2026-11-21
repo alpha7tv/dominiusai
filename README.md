@@ -28,7 +28,7 @@ clique em **Testar conexão** e **Registrar webhook**.
 
 ## Servidor em VPS Linux
 
-Guia completo em [docs/INSTALACAO-VPS.md](docs/INSTALACAO-VPS.md). Resumo: `sudo bash deploy/linux/instalar.sh crm.seudominio.com` instala o servidor com systemd, nginx e HTTPS, e o aplicativo Windows aponta para `https://crm.seudominio.com`.
+Guia completo em [docs/INSTALACAO-VPS.md](docs/INSTALACAO-VPS.md). Resumo: `sudo bash deploy/linux/instalar.sh crm.seudominio.com` instala o servidor com systemd, nginx e HTTPS, e as telas abrem no navegador em `https://crm.seudominio.com` (mesmo código do app Windows, compilado para WebAssembly em `src/DominiusPlay.Web`).
 
 ## Gerar o instalador Windows
 

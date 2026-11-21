@@ -17,7 +17,9 @@ public partial class LeadsView : UserControl
             Title = "Importar leads", AllowMultiple = false,
             FileTypeFilter = [new FilePickerFileType("Planilhas") { Patterns = ["*.csv", "*.xlsx", "*.txt"] }],
         });
-        if (files.Count == 1 && files[0].TryGetLocalPath() is { } path) await vm.ImportFile(path);
+        if (files.Count != 1) return;
+        if (files[0].TryGetLocalPath() is { } path) await vm.ImportFile(path);
+        else { await using var stream = await files[0].OpenReadAsync(); await vm.ImportFile(stream, files[0].Name); } // navegador
     }
 
     private async void OnExportLgpd(object? sender, RoutedEventArgs e)
@@ -38,7 +40,7 @@ public partial class LeadsView : UserControl
     {
         if (DataContext is not LeadsViewModel vm) return;
         if (vm.Selected is null) { vm.Error = "Selecione um lead na lista."; return; }
-        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this) as Window, "Excluir dados do titular",
+        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this), "Excluir dados do titular",
                 $"Excluir definitivamente {vm.Selected.Name} ({vm.Selected.Phone}) com mensagens, histórico e fatos?\n\nO número continua na lista de bloqueio se tiver sido descadastrado. Esta ação não pode ser desfeita."))
             await vm.DeleteSelectedAsync();
     }
@@ -47,7 +49,7 @@ public partial class LeadsView : UserControl
     {
         if (DataContext is not LeadsViewModel vm) return;
         if (vm.Selected is null) { vm.Error = "Selecione um lead na lista."; return; }
-        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this) as Window, "Anonimizar contato",
+        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this), "Anonimizar contato",
                 $"Anonimizar {vm.Selected.Name} ({vm.Selected.Phone})?\n\nNome, telefone, cidade, notas, fatos e o texto das mensagens são apagados. Os números de campanha e funil continuam nos relatórios. O telefone entra na lista de descadastro para nunca mais ser abordado. Não pode ser desfeito."))
             await vm.AnonymizeSelectedAsync();
     }
@@ -56,7 +58,7 @@ public partial class LeadsView : UserControl
     {
         if (DataContext is not LeadsViewModel vm) return;
         if (vm.CheckedCount == 0) { vm.Error = "Marque pelo menos um lead na lista."; return; }
-        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this) as Window, "Excluir leads selecionados",
+        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this), "Excluir leads selecionados",
                 $"Excluir definitivamente {vm.CheckedText} com mensagens, histórico e fatos?\n\nNúmeros descadastrados continuam na lista de bloqueio. Esta ação não pode ser desfeita."))
             await vm.DeleteCheckedAsync();
     }

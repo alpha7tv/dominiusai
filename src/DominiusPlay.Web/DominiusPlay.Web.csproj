@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <!-- Versão para navegador: as MESMAS telas do aplicativo Windows (código de DominiusPlay.Desktop compilado para WebAssembly).
+       O servidor publica o resultado em wwwroot e a página abre em https://seu-dominio/. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-browser</TargetFramework>
+    <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>DominiusPlayCRM.Web</AssemblyName>
+    <RootNamespace>DominiusPlay.Desktop</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <WasmEnableWebcil>true</WasmEnableWebcil>
+    <!-- O cliente da API usa System.Text.Json por reflexão (DTOs do Domain): não cortar o código do app nem do Domain -->
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <TrimMode>partial</TrimMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\DominiusPlay.Desktop\**\*.cs" Exclude="..\DominiusPlay.Desktop\Program.cs;..\DominiusPlay.Desktop\obj\**;..\DominiusPlay.Desktop\bin\**" LinkBase="Shared" />
+    <AvaloniaXaml Include="..\DominiusPlay.Desktop\**\*.axaml" Exclude="..\DominiusPlay.Desktop\obj\**;..\DominiusPlay.Desktop\bin\**" LinkBase="Shared" />
+    <AvaloniaResource Include="..\DominiusPlay.Desktop\Assets\**" Link="Assets\%(RecursiveDir)%(Filename)%(Extension)" />
+    <AvaloniaResource Include="Assets\Fonts\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <TrimmerRootAssembly Include="DominiusPlay.Domain" />
+    <TrimmerRootAssembly Include="DominiusPlayCRM.Web" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DominiusPlay.Domain\DominiusPlay.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Browser" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.23" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.23" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.15" />
+  </ItemGroup>
+</Project>

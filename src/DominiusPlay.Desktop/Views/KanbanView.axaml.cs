@@ -131,7 +131,7 @@ public partial class KanbanView : UserControl
     public static async Task<bool?> ConfirmClosingIfNeeded(Control owner, bool closing)
     {
         if (!closing) return false;
-        var ok = await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(owner) as Window, "Confirmar fechamento",
+        var ok = await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(owner), "Confirmar fechamento",
             "Confirma que a contratação foi validada comercialmente (pagamento confirmado ou aceite formal)?\n\nInteresse demonstrado não é suficiente para marcar 'Negócio fechado'.");
         return ok ? true : null;
     }
