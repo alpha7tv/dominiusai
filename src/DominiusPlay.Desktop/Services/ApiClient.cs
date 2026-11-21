@@ -55,6 +55,7 @@ public class ApiClient
     public Task<OperationResult> UpdateLeadAsync(Guid id, LeadUpsert l) => Send<OperationResult>(HttpMethod.Put, $"api/leads/{id}", l);
     public Task<OperationResult> ConsentAsync(Guid id, ConsentRequest r) => Post<OperationResult>($"api/leads/{id}/consent", r);
     public Task<OperationResult> DeleteLeadAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/leads/{id}", null);
+    public Task<BulkLeadResponse> BulkLeadsAsync(BulkLeadRequest r) => Post<BulkLeadResponse>(r.Action == BulkLeadAction.Excluir ? "api/leads/bulk-delete" : "api/leads/bulk", r);
     public Task<OperationResult> OptOutAsync(Guid id) => Post<OperationResult>($"api/leads/{id}/optout", null);
     public Task<List<LeadCard>> ConversationsAsync(string? q = null) => Get<List<LeadCard>>("api/conversations" + (string.IsNullOrWhiteSpace(q) ? "" : "?q=" + Uri.EscapeDataString(q)));
     public Task<List<MessageDto>> MessagesAsync(Guid id) => Get<List<MessageDto>>($"api/conversations/{id}/messages");

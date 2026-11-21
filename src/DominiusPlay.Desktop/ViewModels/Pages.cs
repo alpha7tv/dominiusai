@@ -8,9 +8,11 @@ using DominiusPlay.Domain.Enums;
 namespace DominiusPlay.Desktop.ViewModels;
 
 /// <summary>Card do lead pronto para exibição (Kanban, listas e conversas).</summary>
-public class LeadCardVm(LeadCard c)
+public partial class LeadCardVm(LeadCard c) : ObservableObject
 {
     public LeadCard Model { get; } = c;
+    /// <summary>Marcado na caixa de seleção da lista de Leads (ações em lote).</summary>
+    [ObservableProperty] private bool _isChecked;
     public Guid Id => Model.Id;
     public string Name => Model.Name;
     public string Phone => Model.PhoneFormatted;
@@ -321,6 +323,105 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     [ObservableProperty] private string _consentSource = "";
     [ObservableProperty] private string _optOutText = "";
     [ObservableProperty] private int _total;
+    // ---- seleção em lote ----
+    [ObservableProperty] private int _checkedCount;
+    [ObservableProperty] private bool? _allChecked = false;
+    [ObservableProperty] private string _bulkConsentSource = "";
+    [ObservableProperty] private string _bulkTag = "";
+    private bool _syncingChecks;
+    public bool HasChecked => CheckedCount > 0;
+    public string CheckedText => CheckedCount == 1 ? "1 lead selecionado" : $"{CheckedCount} leads selecionados";
+    public IEnumerable<LeadCardVm> CheckedLeads => Leads.Where(l => l.IsChecked);
+
+    partial void OnCheckedCountChanged(int value) { OnPropertyChanged(nameof(HasChecked)); OnPropertyChanged(nameof(CheckedText)); }
+
+    partial void OnAllCheckedChanged(bool? value)
+    {
+        if (_syncingChecks || value is null) return;
+        _syncingChecks = true;
+        foreach (var l in Leads) l.IsChecked = value.Value;
+        _syncingChecks = false;
+        UpdateChecked();
+    }
+
+    private void OnCardChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LeadCardVm.IsChecked) && !_syncingChecks) UpdateChecked();
+    }
+
+    private void UpdateChecked()
+    {
+        CheckedCount = Leads.Count(l => l.IsChecked);
+        _syncingChecks = true;
+        AllChecked = CheckedCount == 0 ? false : CheckedCount == Leads.Count ? true : null;
+        _syncingChecks = false;
+    }
+
+    /// <summary>Tag sugerida para o lote: a tag em comum dos selecionados ou o texto pesquisado.</summary>
+    private string? SuggestTag()
+    {
+        var sel = CheckedLeads.Select(l => l.Model.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
+        if (sel.Count > 0)
+        {
+            var common = sel.Skip(1).Aggregate((IEnumerable<string>)sel[0], (a, b) => a.Intersect(b, StringComparer.OrdinalIgnoreCase)).ToList();
+            if (common.Count == 1) return common[0];
+        }
+        return null;
+    }
+
+    [RelayCommand]
+    private Task AuthorizeChecked() => Run(async () =>
+    {
+        var ids = CheckedLeads.Select(l => l.Id).ToList();
+        if (ids.Count == 0) { Error = "Marque pelo menos um lead na lista."; return; }
+        if (string.IsNullOrWhiteSpace(BulkConsentSource)) { Error = "Informe como esses contatos autorizaram receber mensagens (ex.: pediram informações no Instagram)."; return; }
+        Info = (await s.Api.BulkLeadsAsync(new BulkLeadRequest(BulkLeadAction.Autorizar, ids, ConsentSource: BulkConsentSource.Trim()))).Message;
+        await RefreshCore();
+    });
+
+    [RelayCommand]
+    private Task AuthorizeByTag() => Run(async () =>
+    {
+        var tag = string.IsNullOrWhiteSpace(BulkTag) ? SuggestTag() : BulkTag.Trim();
+        if (string.IsNullOrWhiteSpace(tag)) { Error = "Informe a tag (ex.: iptv) para autorizar todos os leads com ela."; return; }
+        if (string.IsNullOrWhiteSpace(BulkConsentSource)) { Error = "Informe como esses contatos autorizaram receber mensagens (ex.: pediram informações no Instagram)."; return; }
+        BulkTag = tag;
+        Info = (await s.Api.BulkLeadsAsync(new BulkLeadRequest(BulkLeadAction.Autorizar, null, ByTag: tag, ConsentSource: BulkConsentSource.Trim()))).Message;
+        await RefreshCore();
+    });
+
+    [RelayCommand]
+    private Task RemoveTagChecked() => Run(async () =>
+    {
+        var ids = CheckedLeads.Select(l => l.Id).ToList();
+        if (ids.Count == 0) { Error = "Marque pelo menos um lead na lista."; return; }
+        var tag = string.IsNullOrWhiteSpace(BulkTag) ? SuggestTag() : BulkTag.Trim();
+        if (string.IsNullOrWhiteSpace(tag)) { Error = "Informe no campo Tag qual tag remover dos selecionados."; return; }
+        BulkTag = tag;
+        Info = (await s.Api.BulkLeadsAsync(new BulkLeadRequest(BulkLeadAction.RemoverTag, ids, Tag: tag))).Message;
+        await RefreshCore();
+    });
+
+    /// <summary>Exclui os leads marcados (a tela pede confirmação antes).</summary>
+    public Task DeleteCheckedAsync() => Run(async () =>
+    {
+        var ids = CheckedLeads.Select(l => l.Id).ToList();
+        if (ids.Count == 0) { Error = "Marque pelo menos um lead na lista."; return; }
+        Info = (await s.Api.BulkLeadsAsync(new BulkLeadRequest(BulkLeadAction.Excluir, ids))).Message;
+        await RefreshCore();
+    });
+
+    [RelayCommand]
+    private void ClearChecked() => AllChecked = false;
+
+    private void Fill(IEnumerable<LeadCard> list)
+    {
+        foreach (var l in Leads) l.PropertyChanged -= OnCardChanged;
+        Leads.Clear();
+        foreach (var l in list) { var vm = new LeadCardVm(l); vm.PropertyChanged += OnCardChanged; Leads.Add(vm); }
+        Total = Leads.Count;
+        UpdateChecked();
+    }
 
     public override Task OnActivatedAsync() => Refresh();
 
@@ -331,10 +432,7 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     public Task Refresh() => Run(async () =>
     {
         ConsentStatus? c = FilterIndex switch { 1 => ConsentStatus.Valido, 2 => ConsentStatus.Pendente, 3 => ConsentStatus.Revogado, _ => null };
-        var list = await s.Api.LeadsAsync(Search, c);
-        Leads.Clear();
-        foreach (var l in list) Leads.Add(new LeadCardVm(l));
-        Total = Leads.Count;
+        Fill(await s.Api.LeadsAsync(Search, c));
     });
 
     [RelayCommand]
@@ -412,10 +510,7 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     private async Task RefreshCore()
     {
         ConsentStatus? c = FilterIndex switch { 1 => ConsentStatus.Valido, 2 => ConsentStatus.Pendente, 3 => ConsentStatus.Revogado, _ => null };
-        var list = await s.Api.LeadsAsync(Search, c);
-        Leads.Clear();
-        foreach (var l in list) Leads.Add(new LeadCardVm(l));
-        Total = Leads.Count;
+        Fill(await s.Api.LeadsAsync(Search, c));
     }
 
     private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

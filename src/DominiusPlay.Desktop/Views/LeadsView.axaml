@@ -21,20 +21,37 @@
       </StackPanel>
       <Border Classes="panel" Padding="0">
         <DockPanel>
-          <Grid DockPanel.Dock="Top" ColumnDefinitions="2*,1.7*,1.4*,1.4*,1.1*" Margin="12,8">
-            <TextBlock Text="Contato" Classes="muted" /><TextBlock Grid.Column="1" Text="WhatsApp" Classes="muted" />
-            <TextBlock Grid.Column="2" Text="Etapa" Classes="muted" /><TextBlock Grid.Column="3" Text="Autorização" Classes="muted" />
-            <TextBlock Grid.Column="4" Text="Tags" Classes="muted" />
+          <Border DockPanel.Dock="Top" IsVisible="{Binding HasChecked}" Background="{StaticResource AccentSoftBrush}" CornerRadius="8,8,0,0" Padding="12,10">
+            <StackPanel Spacing="8">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Limpar seleção" Command="{Binding ClearCheckedCommand}" />
+                <TextBlock Text="{Binding CheckedText}" FontWeight="SemiBold" VerticalAlignment="Center" />
+              </DockPanel>
+              <TextBox Text="{Binding BulkConsentSource}" Watermark="Como esses contatos autorizaram? (obrigatório para autorizar, ex.: pediram informações no Instagram)" />
+              <WrapPanel>
+                <Button Classes="primary" Content="Autorizar selecionados" Command="{Binding AuthorizeCheckedCommand}" Margin="0,0,8,4" />
+                <TextBox Text="{Binding BulkTag}" Watermark="Tag (ex.: iptv)" Width="140" Margin="0,0,8,4" />
+                <Button Content="Remover tag" Command="{Binding RemoveTagCheckedCommand}" Margin="0,0,8,4" />
+                <Button Classes="danger" Content="Excluir selecionados" Click="OnDeleteChecked" Margin="0,0,8,4" />
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="32,2*,1.7*,1.4*,1.4*,1.1*" Margin="12,8">
+            <CheckBox Name="CheckAll" IsChecked="{Binding AllChecked}" IsThreeState="False" ToolTip.Tip="Selecionar todos os leads da lista" />
+            <TextBlock Grid.Column="1" Text="Contato" Classes="muted" VerticalAlignment="Center" /><TextBlock Grid.Column="2" Text="WhatsApp" Classes="muted" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="3" Text="Etapa" Classes="muted" VerticalAlignment="Center" /><TextBlock Grid.Column="4" Text="Autorização" Classes="muted" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="5" Text="Tags" Classes="muted" VerticalAlignment="Center" />
           </Grid>
           <ListBox ItemsSource="{Binding Leads}" SelectedItem="{Binding Selected}" Background="Transparent">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:LeadCardVm">
-                <Grid ColumnDefinitions="2*,1.7*,1.4*,1.4*,1.1*">
-                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
-                  <TextBlock Grid.Column="1" Text="{Binding Phone}" />
-                  <TextBlock Grid.Column="2" Text="{Binding Stage}" />
-                  <TextBlock Grid.Column="3" Text="{Binding Consent}" />
-                  <TextBlock Grid.Column="4" Text="{Binding Tags}" Classes="muted" TextTrimming="CharacterEllipsis" />
+                <Grid ColumnDefinitions="32,2*,1.7*,1.4*,1.4*,1.1*">
+                  <CheckBox IsChecked="{Binding IsChecked}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="2" Text="{Binding Phone}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="3" Text="{Binding Stage}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="4" Text="{Binding Consent}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="5" Text="{Binding Tags}" Classes="muted" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                 </Grid>
               </DataTemplate>
             </ListBox.ItemTemplate>
@@ -45,6 +62,15 @@
 
     <ScrollViewer Grid.Column="1">
       <StackPanel Spacing="12">
+        <Border Classes="panel">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Autorizar em lote por tag" Classes="h2" />
+            <TextBlock Text="Autoriza de uma vez todos os leads com a tag (inclusive os que não aparecem na tela). Descadastrados não são alterados." Classes="muted" TextWrapping="Wrap" />
+            <TextBox Text="{Binding BulkTag}" Watermark="Tag (ex.: iptv)" />
+            <TextBox Text="{Binding BulkConsentSource}" Watermark="Como esses contatos autorizaram? (ex.: pediram informações no Instagram)" TextWrapping="Wrap" />
+            <Button Classes="primary" Content="Autorizar todos com esta tag" Command="{Binding AuthorizeByTagCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </StackPanel>
+        </Border>
         <Border Classes="panel">
           <StackPanel Spacing="8">
             <TextBlock Text="Importar números" Classes="h2" />

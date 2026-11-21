@@ -120,6 +120,23 @@ public class UiTests
         Assert.Null(leads.Error);
         Assert.Contains(leads.Leads, l => l.Name == "+55 (14) 99666-5544");
         Shot(win, "05-leads-importacao");
+        // seleção em lote: marcar todos, desmarcar um e autorizar os demais
+        var pendentes = leads.Leads.Count(l => l.Model.Consent == ConsentStatus.Pendente);
+        leads.AllChecked = true;
+        Assert.Equal(leads.Leads.Count, leads.CheckedCount);
+        leads.Leads[0].IsChecked = false;
+        Assert.Null(leads.AllChecked);
+        Assert.True(leads.HasChecked);
+        leads.AllChecked = true;
+        leads.BulkConsentSource = "Pediram informações nos grupos";
+        await Pump();
+        Shot(win, "05b-leads-selecao-em-lote");
+        await leads.AuthorizeCheckedCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(leads.Error);
+        Assert.Contains($"{pendentes} leads autorizados", leads.Info);
+        Assert.DoesNotContain(leads.Leads, l => l.Model.Consent == ConsentStatus.Pendente);
+        Assert.False(leads.HasChecked);
 
         await main.NavigateCommand.ExecuteAsync("planos");
         await Pump();
@@ -193,12 +210,12 @@ public class UiTests
         camp.Sat = camp.Sun = true; camp.Objective = "Apresentar planos de revenda";
         await camp.SaveCommand.ExecuteAsync(null);
         await Pump();
-        Assert.Equal(4, camp.Selected!.Model.Eligible); // 1 do exemplo + 3 números importados sem nome, com autorização
+        Assert.Equal(5, camp.Selected!.Model.Eligible); // 1 do exemplo + 3 importados com autorização + 1 manual autorizado em lote
         await camp.StartCommand.ExecuteAsync(null);
         await Pump();
         Assert.Null(camp.Error);
         Assert.Equal(CampaignStatus.Ativa, camp.Selected!.Model.Status);
-        Assert.Equal(4, camp.Selected.Model.Queued);
+        Assert.Equal(5, camp.Selected.Model.Queued);
         Shot(win, "12-campanhas");
 
         // Fase 9: relatórios

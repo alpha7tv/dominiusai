@@ -42,4 +42,13 @@ public partial class LeadsView : UserControl
                 $"Excluir definitivamente {vm.Selected.Name} ({vm.Selected.Phone}) com mensagens, histórico e fatos?\n\nO número continua na lista de bloqueio se tiver sido descadastrado. Esta ação não pode ser desfeita."))
             await vm.DeleteSelectedAsync();
     }
+
+    private async void OnDeleteChecked(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not LeadsViewModel vm) return;
+        if (vm.CheckedCount == 0) { vm.Error = "Marque pelo menos um lead na lista."; return; }
+        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this) as Window, "Excluir leads selecionados",
+                $"Excluir definitivamente {vm.CheckedText} com mensagens, histórico e fatos?\n\nNúmeros descadastrados continuam na lista de bloqueio. Esta ação não pode ser desfeita."))
+            await vm.DeleteCheckedAsync();
+    }
 }

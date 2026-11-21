@@ -39,6 +39,17 @@ public sealed record LeadUpsert(
 
 public sealed record ConsentRequest(string Source, string? Evidence, DateTimeOffset? GrantedAt);
 
+/// <summary>Ação em lote na lista de Leads.</summary>
+public enum BulkLeadAction { Autorizar = 0, RemoverTag = 1, Excluir = 2 }
+
+/// <summary>
+/// Ação em lote: aplica-se aos <see cref="Ids"/> informados ou, se <see cref="ByTag"/> vier preenchido,
+/// a todos os leads com essa tag. <see cref="ConsentSource"/> é obrigatório para autorizar;
+/// <see cref="Tag"/> é a tag a remover em <see cref="BulkLeadAction.RemoverTag"/>.
+/// </summary>
+public sealed record BulkLeadRequest(BulkLeadAction Action, IReadOnlyList<Guid>? Ids, string? ByTag = null, string? ConsentSource = null, string? Tag = null);
+public sealed record BulkLeadResponse(int Affected, int Skipped, string Message);
+
 public sealed record MoveCardRequest(KanbanStage To, string? Reason, bool CommercialConfirmation);
 public sealed record MoveCardResponse(bool Applied, bool IsSuggestion, string? Message);
 
