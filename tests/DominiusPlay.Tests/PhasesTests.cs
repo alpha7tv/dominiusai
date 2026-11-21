@@ -5,6 +5,8 @@ using System.Text.Json;
 using DominiusPlay.Domain.Contracts;
 using DominiusPlay.Domain.Enums;
 using DominiusPlay.Domain.Services;
+using DominiusPlay.Infrastructure.Evolution;
+using DominiusPlay.Server.Endpoints;
 using Microsoft.EntityFrameworkCore;
 
 namespace DominiusPlay.Tests;
@@ -235,6 +237,86 @@ public class PhasesTests
         Assert.Equal(0, await f.RunQueueAsync());
         Assert.Equal(2, f.Evolution.Sent.Count);
         Assert.Equal(HttpStatusCode.BadRequest, (await c.PutAsJsonAsync($"/api/campaigns/{c2.Id}", AllDay("x", tid))).StatusCode);
+    }
+
+    [Fact]
+    public async Task Relatorio_de_mensagens_enviadas_por_periodo_campanha_atendente_e_status()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        await f.ConfigureEvolutionAsync(c);
+        var a = await NewLead(c, "Ana", "11987650030", "revenda");
+        var b = await NewLead(c, "Bruno", "11987650031", "revenda");
+        var d = await NewLead(c, "Duda", "11987650032", "revenda");
+        var tid = await ApprovedTemplate(c, "Abordagem", "Olá{, nome}! Sou {assistente}, da Dominius Play. Podemos conversar sobre revenda?");
+        var camp = (await (await c.PostAsJsonAsync("/api/campaigns", AllDay("Revenda dezembro", tid, "revenda"))).Content.ReadFromJsonAsync<CampaignDto>())!;
+        Assert.True((await (await c.PostAsync($"/api/campaigns/{camp.Id}/start", null)).Content.ReadFromJsonAsync<OperationResult>())!.Ok);
+
+        // 1º envio ok, 2º recusado pela Evolution (número inválido, não retenta), 3º ok
+        var calls = 0;
+        f.Evolution.Behavior = _ => ++calls == 2
+            ? new EvolutionSendResult(false, null, null, "Número não existe no WhatsApp", 400)
+            : new EvolutionSendResult(true, "WA" + Guid.NewGuid().ToString("N")[..10], "SERVER_ACK", null, 201);
+        for (var i = 0; i < 3; i++) { await f.RunQueueAsync(); f.Clock.Advance(TimeSpan.FromMinutes(6)); }
+        Assert.Equal(3, calls);
+
+        var adminId = await f.WithDb(db => db.Users.Select(u => u.Id).FirstAsync());
+        await f.WithDb(async db =>
+        {
+            var sent = await db.Messages.Where(m => m.CampaignId == camp.Id && m.Status != MessageStatus.Falhou).OrderBy(m => m.Timestamp).ToListAsync();
+            Assert.Equal(2, sent.Count);
+            sent[0].Status = MessageStatus.Lida;
+            sent[1].Status = MessageStatus.Entregue;
+            // A falha guarda a campanha (para o relatório), mas continua como nota do Sistema (fora do histórico da IA)
+            var failed = await db.Messages.SingleAsync(m => m.Status == MessageStatus.Falhou);
+            Assert.Equal(camp.Id, failed.CampaignId);
+            Assert.Equal(MessageAuthor.Sistema, failed.Author);
+            db.Messages.Add(new() { LeadId = a.Id, Direction = MessageDirection.Entrada, Author = MessageAuthor.Contato, Status = MessageStatus.Recebida, Text = "oi" });
+            db.Messages.Add(new() { LeadId = a.Id, Direction = MessageDirection.Saida, Author = MessageAuthor.Atendente, Status = MessageStatus.EnviadaServidor, Text = "Tudo bem?", SentByUserId = adminId });
+            db.Messages.Add(new() { LeadId = b.Id, Direction = MessageDirection.Saida, Author = MessageAuthor.ManualNoAparelho, Status = MessageStatus.Lida, Text = "pelo celular" });
+            db.Messages.Add(new() { LeadId = b.Id, Direction = MessageDirection.Saida, Author = MessageAuthor.Sistema, Status = MessageStatus.Recebida, Text = "nota interna" });
+            db.Messages.Add(new() { LeadId = d.Id, Direction = MessageDirection.Saida, Author = MessageAuthor.Ia, Status = MessageStatus.Lida, Text = "antiga", Timestamp = DateTimeOffset.UtcNow.AddDays(-40) });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        var from = DateTimeOffset.Now.AddDays(-7);
+        var url = $"/api/reports/sent-messages?from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(30).ToString("o"))}";
+        var r = (await c.GetFromJsonAsync<SentMessagesReportDto>(url))!;
+        Assert.Equal("dia", r.Grouping);
+        Assert.Equal(new SentMessagesRow("total", "Total", 5, 1, 1, 2, 1), r.Totals); // nota interna, recebida e a de 40 dias atrás ficam de fora
+        Assert.Equal(8, r.ByPeriod.Count); // 7 dias atrás até hoje, inclusive dias sem envio
+        Assert.Equal(5, r.ByPeriod.Sum(p => p.Total));
+
+        var byCamp = r.ByCampaign.Single(x => x.Key == camp.Id.ToString());
+        Assert.Equal(("Revenda dezembro", 3, 1, 1, 1), (byCamp.Label, byCamp.Total, byCamp.Delivered, byCamp.Read, byCamp.Failed));
+        Assert.Equal(2, r.ByCampaign.Single(x => x.Key == SentMessagesReport.NoCampaign).Total);
+
+        var ia = r.ByAuthor.Single(x => x.Key == SentMessagesReport.AuthorAi);
+        Assert.Equal(3, ia.Total); // a falha da campanha conta para a IA
+        Assert.Equal(1, r.ByAuthor.Single(x => x.Key == "user:" + adminId).Sent);
+        Assert.Equal(1, r.ByAuthor.Single(x => x.Key == SentMessagesReport.AuthorManual).Read);
+        Assert.Contains(r.FailureReasons, x => x.Label.Contains("Número não existe") && x.Value == 1);
+        Assert.Contains(r.CampaignOptions, o => o.Label == "Revenda dezembro");
+        Assert.Contains(r.AuthorOptions, o => o.Key == "user:" + adminId);
+
+        // Filtros: campanha e autor
+        var onlyCamp = (await c.GetFromJsonAsync<SentMessagesReportDto>(url + "&campaign=" + camp.Id))!;
+        Assert.Equal(3, onlyCamp.Totals.Total);
+        Assert.Equal(r.CampaignOptions.Count, onlyCamp.CampaignOptions.Count); // opções do filtro não somem
+        var onlyAgent = (await c.GetFromJsonAsync<SentMessagesReportDto>(url + "&author=user:" + adminId))!;
+        Assert.Equal(1, onlyAgent.Totals.Total);
+
+        // Hoje: agrupa por hora; 12 meses: por mês
+        Assert.Equal("hora", (await c.GetFromJsonAsync<SentMessagesReportDto>($"/api/reports/sent-messages?from={Uri.EscapeDataString(DateTimeOffset.Now.Date.ToString("o"))}"))!.Grouping);
+        var year = (await c.GetFromJsonAsync<SentMessagesReportDto>($"/api/reports/sent-messages?from={Uri.EscapeDataString(DateTimeOffset.Now.AddDays(-365).ToString("o"))}&to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(30).ToString("o"))}"))!;
+        Assert.Equal("mes", year.Grouping);
+        Assert.Equal(6, year.Totals.Total);
+
+        // CSV de mensagens traz campanha e status de entrega
+        var csv = System.Text.Encoding.UTF8.GetString(await c.GetByteArrayAsync($"/api/export/messages.csv?to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(30).ToString("o"))}"));
+        Assert.Contains("Status de entrega", csv);
+        Assert.Contains(";Revenda dezembro;", csv);
     }
 
     [Fact]

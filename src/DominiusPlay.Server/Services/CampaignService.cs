@@ -124,7 +124,7 @@ public class CampaignService(CrmDbContext db, SettingsStore settings, EvolutionG
         {
             var its = items.Where(i => i.CampaignId == c.Id).ToList();
             var ms = msgs.Where(m => m.CampaignId == c.Id).ToList();
-            var firstByLead = ms.GroupBy(m => m.LeadId).ToDictionary(g => g.Key, g => g.Min(x => x.Timestamp));
+            var firstByLead = ms.Where(m => m.Status != MessageStatus.Falhou).GroupBy(m => m.LeadId).ToDictionary(g => g.Key, g => g.Min(x => x.Timestamp));
             var replied = inbound.Where(i => firstByLead.TryGetValue(i.LeadId, out var t) && i.Timestamp > t).Select(i => i.LeadId).Distinct().Count();
             var eligible = c.Status == CampaignStatus.Rascunho ? (await EligibleLeadsAsync(c, ct)).Count : 0;
             result.Add(ToDto(c, its.Count(i => i.Status is MessageStatus.NaFila or MessageStatus.Enviando),
