@@ -21,7 +21,8 @@ PORTA="${PORTA:-5080}"
 
 echo "==> Pacotes do sistema"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
+# --allow-releaseinfo-change: PPAs de terceiros (ex.: ondrej/php) que mudaram o rótulo não bloqueiam a instalação
+apt-get update -qq --allow-releaseinfo-change || echo "   (aviso: algum repositório do apt falhou; seguindo com os pacotes já conhecidos)"
 apt-get install -y -qq curl git ca-certificates libicu-dev sqlite3 >/dev/null
 
 echo "==> .NET 10 SDK (para compilar)"
