@@ -39,7 +39,18 @@ public record NavItem(string Key, string Icon, string Title);
 
 public partial class MainWindowViewModel : ViewModelBase
 {
-    public static readonly NavItem[] Menu =
+    /// <summary>No navegador não há fonte de emoji: usa símbolos monocromáticos da fonte embutida.</summary>
+    private static NavItem[] BrowserIcons(NavItem[] items)
+    {
+        var map = new Dictionary<string, string>
+        {
+            ["disparo"] = "➤", ["atendimento"] = "☺", ["campanhas"] = "⚑", ["leads"] = "☷", ["conversas"] = "✉", ["automacoes"] = "⚡",
+            ["conhecimento"] = "❖", ["laboratorio"] = "⚗", ["mensagens"] = "✎", ["planos"] = "$", ["relatorios"] = "▤", ["equipe"] = "☻", ["integracoes"] = "⇄",
+        };
+        return items.Select(i => map.TryGetValue(i.Key, out var ic) ? i with { Icon = ic } : i).ToArray();
+    }
+
+    private static readonly NavItem[] MenuItems =
     [
         new("dashboard", "▦", "Visão geral"), new("disparo", "🚀", "Agentes de disparo"), new("atendimento", "🤖", "Agentes de atendimento"),
         new("campanhas", "📣", "Campanhas"), new("leads", "👥", "Contatos"), new("conversas", "💬", "Caixa de entrada"), new("automacoes", "⚡", "Automações"),
@@ -47,6 +58,9 @@ public partial class MainWindowViewModel : ViewModelBase
         new("planos", "💲", "Planos"), new("relatorios", "📊", "Relatórios"),
         new("equipe", "👤", "Equipe"), new("integracoes", "🔌", "Integrações"), new("config", "⚙", "Configurações"),
     ];
+
+    // Declarado depois de MenuItems: campos estáticos são inicializados na ordem do texto
+    public static readonly NavItem[] Menu = OperatingSystem.IsBrowser() ? BrowserIcons(MenuItems) : MenuItems;
 
     [ObservableProperty] private ViewModelBase _current;
     [ObservableProperty] private bool _isLoggedIn;
@@ -62,6 +76,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var login = new LoginViewModel();
         login.LoggedIn += OnLoggedIn;
         _current = login;
+        _ = login.AutoCheckAsync();
     }
 
     private async void OnLoggedIn(AppSession s) => await StartSessionAsync(s);
@@ -127,6 +142,7 @@ public partial class MainWindowViewModel : ViewModelBase
         var login = new LoginViewModel();
         login.LoggedIn += OnLoggedIn;
         Current = login;
+        _ = login.AutoCheckAsync();
     }
 }
 
@@ -141,6 +157,10 @@ public partial class LoginViewModel : ViewModelBase
     public event Action<AppSession>? LoggedIn;
 
     public LoginViewModel() { _serverUrl = _settings.ServerUrl; _userName = _settings.LastUser ?? ""; }
+    public bool ShowServerField => LocalSettings.ForcedServerUrl is null;
+
+    /// <summary>Navegador: o servidor é o próprio site, então já verifica se é o primeiro acesso.</summary>
+    public Task AutoCheckAsync() => ShowServerField ? Task.CompletedTask : CheckServer();
 
     [RelayCommand]
     private Task CheckServer() => Run(async () =>

@@ -32,7 +32,7 @@ public partial class KbView : UserControl
         if (files.Count != 1) return;
         await using var stream = await files[0].OpenReadAsync();
         var json = await new StreamReader(stream).ReadToEndAsync();
-        var overwrite = await ConfirmDialog.ShowAsync(top as Window, "Importar perguntas",
+        var overwrite = await ConfirmDialog.ShowAsync(top, "Importar perguntas",
             "Atualizar as perguntas que já existem com o mesmo ID?\n\nSim = atualiza (o histórico guarda a versão anterior). Não = só cria as novas.");
         await vm.ImportAsync(json, overwrite);
     }
@@ -40,7 +40,7 @@ public partial class KbView : UserControl
     private async void OnDelete(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not KbViewModel vm || vm.Selected is null) return;
-        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this) as Window, "Excluir pergunta",
+        if (await ConfirmDialog.ShowAsync(TopLevel.GetTopLevel(this), "Excluir pergunta",
                 $"Excluir {vm.Selected.Code} — {vm.Selected.Question}?\n\nPrefira Desativar se quiser só tirar da IA. A cópia completa fica no histórico."))
             await vm.DeleteSelectedAsync();
     }

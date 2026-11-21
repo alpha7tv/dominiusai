@@ -117,6 +117,7 @@ using (var scope = app.Services.CreateScope())
     await AgentSeed.EnsureAsync(db, scope.ServiceProvider.GetRequiredService<SettingsStore>());
 }
 
+app.UseCrmWebApp(); // telas no navegador (se publicadas em wwwroot)
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -81,7 +81,13 @@ public class ApiClient
     public async Task<ImportResponse> ImportFileAsync(string path, string? source, string? tags, string? consentSource = null)
     {
         await using var fs = File.OpenRead(path);
-        using var form = new MultipartFormDataContent { { new StreamContent(fs), "file", Path.GetFileName(path) } };
+        return await ImportFileAsync(fs, Path.GetFileName(path), source, tags, consentSource);
+    }
+
+    /// <summary>Importação a partir de um fluxo (navegador: o arquivo escolhido não tem caminho local).</summary>
+    public async Task<ImportResponse> ImportFileAsync(Stream fs, string fileName, string? source, string? tags, string? consentSource = null)
+    {
+        using var form = new MultipartFormDataContent { { new StreamContent(fs), "file", fileName } };
         if (source is not null) form.Add(new StringContent(source), "source");
         if (tags is not null) form.Add(new StringContent(tags), "tags");
         if (consentSource is not null) form.Add(new StringContent(consentSource), "consentSource");

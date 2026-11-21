@@ -1,45 +1,9 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+        xmlns:views="using:DominiusPlay.Desktop.Views"
         x:Class="DominiusPlay.Desktop.Views.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
-        x:Name="Root"
         Title="DOMINIUS PLAY AI CRM" Icon="/Assets/dominius.ico"
         Width="1440" Height="880" MinWidth="1100" MinHeight="680" WindowStartupLocation="CenterScreen">
-  <Grid ColumnDefinitions="Auto,*">
-    <!-- Menu lateral -->
-    <Border Grid.Column="0" Width="232" Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0"
-            IsVisible="{Binding IsLoggedIn}">
-      <DockPanel Margin="12,16">
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="6,0,0,22">
-          <Image Source="/Assets/dominius.png" Width="34" Height="34" />
-          <StackPanel>
-            <TextBlock Text="DOMINIUS PLAY" FontWeight="Bold" FontSize="15" Foreground="{StaticResource AccentBrush}" />
-            <TextBlock Text="AI CRM" Classes="muted" />
-          </StackPanel>
-        </StackPanel>
-        <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="6,12,0,0">
-          <TextBlock Text="{Binding ConnectionText}" Classes="muted" TextWrapping="Wrap" />
-          <TextBlock Text="{Binding Notification}" Classes="muted" Foreground="{StaticResource AccentBrush}" TextWrapping="Wrap" />
-          <TextBlock Text="{Binding UserName}" FontWeight="SemiBold" />
-          <Button Content="Sair" Command="{Binding LogoutCommand}" Padding="10,4" />
-        </StackPanel>
-        <ItemsControl x:Name="NavList" ItemsSource="{x:Static vm:MainWindowViewModel.Menu}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:NavItem">
-              <Button Classes="nav" Margin="0,1"
-                      Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).NavigateCommand}"
-                      CommandParameter="{Binding Key}">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                  <TextBlock Text="{Binding Icon}" Width="20" />
-                  <TextBlock Text="{Binding Title}" />
-                </StackPanel>
-              </Button>
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </DockPanel>
-    </Border>
-    <ContentControl Grid.Column="1" Grid.ColumnSpan="1" Content="{Binding Current}" Margin="0" />
-  </Grid>
+  <!-- As telas ficam em MainView, compartilhada com a versão para navegador -->
+  <views:MainView />
 </Window>
