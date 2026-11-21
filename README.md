@@ -26,6 +26,10 @@ clique em **Testar conexão** e **Registrar webhook**.
 "ConnectionStrings": { "Crm": "Host=...;Database=dominius_crm;Username=...;Password=..." }
 ```
 
+## Servidor em VPS Linux
+
+Guia completo em [docs/INSTALACAO-VPS.md](docs/INSTALACAO-VPS.md). Resumo: `sudo bash deploy/linux/instalar.sh crm.seudominio.com` instala o servidor com systemd, nginx e HTTPS, e o aplicativo Windows aponta para `https://crm.seudominio.com`.
+
 ## Gerar o instalador Windows
 
 No Windows, com .NET 10 SDK e Inno Setup 6: `powershell -File installer\build.ps1`
