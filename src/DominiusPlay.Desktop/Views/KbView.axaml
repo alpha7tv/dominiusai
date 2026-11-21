@@ -179,6 +179,7 @@
                   <TextBlock Text="Regras" Classes="h2" Margin="0,8,0,0" />
                   <TextBlock Text="Regras de créditos" Classes="muted" /><TextBox Text="{Binding CreditRules}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" />
                   <TextBlock Text="Regras de subpainéis (Master)" Classes="muted" /><TextBox Text="{Binding SubpanelRules}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" />
+                  <StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="Mensalistas a partir de (R$) já saem com Master:" Classes="muted" VerticalAlignment="Center" /><NumericUpDown Value="{Binding MasterMinPrice}" Minimum="0" FormatString="N2" Width="140" /></StackPanel>
                   <TextBlock Text="Ofertas" Classes="h2" Margin="0,8,0,0" />
                   <Grid ColumnDefinitions="Auto,10,*">
                     <CheckBox Content="Oferecer painel dividido entre amigos" IsChecked="{Binding FriendSplitEnabled}" VerticalAlignment="Bottom" />
@@ -186,8 +187,8 @@
                   </Grid>
                   <TextBlock Text="Ofertas promocionais vigentes (vazio = nenhuma)" Classes="muted" /><TextBox Text="{Binding Promotions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
                   <Grid ColumnDefinitions="Auto,10,*,10,140">
-                    <CheckBox Content="Modalidade por cliente ativo habilitada" IsChecked="{Binding PostPaidEnabled}" VerticalAlignment="Top" />
-                    <StackPanel Grid.Column="2"><TextBlock Text="Faixas (uma por linha)" Classes="muted" /><TextBox Text="{Binding PostPaidTiers}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" /></StackPanel>
+                    <CheckBox Content="Modalidade pós-paga por login ativo habilitada" IsChecked="{Binding PostPaidEnabled}" VerticalAlignment="Top" />
+                    <StackPanel Grid.Column="2"><TextBlock Text="Valor por login ativo (uma faixa por linha)" Classes="muted" /><TextBox Text="{Binding PostPaidTiers}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" /></StackPanel>
                     <StackPanel Grid.Column="4"><TextBlock Text="Taxa de adesão (R$)" Classes="muted" /><NumericUpDown Value="{Binding PostPaidAdhesionFee}" Minimum="0" FormatString="N2" /></StackPanel>
                   </Grid>
                 </StackPanel>

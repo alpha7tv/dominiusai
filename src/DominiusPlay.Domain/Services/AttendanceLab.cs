@@ -246,7 +246,7 @@ public static class AttendanceLab
         CommercialTrigger.PedePix => "Informar a chave Pix da configuração comercial e pedir para conferir o recebedor; aguardar confirmação do sistema",
         CommercialTrigger.QuerContratar => "Confirmar plano e condições, pedir primeiro nome e e-mail, orientar o Pix; não declarar contratação concluída",
         CommercialTrigger.QuerTestar or CommercialTrigger.QuerTestarPainel => "Enviar o link do teste do serviço (não existe teste do painel)",
-        CommercialTrigger.AmigoInteressado => "Apresentar o painel Master dividido (verificar permissão Master antes de prometer subpainel)",
+        CommercialTrigger.AmigoInteressado => "Apresentar o painel Master dividido (Mensalista 500, que já sai com permissão Master)",
         CommercialTrigger.JaPossuiPainel => "Qualificar painel e quantidade de ativos; avaliar apontamento",
         CommercialTrigger.MarcaPropria => "Apresentar a franquia e confirmar requisitos; encaminhar à implantação",
         CommercialTrigger.OrcamentoBaixo or CommercialTrigger.AchouCaro => "Tratar a objeção sem pressionar: plano de entrada; divisão com amigo se fizer sentido",

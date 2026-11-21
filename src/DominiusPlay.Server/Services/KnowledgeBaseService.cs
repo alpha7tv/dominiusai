@@ -108,8 +108,10 @@ public class KnowledgeBaseService(CrmDbContext db, TimeProvider clock)
             : $"- Parceiros ativos: {c.ActivePartnerApps}. Encerraram a locação (não apresentar como ativos): {c.FormerPartnerApps}.");
         sb.AppendLine("- Regras de créditos: " + c.CreditRules.Replace("\n", " "));
         sb.AppendLine("- Subpainéis: " + c.SubpanelRules.Replace("\n", " "));
+        if (KnowledgeRenderer.MasterPlans(c, kb.Plans) is { } master)
+            sb.AppendLine($"- Permissão Master: os mensalistas a partir de {CreditMath.Money(c.MasterMinPrice)} já saem com Master ({master}); os de valor menor não criam subpainéis.");
         sb.AppendLine(c.PostPaidEnabled
-            ? $"- Modalidade pós-paga por cliente ativo (habilitada; não misture com créditos): {c.PostPaidTiers.Replace("\n", "; ")}; adesão {CreditMath.Money(c.PostPaidAdhesionFee)}."
+            ? $"- Modalidade pós-paga por login ativo (habilitada; não misture com créditos): adesão do painel {CreditMath.Money(c.PostPaidAdhesionFee)} e {c.PostPaidTiers.Replace("\n", "; ")}."
             : "- Modalidade pós-paga por cliente ativo: NÃO está habilitada no momento; não ofereça (se perguntarem, diga que a equipe confirma a vigência).");
         if (!string.IsNullOrWhiteSpace(c.Promotions)) sb.AppendLine("- Ofertas promocionais vigentes: " + c.Promotions.Replace("\n", " "));
         sb.AppendLine("- Exemplos de margem são ilustrativos: margem bruta antes de despesas, nunca lucro líquido nem garantia.");

@@ -138,8 +138,11 @@ public class KnowledgeBaseTests
     {
         var t = CreditMath.TransferToSubpanel(500, 250, isMaster: false);
         Assert.False(t.Ok); Assert.Contains("Master", t.Error);
-        Assert.Contains("desde que seu painel seja Master", Reply("Posso criar sub-revendedores?"));
-        Assert.Contains("Se possuir a permissão Master", Reply("Posso dividir um painel com um amigo para pagar menos?"));
+        var sub = Reply("Posso criar sub-revendedores?");
+        Assert.Contains("a partir de R$ 100,00 mensais já saem com permissão Master: Mensalista 200 (R$ 100,00) e Mensalista 500 (R$ 200,00)", sub);
+        Assert.DoesNotContain("Mensalista 100 (", sub); // R$ 80: sem Master
+        Assert.Contains("já sai com permissão Master", Reply("Posso dividir um painel com um amigo para pagar menos?"));
+        Assert.True(Cfg.HasMaster(P(PlanCodes.Mensalista200))); Assert.False(Cfg.HasMaster(P(PlanCodes.Mensalista100))); Assert.False(Cfg.HasMaster(P(PlanCodes.Mensalista50)));
     }
 
     [Fact] public void T14_rateio_de_500_creditos_em_duas_partes_da_250_para_cada() => Assert.Equal(250, CreditMath.Split(500, 200m).CreditsEach);
@@ -561,7 +564,7 @@ public class KnowledgeBaseTests
             db.Settings.Remove(await db.Settings.SingleAsync(s => s.Key == SettingKeys.CommercialTable202611));
             db.Plans.RemoveRange(db.Plans.Where(p => p.Code == PlanCodes.Mensalista10));
             (await db.Plans.SingleAsync(p => p.Code == PlanCodes.Mensalista100)).MonthlyPrice = 90m;
-            db.Plans.Add(new Plan { Code = PlanRecommender.Mensalista50, Name = "Mensalista 50", MonthlyPrice = 50m, Credits = 50, Approval = ApprovalStatus.Aprovado });
+            // o Mensalista 50 (R$ 50, 50 créditos) da v0.4.0 já está no banco de teste e continua igual
             var e = await db.KbEntries.SingleAsync(x => x.Code == "DP-010");
             e.Answer = "Resposta editada pelo administrador."; // edição do admin
             return await db.SaveChangesAsync();
@@ -569,15 +572,66 @@ public class KnowledgeBaseTests
         var changes = await f.WithDb(db => SeedData.EnsureCommercialAsync(db));
         Assert.Contains(changes, x => x.Contains("Mensalista 10"));
         Assert.Contains(changes, x => x.Contains("Mensalista 100 v2"));
-        Assert.Contains(changes, x => x.Contains("Mensalista 50 arquivado"));
+        Assert.DoesNotContain(changes, x => x.Contains("Mensalista 50"));
         var plans = await f.WithDb(db => db.Plans.AsNoTracking().ToListAsync());
-        Assert.Equal(ApprovalStatus.Arquivado, plans.Single(p => p.Code == PlanRecommender.Mensalista50).Approval);
+        Assert.Contains(plans, p => p.Code == PlanCodes.Mensalista50 && p.Approval == ApprovalStatus.Aprovado && p.MonthlyPrice == 50m); // continua à venda
         Assert.Equal(80m, plans.Single(p => p.Code == PlanCodes.Mensalista100 && p.Approval == ApprovalStatus.Aprovado).MonthlyPrice);
         Assert.Contains(plans, p => p.Code == PlanCodes.Mensalista100 && p.Approval == ApprovalStatus.Arquivado && p.MonthlyPrice == 90m); // histórico preservado
         // rodar de novo não muda nada nem duplica a base
         Assert.Empty(await f.WithDb(db => SeedData.EnsureCommercialAsync(db)));
         Assert.Equal(75, await f.WithDb(db => db.KbEntries.CountAsync()));
         Assert.Equal("Resposta editada pelo administrador.", await f.WithDb(db => db.KbEntries.Where(x => x.Code == "DP-010").Select(x => x.Answer).SingleAsync()));
+    }
+
+    [Fact]
+    public async Task Confirmacoes_de_Carlos_atualizam_quem_instalou_a_primeira_041()
+    {
+        using var f = new CrmFactory();
+        var c = await f.AdminAsync();
+        // simula a primeira 0.4.1: Mensalista 50 arquivado, pós-pago desligado com faixas antigas, só o atendimento consulta a base, respostas antigas
+        await f.WithDb(async db =>
+        {
+            db.Settings.Remove(await db.Settings.SingleAsync(s => s.Key == SettingKeys.CommercialAnswers20261121));
+            foreach (var p in db.Plans.Where(p => p.Code == PlanCodes.Mensalista50)) p.Approval = ApprovalStatus.Arquivado;
+            var cfg = await db.Settings.SingleAsync(s => s.Key == SettingKeys.CommercialConfig);
+            cfg.Value = (new CommercialConfig() with { PostPaidEnabled = false, PostPaidTiers = CommercialConfig.LegacyPostPaidTiers, PixKey = "editada@exemplo.com" }).ToJson();
+            (await db.Settings.SingleAsync(s => s.Key == SettingKeys.KbAccess)).Value = "Atendimento";
+            (await db.KbEntries.SingleAsync(x => x.Code == "DP-053")).Answer = "Sim, desde que seu painel seja Master e possua as permissões correspondentes.";
+            var edited = await db.KbEntries.SingleAsync(x => x.Code == "DP-044");
+            edited.Answer = "Texto do administrador."; edited.UpdatedBy = "admin"; edited.Version = 2;
+            return await db.SaveChangesAsync();
+        });
+        var changes = await f.WithDb(db => SeedData.EnsureCommercialAsync(db));
+        Assert.Contains(changes, x => x.StartsWith("Mensalista 50 ativo"));
+        Assert.Contains(changes, x => x.StartsWith("pós-pago ligado"));
+        Assert.Contains("agente de disparo consulta a base", changes);
+        Assert.Contains("resposta DP-053", changes);
+        Assert.DoesNotContain("resposta DP-044", changes); // editada pelo administrador: não mexe
+
+        var plans = await f.WithDb(db => db.Plans.AsNoTracking().Where(p => p.Code == PlanCodes.Mensalista50).ToListAsync());
+        Assert.Single(plans, p => p.Approval == ApprovalStatus.Aprovado);
+        Assert.Contains(plans, p => p.Approval == ApprovalStatus.Arquivado); // histórico preservado
+        var cfgNow = CommercialConfig.FromJson(await f.WithDb(db => db.Settings.Where(s => s.Key == SettingKeys.CommercialConfig).Select(s => s.Value).SingleAsync()));
+        Assert.True(cfgNow.PostPaidEnabled);
+        Assert.Equal("R$ 5,00 por login ativo", cfgNow.PostPaidTiers);
+        Assert.Equal(60m, cfgNow.PostPaidAdhesionFee);
+        Assert.Equal("editada@exemplo.com", cfgNow.PixKey); // edição do administrador preservada
+        Assert.Contains("R$ 100,00", cfgNow.SubpanelRules);
+        Assert.Equal("Texto do administrador.", await f.WithDb(db => db.KbEntries.Where(x => x.Code == "DP-044").Select(x => x.Answer).SingleAsync()));
+        Assert.Contains("{planos_master}", await f.WithDb(db => db.KbEntries.Where(x => x.Code == "DP-053").Select(x => x.Answer).SingleAsync()));
+
+        var access = await c.GetFromJsonAsync<KbAccessDto>("/api/kb/access");
+        Assert.True(access!.Attendance); Assert.True(access.Dispatch);
+        Assert.Empty(await f.WithDb(db => SeedData.EnsureCommercialAsync(db))); // roda uma vez só
+    }
+
+    [Fact]
+    public void Pos_pago_e_Mensalista_50_aparecem_nas_respostas()
+    {
+        Assert.Contains("50 créditos por R$ 50,00", Reply("Quais pacotes de créditos vocês têm?"));
+        var post = Reply("É pós-pago?");
+        Assert.Contains("R$ 60,00", post); Assert.Contains("R$ 5,00 por login ativo", post);
+        Assert.False(Entries.Single(e => e.Code == "DP-044").NeedsConfirmation);
     }
 
     [Fact]

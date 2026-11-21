@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using DominiusPlay.Domain.Entities;
 
 namespace DominiusPlay.Domain.Services;
 
@@ -41,6 +42,7 @@ Créditos não são ilimitados.
 """.Trim();
     public string SubpanelRules { get; init; } = """
 Criar subpainel (sub-revendedor) exige painel com permissão Master.
+Os planos mensalistas a partir de R$ 100,00 por mês já saem com permissão Master.
 Os créditos distribuídos para sub-revendedores saem do saldo do painel principal.
 O titular continua responsável pelo pagamento integral à Dominius Play e pela distribuição dos créditos.
 O amigo/sub-revendedor não passa a ter contrato separado com a empresa; o rateio é combinado entre os participantes.
@@ -50,10 +52,19 @@ O amigo/sub-revendedor não passa a ter contrato separado com a empresa; o ratei
     /// <summary>Oferta "painel dividido entre amigos" habilitada e o plano usado.</summary>
     public bool FriendSplitEnabled { get; init; } = true;
     public string FriendSplitPlanCode { get; init; } = PlanCodes.Mensalista500;
-    /// <summary>Modalidade pós-paga por cliente ativo: só é oferecida se habilitada (precisa confirmação de vigência).</summary>
-    public bool PostPaidEnabled { get; init; }
-    public string PostPaidTiers { get; init; } = "Até 20 ativos: R$ 5,00 por ativo\nDe 21 a 50: R$ 3,00 por ativo\nDe 51 a 100: R$ 2,00 por ativo\nAcima de 100: R$ 1,50 por ativo";
+    /// <summary>Modalidade pós-paga por login ativo: só é oferecida se habilitada (confirmada por Carlos em 21/11/2026).</summary>
+    public bool PostPaidEnabled { get; init; } = true;
+    public string PostPaidTiers { get; init; } = DefaultPostPaidTiers;
     public decimal PostPaidAdhesionFee { get; init; } = 60m;
+    /// <summary>Mensalidade mínima a partir da qual o plano mensalista já sai com permissão Master.</summary>
+    public decimal MasterMinPrice { get; init; } = 100m;
+
+    public const string DefaultPostPaidTiers = "R$ 5,00 por login ativo";
+    /// <summary>Faixas cadastradas na primeira versão da 0.4.1 (antes da confirmação de Carlos).</summary>
+    public const string LegacyPostPaidTiers = "Até 20 ativos: R$ 5,00 por ativo\nDe 21 a 50: R$ 3,00 por ativo\nDe 51 a 100: R$ 2,00 por ativo\nAcima de 100: R$ 1,50 por ativo";
+
+    /// <summary>O plano dá direito a Master? Mensalistas a partir de <see cref="MasterMinPrice"/>.</summary>
+    public bool HasMaster(Plan plan) => plan.Credits is not null && plan.MonthlyPrice >= MasterMinPrice;
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never };
     public string ToJson() => JsonSerializer.Serialize(this, Json);
@@ -73,6 +84,7 @@ O amigo/sub-revendedor não passa a ter contrato separado com a empresa; o ratei
         if (TestHours is < 1 or > 72) errors.Add("Duração do teste entre 1 e 72 horas");
         if (PanelReleaseMinutes is < 1 or > 1440) errors.Add("Prazo de liberação do painel entre 1 e 1440 minutos");
         if (FranchiseDeliveryHours is < 1 or > 720) errors.Add("Prazo da franquia entre 1 e 720 horas");
+        if (MasterMinPrice < 0) errors.Add("Valor mínimo para Master não pode ser negativo");
         if (!AppCode.All(char.IsAsciiDigit) || !P2pCode.All(char.IsAsciiDigit)) errors.Add("Códigos Downloader só com números");
         return errors;
     }
@@ -80,6 +92,7 @@ O amigo/sub-revendedor não passa a ter contrato separado com a empresa; o ratei
 
 public static class PlanCodes
 {
+    public const string Mensalista50 = "MENSALISTA_50";
     public const string Mensalista10 = "MENSALISTA_10";
     public const string Mensalista100 = "MENSALISTA_100";
     public const string Mensalista200 = "MENSALISTA_200";

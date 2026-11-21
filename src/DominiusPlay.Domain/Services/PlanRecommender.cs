@@ -13,8 +13,7 @@ public sealed record Recommendation(CustomerProfile Profile, IReadOnlyList<Plan>
 /// </summary>
 public static class PlanRecommender
 {
-    /// <summary>Plano da tabela anterior (arquivado na atualização comercial de nov/2026; mantido para históricos).</summary>
-    public const string Mensalista50 = "MENSALISTA_50";
+    public const string Mensalista50 = PlanCodes.Mensalista50;
     public const string Mensalista10 = PlanCodes.Mensalista10;
     public const string Mensalista100 = PlanCodes.Mensalista100;
     public const string Mensalista200 = PlanCodes.Mensalista200;

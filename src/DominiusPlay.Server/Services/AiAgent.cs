@@ -96,7 +96,7 @@ ROTEIRO DE DIAGNÓSTICO (gradual, uma pergunta por vez, adaptando às respostas)
 - Se está começando: se conhece o funcionamento de um painel de revenda; se pretende começar com poucos clientes ou já tem carteira em formação; se o objetivo é renda complementar ou operação maior. Explique créditos de forma simples (1 crédito = 1 ativação de 30 dias, conforme regra comercial).
 
 RECOMENDAÇÃO:
-- Perfil A (iniciante, investimento reduzido): Mensalista 10 (plano de entrada) ou Mensalista 100. O Mensalista 500 merece destaque para operações maiores ou para dividir com um amigo (painel Master).
+- Perfil A (iniciante, investimento reduzido): Mensalista 10 (plano de entrada) ou Mensalista 100. O Mensalista 50 é o passo seguinte. Os mensalistas a partir de R$ 100 (200 e 500 créditos) já saem com permissão Master; o 500 merece destaque para operações maiores ou para dividir com um amigo.
 - Perfil B (já tem Painel Sigma e quer manter): pergunte a quantidade de ativos; até o limite do Apontamento Sigma 600 → esse plano (explique DNS exclusiva e que os requisitos técnicos de apontamento precisam ser confirmados); acima → Apontamento Ilimitado (limites físicos e políticas de uso continuam valendo).
 - Perfil C (quer marca própria: painel, DNS, app e identidade visual): Franquia Completa. Prazo estimado de entrega até 4 horas após confirmação dos requisitos, quando tecnicamente viável — nunca prometa de forma incondicional.
 - Perfil D (indeciso): continue o diagnóstico, não force plano; ofereça explicação ou atendimento humano.
@@ -358,7 +358,7 @@ CONTATO SEM NOME (listas importadas só com o número):
             ["clientes_ativos"] = new JsonObject { ["type"] = "integer", ["description"] = "Quantidade de clientes/logins ativos" },
             ["dor_principal"] = Enum("Principal dificuldade", System.Enum.GetNames<PainCategory>().Where(n => n != "Nenhuma")),
             ["dores_secundarias"] = new JsonObject { ["type"] = "array", ["items"] = Enum("Dor", System.Enum.GetNames<PainCategory>().Where(n => n != "Nenhuma")) },
-            ["plano_interesse"] = Enum("Código do plano de interesse", [PlanRecommender.Mensalista10, PlanRecommender.Mensalista100, PlanRecommender.Mensalista200, PlanRecommender.Mensalista500, PlanRecommender.Sigma600, PlanRecommender.ApontamentoIlimitado, PlanRecommender.Franquia]),
+            ["plano_interesse"] = Enum("Código do plano de interesse", [PlanRecommender.Mensalista10, PlanRecommender.Mensalista50, PlanRecommender.Mensalista100, PlanRecommender.Mensalista200, PlanRecommender.Mensalista500, PlanRecommender.Sigma600, PlanRecommender.ApontamentoIlimitado, PlanRecommender.Franquia]),
             ["faixa_investimento"] = Str("Faixa de investimento mencionada"),
             ["proxima_acao"] = Str("Próximo passo combinado"),
             ["nome"] = Str("Nome do cliente, se ele informar"),

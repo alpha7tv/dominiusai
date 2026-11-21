@@ -27,21 +27,25 @@ public static class SeedData
     {
         var by = "Administrador (tabela oficial nov/2026)";
         const string credits = "Créditos acumulativos com mensalidade em dia. 1 crédito = 1 ativação de 30 dias; renovação consome outro crédito; 12 meses = 12 créditos. Créditos não são ilimitados.";
+        var master = new CommercialConfig().MasterMinPrice;
         Plan M(string code, string name, decimal price, int c, int order, string profile, string extra = "") => new()
         {
             Code = code, Name = name, MonthlyPrice = price, Credits = c, SortOrder = order,
             Description = $"Plano mensalista com {c} créditos (custo de {CreditMath.Money(CreditMath.CostPerCredit(price, c))} por crédito). 1 crédito = 1 ativação de 30 dias." + extra,
-            Benefits = $"{c} créditos por mês\nCréditos acumulativos com pagamento em dia\nPainel de gerenciamento pelo navegador",
+            Benefits = $"{c} créditos por mês\nCréditos acumulativos com pagamento em dia\nPainel de gerenciamento pelo navegador"
+                + (price >= master ? "\nPermissão Master (cria subpainéis para sub-revendedores)" : ""),
             Limits = credits, TargetProfile = profile, Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
         };
         yield return M(PlanCodes.Mensalista10, "Mensalista 10", 30m, 10, 1, "Iniciante com investimento reduzido");
-        yield return M(PlanCodes.Mensalista100, "Mensalista 100", 80m, 100, 2, "Revendedores em início ou expansão");
-        yield return M(PlanCodes.Mensalista200, "Mensalista 200", 100m, 200, 3, "Revendedores em expansão");
-        yield return M(PlanCodes.Mensalista500, "Mensalista 500", 200m, 500, 4, "Operação maior ou painel Master dividido entre amigos",
-            " Com permissão Master, permite criar subpainéis (os créditos dos sub-revendedores saem do saldo principal).");
+        yield return M(PlanCodes.Mensalista50, "Mensalista 50", 50m, 50, 2, "Iniciante que já quer mais créditos");
+        yield return M(PlanCodes.Mensalista100, "Mensalista 100", 80m, 100, 3, "Revendedores em início ou expansão");
+        yield return M(PlanCodes.Mensalista200, "Mensalista 200", 100m, 200, 4, "Revendedores em expansão",
+            " Já sai com permissão Master: permite criar subpainéis (os créditos dos sub-revendedores saem do saldo principal).");
+        yield return M(PlanCodes.Mensalista500, "Mensalista 500", 200m, 500, 5, "Operação maior ou painel Master dividido entre amigos",
+            " Já sai com permissão Master: permite criar subpainéis (os créditos dos sub-revendedores saem do saldo principal).");
         yield return new Plan
         {
-            Code = PlanCodes.Apontamento600, Name = "Apontamento Sigma 600", MonthlyPrice = 250m, MaxActiveLogins = 600, SortOrder = 5,
+            Code = PlanCodes.Apontamento600, Name = "Apontamento Sigma 600", MonthlyPrice = 250m, MaxActiveLogins = 600, SortOrder = 6,
             Description = "Apontamento em painel compatível (ex.: Sigma): o cliente mantém o próprio painel e usa a infraestrutura da Dominius Play.",
             Benefits = "Até 600 logins ativos\nDNS exclusiva conforme condições técnicas\nContinua usando o próprio painel compatível",
             TechnicalRequirements = "Confirmar compatibilidade técnica do painel antes da contratação.",
@@ -49,7 +53,7 @@ public static class SeedData
         };
         yield return new Plan
         {
-            Code = PlanCodes.ApontamentoIlimitado, Name = "Apontamento Ilimitado", MonthlyPrice = 500m, MaxActiveLogins = null, SortOrder = 6,
+            Code = PlanCodes.ApontamentoIlimitado, Name = "Apontamento Ilimitado", MonthlyPrice = 500m, MaxActiveLogins = null, SortOrder = 7,
             Description = "Apontamento sem limite contratual de ativos, para operações de maior volume.",
             Benefits = "Sem limite contratual de ativos",
             Limits = "Não é capacidade técnica ilimitada de conexões simultâneas: condições de uso e capacidade devem ser verificadas pela equipe.",
@@ -57,7 +61,7 @@ public static class SeedData
         };
         yield return new Plan
         {
-            Code = PlanCodes.Franquia, Name = "Franquia Completa", MonthlyPrice = 650m, SortOrder = 7,
+            Code = PlanCodes.Franquia, Name = "Franquia Completa", MonthlyPrice = 650m, SortOrder = 8,
             Description = "Operação sob a marca comercial do cliente.",
             Benefits = "Painel de gerenciamento\nDNS exclusiva\nAplicativo personalizado com a marca do cliente\nEstrutura comercial personalizada",
             Limits = "Personalização e controle administrativo não significam propriedade dos servidores nem direitos de distribuição de conteúdos.",
@@ -82,7 +86,7 @@ public static class SeedData
             db.Settings.Add(new AppSetting { Key = SettingKeys.CommercialConfig, Value = new CommercialConfig().ToJson() });
             changes.Add("configuração comercial");
         }
-        if (await S(SettingKeys.KbAccess) is null) db.Settings.Add(new AppSetting { Key = SettingKeys.KbAccess, Value = "Atendimento" });
+        if (await S(SettingKeys.KbAccess) is null) db.Settings.Add(new AppSetting { Key = SettingKeys.KbAccess, Value = "Atendimento,Disparo" });
         if (!await db.KbEntries.AnyAsync(e => e.Base == DominiusKnowledge.BaseName, ct))
         {
             foreach (var e in DominiusKnowledge.Entries())
@@ -108,14 +112,60 @@ public static class SeedData
                 db.Plans.Add(official);
                 changes.Add($"plano {official.Name} v{official.Version}");
             }
-            foreach (var legacy in all.Where(p => p.Code == PlanRecommender.Mensalista50 && p.Approval == ApprovalStatus.Aprovado))
-            { legacy.Approval = ApprovalStatus.Arquivado; legacy.UpdatedAt = now; changes.Add("Mensalista 50 arquivado (fora da tabela oficial)"); }
             foreach (var agent in await db.AgentProfiles.Where(a => a.AllowedAnswers.Contains(DefaultPixSentence)).ToListAsync(ct))
             { agent.AllowedAnswers = agent.AllowedAnswers.Replace(DefaultPixSentence, NewPixSentence); changes.Add($"agente {agent.Name}: regra do Pix"); }
             db.Settings.Add(new AppSetting { Key = SettingKeys.CommercialTable202611, Value = "true" });
             if (changes.Count > 0)
                 db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "commercial.upgrade", EntityType = "Plan", Details = "Tabela oficial nov/2026: " + string.Join(", ", changes) });
             await db.SaveChangesAsync(ct);
+        }
+
+        if (await S(SettingKeys.CommercialAnswers20261121) is null)
+        {
+            var done = new List<string>();
+            var now = DateTimeOffset.UtcNow;
+            // 1. Mensalista 50 continua à venda (a primeira 0.4.1 arquivava): volta como versão aprovada, histórico preservado
+            var m50 = CampaignPlans().Single(p => p.Code == PlanCodes.Mensalista50);
+            var plans50 = await db.Plans.Where(p => p.Code == PlanCodes.Mensalista50).ToListAsync(ct);
+            if (!plans50.Any(p => p.Approval == ApprovalStatus.Aprovado))
+            {
+                m50.Version = plans50.Select(p => p.Version).DefaultIfEmpty(0).Max() + 1;
+                db.Plans.Add(m50);
+                done.Add($"Mensalista 50 ativo (v{m50.Version})");
+            }
+            // 2. pós-pago confirmado (R$ 60 de adesão + R$ 5 por login ativo); valores editados pelo administrador são mantidos
+            var cfgRow = await S(SettingKeys.CommercialConfig);
+            if (cfgRow is not null)
+            {
+                var cfg = CommercialConfig.FromJson(cfgRow.Value);
+                var tiers = cfg.PostPaidTiers.Trim() == CommercialConfig.LegacyPostPaidTiers ? CommercialConfig.DefaultPostPaidTiers : cfg.PostPaidTiers;
+                var subpanel = cfg.SubpanelRules.Contains("permissão Master.") && !cfg.SubpanelRules.Contains("R$ 100")
+                    ? new CommercialConfig().SubpanelRules : cfg.SubpanelRules;
+                var upd = cfg with { PostPaidEnabled = true, PostPaidTiers = tiers, SubpanelRules = subpanel };
+                if (upd != cfg) { cfgRow.Value = upd.ToJson(); done.Add("pós-pago ligado (adesão + R$ 5,00 por login ativo), Master a partir de R$ 100,00"); }
+            }
+            // 3. agente de disparo também consulta a base
+            var acc = await S(SettingKeys.KbAccess);
+            if (acc is not null && !acc.Value.Contains("Disparo", StringComparison.OrdinalIgnoreCase))
+            { acc.Value = string.IsNullOrWhiteSpace(acc.Value) ? "Atendimento,Disparo" : acc.Value + ",Disparo"; done.Add("agente de disparo consulta a base"); }
+            // 4. respostas reescritas, só onde o administrador ainda não editou
+            var codes = DominiusKnowledge.RevisedOn20261121.Select(DominiusKnowledge.Code).ToList();
+            var seeds = DominiusKnowledge.Entries().Where(e => codes.Contains(e.Code)).ToDictionary(e => e.Code);
+            foreach (var e in await db.KbEntries.Where(e => e.Base == DominiusKnowledge.BaseName && codes.Contains(e.Code)).ToListAsync(ct))
+            {
+                if (e.UpdatedBy != DominiusKnowledge.SeedAuthor || e.Version != 1) continue;
+                var seed = seeds[e.Code];
+                if (e.Answer == seed.Answer && e.Products == seed.Products && e.NeedsConfirmation == seed.NeedsConfirmation) continue;
+                e.Answer = seed.Answer; e.Products = seed.Products; e.Keywords = seed.Keywords; e.NeedsConfirmation = seed.NeedsConfirmation;
+                e.Version++; e.UpdatedAt = now;
+                db.KbEntryRevisions.Add(KbHistory.Revision(e, "editada", "Sistema (confirmação comercial 21/11/2026)"));
+                done.Add($"resposta {e.Code}");
+            }
+            db.Settings.Add(new AppSetting { Key = SettingKeys.CommercialAnswers20261121, Value = "true" });
+            if (done.Count > 0)
+                db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "commercial.upgrade", EntityType = "Plan", Details = "Confirmações comerciais de 21/11/2026: " + string.Join(", ", done) });
+            await db.SaveChangesAsync(ct);
+            changes.AddRange(done);
         }
         return changes;
     }

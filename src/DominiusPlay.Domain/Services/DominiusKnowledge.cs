@@ -21,17 +21,21 @@ public static class DominiusKnowledge
     public const string CatNovidades = "G — Novidades e ofertas";
     public static readonly string[] Categories = [CatPrincipais, CatIniciantes, CatInfra, CatCreditos, CatPainel, CatNegocio, CatNovidades];
 
-    private const string M10 = PlanCodes.Mensalista10, M100 = PlanCodes.Mensalista100, M200 = PlanCodes.Mensalista200, M500 = PlanCodes.Mensalista500,
+    private const string M50 = PlanCodes.Mensalista50, M10 = PlanCodes.Mensalista10, M100 = PlanCodes.Mensalista100, M200 = PlanCodes.Mensalista200, M500 = PlanCodes.Mensalista500,
         AP = PlanCodes.Apontamento600, AI = PlanCodes.ApontamentoIlimitado, FR = PlanCodes.Franquia;
-    private const string Mensalistas = M10 + "," + M100 + "," + M200 + "," + M500;
+    private const string Mensalistas = M10 + "," + M50 + "," + M100 + "," + M200 + "," + M500;
 
     private static KbEntry E(int n, string cat, string q, string[] variations, string answer, string keywords, string products = "", int priority = 3, bool confirm = false) => new()
     {
         Base = BaseName, Code = Code(n), Category = cat, Question = q, Variations = string.Join("\n", variations), Answer = answer.Trim(),
-        Keywords = keywords, Products = products, Priority = priority, NeedsConfirmation = confirm, Status = KbStatus.Publicado, Source = Source, UpdatedBy = "Sistema (carga inicial)",
+        Keywords = keywords, Products = products, Priority = priority, NeedsConfirmation = confirm, Status = KbStatus.Publicado, Source = Source, UpdatedBy = SeedAuthor,
     };
 
     public static string Code(int n) => $"DP-{n:000}";
+
+    /// <summary>Respostas reescritas com as confirmações de Carlos (21/11/2026): Mensalista 50, pós-pago e Master.</summary>
+    public static readonly int[] RevisedOn20261121 = [9, 41, 44, 47, 53, 72];
+    public const string SeedAuthor = "Sistema (carga inicial)";
 
     public static IReadOnlyList<KbEntry> Entries() =>
     [
@@ -70,7 +74,7 @@ public static class DominiusKnowledge
             "mensalista, pré-pago, pre pago, modalidades, mensal", Mensalistas + "," + AP + "," + FR, 2),
         E(9, CatPrincipais, "Qual é o valor de cada cliente ativo?",
             ["Quanto sai cada cliente?", "Qual o custo por cliente?", "Quanto custa cada ativação?", "Qual o custo por crédito?"],
-            "No plano de {creditos:MENSALISTA_10} créditos por {preco:MENSALISTA_10}, o custo é de {custo_credito:MENSALISTA_10} por ativação. No plano de {creditos:MENSALISTA_100} créditos por {preco:MENSALISTA_100}, o custo é de {custo_credito:MENSALISTA_100}. Também existe uma modalidade pós-paga por cliente ativo, sujeita à tabela vigente.",
+            "No plano de {creditos:MENSALISTA_10} créditos por {preco:MENSALISTA_10}, o custo é de {custo_credito:MENSALISTA_10} por ativação. No plano de {creditos:MENSALISTA_100} créditos por {preco:MENSALISTA_100}, o custo é de {custo_credito:MENSALISTA_100}. Também existe a modalidade pós-paga: {pospago}, com adesão de {adesao_pospago} para o painel.",
             "cada cliente, por cliente, cliente ativo, custo por crédito, ativação", M10 + "," + M100, 2),
         E(10, CatPrincipais, "Vocês oferecem suporte 24 horas?",
             ["O suporte é 24h?", "Tem suporte de madrugada?", "Qual o horário do suporte?", "Vocês dão suporte?"],
@@ -204,7 +208,7 @@ public static class DominiusKnowledge
         // ---------------------------------------------------------------- D — créditos, pagamentos e contratos
         E(41, CatCreditos, "Qual é a quantidade mínima de créditos?",
             ["Qual o menor pacote de créditos?", "Quais pacotes de créditos vocês têm?", "Qual a tabela de créditos?"],
-            "Nosso plano inicial possui {creditos:MENSALISTA_10} créditos por {preco:MENSALISTA_10} mensais. Também temos pacotes maiores: {creditos:MENSALISTA_100} créditos por {preco:MENSALISTA_100}, {creditos:MENSALISTA_200} por {preco:MENSALISTA_200} e {creditos:MENSALISTA_500} por {preco:MENSALISTA_500}, conforme a tabela vigente.",
+            "Nosso plano inicial possui {creditos:MENSALISTA_10} créditos por {preco:MENSALISTA_10} mensais. Também temos pacotes maiores: {creditos:MENSALISTA_50} créditos por {preco:MENSALISTA_50}, {creditos:MENSALISTA_100} créditos por {preco:MENSALISTA_100}, {creditos:MENSALISTA_200} por {preco:MENSALISTA_200} e {creditos:MENSALISTA_500} por {preco:MENSALISTA_500}, conforme a tabela vigente.",
             "quantidade mínima, menor pacote, pacotes, tabela de créditos", Mensalistas, 1),
         E(42, CatCreditos, "Posso comprar créditos adicionais a qualquer momento?",
             ["Posso comprar mais créditos?", "E se meus créditos acabarem?", "Dá para comprar crédito avulso?"],
@@ -216,8 +220,8 @@ public static class DominiusKnowledge
             "vencimento, mensalidade, data de pagamento", Mensalistas),
         E(44, CatCreditos, "Existe taxa de adesão?",
             ["Tem taxa de adesão?", "Tem taxa de entrada?", "Paga alguma taxa para começar?"],
-            "A taxa depende da modalidade. Na modalidade pós-paga por cliente ativo, a taxa anteriormente informada é de {adesao_pospago}. Consulte as condições vigentes.",
-            "taxa, adesão, taxa de entrada", "", 3, true),
+            "A taxa depende da modalidade. Na modalidade pós-paga, a adesão do painel é de {adesao_pospago} e depois você paga {pospago}.",
+            "taxa, adesão, taxa de entrada, pós-pago, login ativo", "", 3),
         E(45, CatCreditos, "Posso alterar meu plano posteriormente?",
             ["Posso mudar de plano depois?", "Dá para fazer upgrade?", "Posso trocar de plano?"],
             "Você pode solicitar a análise de mudança de plano. Nossa equipe verificará valores, condições e tratamento do saldo existente.",
@@ -228,7 +232,7 @@ public static class DominiusKnowledge
             "pix, cartão, boleto, forma de pagamento, chave pix, pagamento", "", 1),
         E(47, CatCreditos, "O pagamento é antecipado ou pós-pago?",
             ["Paga antes ou depois?", "É pós-pago?", "O pagamento é adiantado?"],
-            "Os planos mensalistas são pagos conforme o vencimento contratado. Também temos uma modalidade por cliente ativo pós-paga, sujeita às condições vigentes.",
+            "Os planos mensalistas são pagos conforme o vencimento contratado. Também temos a modalidade pós-paga: adesão de {adesao_pospago} para o painel e {pospago}.",
             "antecipado, pós-pago, pos pago, adiantado", Mensalistas),
         E(48, CatCreditos, "Existe contrato de fidelidade?",
             ["Tem fidelidade?", "Tem multa para cancelar?", "Fico preso no contrato?"],
@@ -254,7 +258,7 @@ public static class DominiusKnowledge
             "ativos e vencidos, vencidos, filtro"),
         E(53, CatPainel, "Posso criar sub-revendedores?",
             ["Posso ter sub-revenda?", "Dá para criar subpainel?", "Como funciona o painel Master?", "Posso revender para outros revendedores?"],
-            "Sim, desde que seu painel seja Master e possua as permissões correspondentes. Você cria subpainéis e define o valor de revenda. Os créditos utilizados pelos sub-revendedores são descontados do saldo do seu painel principal.",
+            "Sim. Os planos a partir de {master_minimo} mensais já saem com permissão Master: {planos_master}. Com o Master, você cria subpainéis e define o valor de revenda. Os créditos utilizados pelos sub-revendedores são descontados do saldo do seu painel principal.",
             "sub-revendedor, sub revenda, subpainel, master", Mensalistas, 1),
         E(54, CatPainel, "Consigo bloquear e reativar clientes?",
             ["Dá para bloquear um cliente?", "Posso suspender um cliente que não pagou?"],
@@ -334,7 +338,7 @@ public static class DominiusKnowledge
             "parceiros, playsim, assist, magic player, aplicativos parceiros", "", 2),
         E(72, CatNovidades, "Posso dividir um painel com um amigo para pagar menos?",
             ["Meu amigo também quer trabalhar", "Posso dividir com um sócio?", "Dá para rachar o painel?", "Como pagar menos por crédito?"],
-            "Sim! Temos uma opção interessante para quem deseja dividir o investimento. Nosso painel de {creditos:MENSALISTA_500} créditos custa {preco:MENSALISTA_500} mensais. Se possuir a permissão Master, você pode criar um subpainel e distribuir 250 créditos para seu amigo, ficando com os outros 250. Assim, vocês podem combinar um rateio de R$ 100 por pessoa, com custo equivalente de {custo_credito:MENSALISTA_500} por crédito. O titular continua responsável pelo pagamento integral e pela administração dos créditos.",
+            "Sim! Temos uma opção interessante para quem deseja dividir o investimento. Nosso painel de {creditos:MENSALISTA_500} créditos custa {preco:MENSALISTA_500} mensais. Como esse plano já sai com permissão Master, você pode criar um subpainel e distribuir 250 créditos para seu amigo, ficando com os outros 250. Assim, vocês podem combinar um rateio de R$ 100 por pessoa, com custo equivalente de {custo_credito:MENSALISTA_500} por crédito. O titular continua responsável pelo pagamento integral e pela administração dos créditos.",
             "amigo, dividir, sócio, rachar, rateio, pagar menos", M500, 1),
         E(73, CatNovidades, "Qual aplicativo posso testar?",
             ["Qual aplicativo vocês usam?", "Tem aplicativo oficial?", "Qual o código do Downloader?", "Como baixo o app?"],

@@ -303,7 +303,7 @@ public class UiTests
 
         await main.NavigateCommand.ExecuteAsync("planos");
         await Pump();
-        Assert.Equal(7, Assert.IsType<PlansViewModel>(main.Current).Plans.Count);
+        Assert.Equal(8, Assert.IsType<PlansViewModel>(main.Current).Plans.Count);
         Shot(win, "06-planos");
 
         await main.NavigateCommand.ExecuteAsync("integracoes");

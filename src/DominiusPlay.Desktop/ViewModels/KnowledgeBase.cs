@@ -82,6 +82,7 @@ public partial class KbViewModel(AppSession s) : ViewModelBase
     [ObservableProperty] private bool _postPaidEnabled;
     [ObservableProperty] private string _postPaidTiers = "";
     [ObservableProperty] private decimal? _postPaidAdhesionFee;
+    [ObservableProperty] private decimal? _masterMinPrice;
     [ObservableProperty] private string _commercialInfo = "";
 
     // acesso dos agentes
@@ -215,7 +216,7 @@ public partial class KbViewModel(AppSession s) : ViewModelBase
         FormerPartnerApps = c.FormerPartnerApps; TestHours = c.TestHours; PanelReleaseMinutes = c.PanelReleaseMinutes; FranchiseDeliveryHours = c.FranchiseDeliveryHours;
         YearsInMarket = c.YearsInMarket; ContractRequirements = c.ContractRequirements; SupportInfo = c.SupportInfo; CreditRules = c.CreditRules; SubpanelRules = c.SubpanelRules;
         Promotions = c.Promotions; FriendSplitEnabled = c.FriendSplitEnabled; FriendSplitPlanCode = c.FriendSplitPlanCode; PostPaidEnabled = c.PostPaidEnabled;
-        PostPaidTiers = c.PostPaidTiers; PostPaidAdhesionFee = c.PostPaidAdhesionFee;
+        PostPaidTiers = c.PostPaidTiers; PostPaidAdhesionFee = c.PostPaidAdhesionFee; MasterMinPrice = c.MasterMinPrice;
         var acc = await s.Api.KbAccessAsync(); AttendanceAccess = acc.Attendance; DispatchAccess = acc.Dispatch;
         CommercialHistory.Clear(); foreach (var h in await s.Api.CommercialHistoryAsync()) CommercialHistory.Add(h);
     }
@@ -231,7 +232,7 @@ public partial class KbViewModel(AppSession s) : ViewModelBase
             PanelReleaseMinutes = (int)(PanelReleaseMinutes ?? 5), FranchiseDeliveryHours = (int)(FranchiseDeliveryHours ?? 4), YearsInMarket = (int)(YearsInMarket ?? 10),
             ContractRequirements = ContractRequirements.Trim(), SupportInfo = SupportInfo.Trim(), CreditRules = CreditRules.Trim(), SubpanelRules = SubpanelRules.Trim(),
             Promotions = Promotions.Trim(), FriendSplitEnabled = FriendSplitEnabled, FriendSplitPlanCode = FriendSplitPlanCode.Trim().ToUpperInvariant(),
-            PostPaidEnabled = PostPaidEnabled, PostPaidTiers = PostPaidTiers.Trim(), PostPaidAdhesionFee = PostPaidAdhesionFee ?? 0,
+            PostPaidEnabled = PostPaidEnabled, PostPaidTiers = PostPaidTiers.Trim(), PostPaidAdhesionFee = PostPaidAdhesionFee ?? 0, MasterMinPrice = MasterMinPrice ?? 0,
         };
         var errors = c.Validate();
         if (errors.Count > 0) { Error = string.Join("; ", errors); return; }

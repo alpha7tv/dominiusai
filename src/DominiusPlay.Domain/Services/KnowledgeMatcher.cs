@@ -93,6 +93,7 @@ public static class KnowledgeRenderer
         ("{p2p_codigo}", "Código Downloader do app P2P"), ("{p2p_link}", "Link do app P2P"), ("{smarttv_apps}", "Apps para Smart TV antigas"),
         ("{parceiros_antigos}", "Parceiros que encerraram a locação"), ("{teste_horas}", "Duração do teste (h)"), ("{liberacao_minutos}", "Liberação do painel após Pix (min)"),
         ("{franquia_horas}", "Prazo de entrega da franquia (h)"), ("{anos_mercado}", "Anos de mercado"), ("{adesao_pospago}", "Taxa de adesão pós-pago"),
+        ("{pospago}", "Valor do pós-pago por login ativo"), ("{master_minimo}", "Mensalidade mínima com Master"), ("{planos_master}", "Planos que já saem com Master"),
         ("{preco:CODIGO}", "Preço mensal do plano aprovado"), ("{creditos:CODIGO}", "Créditos do plano"), ("{custo_credito:CODIGO}", "Custo por crédito do plano"),
         ("{logins:CODIGO}", "Limite de logins ativos do plano"),
     ];
@@ -125,6 +126,8 @@ public static class KnowledgeRenderer
                 "smarttv_apps" => cfg.SmartTvApps, "parceiros_antigos" => cfg.FormerPartnerApps, "teste_horas" => cfg.TestHours.ToString(PtBr),
                 "liberacao_minutos" => cfg.PanelReleaseMinutes.ToString(PtBr), "franquia_horas" => cfg.FranchiseDeliveryHours.ToString(PtBr),
                 "anos_mercado" => cfg.YearsInMarket.ToString(PtBr), "adesao_pospago" => CreditMath.Money(cfg.PostPaidAdhesionFee),
+                "pospago" => cfg.PostPaidTiers.Replace("\n", "; "), "master_minimo" => CreditMath.Money(cfg.MasterMinPrice),
+                "planos_master" => MasterPlans(cfg, activePlans),
                 _ => null,
             };
             if (string.IsNullOrWhiteSpace(v)) { warnings.Add($"Marcador {m.Value} desconhecido ou vazio"); return Missing; }
@@ -133,11 +136,18 @@ public static class KnowledgeRenderer
         return new Rendered(text, warnings);
     }
 
+    /// <summary>Planos mensalistas ativos que já saem com permissão Master (ex.: "Mensalista 200 (R$ 100,00) e Mensalista 500 (R$ 200,00)").</summary>
+    public static string? MasterPlans(CommercialConfig cfg, IReadOnlyList<Plan> activePlans)
+    {
+        var names = activePlans.Where(cfg.HasMaster).OrderBy(p => p.MonthlyPrice).Select(p => $"{p.Name} ({CreditMath.Money(p.MonthlyPrice)})").ToList();
+        return names.Count switch { 0 => null, 1 => names[0], _ => string.Join(", ", names[..^1]) + " e " + names[^1] };
+    }
+
     /// <summary>Marcadores usados no texto que não existem (para validar antes de salvar).</summary>
     public static IReadOnlyList<string> UnknownPlaceholders(string template)
     {
         var known = new HashSet<string> { "empresa","site","link_teste","link_player","pix","forma_pagamento","app_codigo","app_link","p2p_codigo","p2p_link",
-            "smarttv_apps","parceiros_antigos","teste_horas","liberacao_minutos","franquia_horas","anos_mercado","adesao_pospago" };
+            "smarttv_apps","parceiros_antigos","teste_horas","liberacao_minutos","franquia_horas","anos_mercado","adesao_pospago","pospago","master_minimo","planos_master" };
         var planKeys = new HashSet<string> { "preco", "creditos", "custo_credito", "logins" };
         return Placeholder.Matches(template).Where(m => m.Groups["p"].Success && m.Groups["p"].Value.Length > 0 ? !planKeys.Contains(m.Groups["k"].Value) : !known.Contains(m.Groups["k"].Value))
             .Select(m => m.Value).Distinct().ToList();

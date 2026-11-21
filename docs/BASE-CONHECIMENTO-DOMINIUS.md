@@ -1,4 +1,4 @@
-# Base de conhecimento comercial Dominius Play — entrega v0.4.1
+# Base de conhecimento comercial Dominius Play — entrega v0.4.1 + 0.4.2
 
 Implementação do "Prompt Mestre" (novembro de 2026) sobre o sistema existente, sem reconstruir nada:
 mesmos agentes, mesma máquina de estados da conversa, mesmo banco (atualização aditiva), mesmas telas.
@@ -61,17 +61,24 @@ Leitura: toda a equipe. Alterações: somente Administrador (o atendente recebe 
 
 ## 6. Testes
 
-`dotnet test`: 221 testes passando (177 anteriores ajustados + 44 novos). Os 35 da parte 13 estão em `KnowledgeBaseTests` com o número no nome (T01…T35).
+`dotnet test`: 223 testes passando (177 anteriores ajustados + 46 novos). Os 35 da parte 13 estão em `KnowledgeBaseTests` com o número no nome (T01…T35).
 
-## 7. Precisa de confirmação de Carlos
+## 7. Confirmações de Carlos (21/11/2026) — versão 0.4.2
 
-1. **Mensalista 50** (R$ 50) não está na tabela nova e foi arquivado. Se ainda vende esse plano, reaprove em Planos.
-2. **Modalidade pós-paga por cliente ativo**: cadastrada, mas **desligada** (o Prompt Mestre pede verificar se está vigente). Ligue em Base → Comercial quando confirmar.
-3. **Permissão Master** de cada painel: o sistema não tem acesso ao painel Sigma, então a IA sempre diz "se o seu painel for Master". Confirmar quais planos já saem como Master.
-4. Respostas marcadas "precisa confirmação" (19, 32, 33, 35, 36, 42, 44, 45, 48, 50, 59, 62, 66, 68, 69, 70): a IA responde com o texto da base e oferece a confirmação da equipe.
-5. Taxa de adesão de R$ 60 e faixas por cliente ativo: valores "anteriormente informados".
-6. O agente de disparo **não** consulta a base por padrão (só o de atendimento). Libere em Base → Comercial se quiser.
+| Pergunta | Resposta | O que mudou |
+|---|---|---|
+| Mensalista 50 | Ativo | Volta à tabela oficial (R$ 50, 50 créditos). Quem instalou a primeira 0.4.1 recebe uma nova versão aprovada; a arquivada fica no histórico. Aparece na resposta DP-041 (pacotes). |
+| Pós-pago | R$ 60,00 de adesão do painel + R$ 5,00 por login ativo | Ligado por padrão. Faixas antigas trocadas por "R$ 5,00 por login ativo" (só se ainda eram as faixas antigas). Respostas DP-009, DP-044 e DP-047 usam `{adesao_pospago}` e `{pospago}`; DP-044 deixou de "precisar confirmação". |
+| Master | Planos de R$ 100,00 para cima | Novo campo "Mensalistas a partir de (R$) já saem com Master" (padrão R$ 100). Hoje: Mensalista 200 (R$ 100) e Mensalista 500 (R$ 200). Marcadores `{master_minimo}` e `{planos_master}`; respostas DP-053 e DP-072 e o bloco do prompt dizem quais planos têm Master. |
+| Agente de disparo consulta a base | Sim | Acesso padrão "Atendimento,Disparo"; bancos existentes recebem "Disparo". |
 
-## 8. Configuração manual
+A atualização roda uma vez (marca `commercial.answers.2026-11-21`), fica na Auditoria e **não mexe** em respostas, chave Pix ou valores que o administrador já editou.
+
+## 8. Ainda precisa de confirmação
+
+1. Apontamento e Franquia não são planos de créditos; a regra do Master foi aplicada só aos mensalistas. Se também saem com Master, avise.
+2. Respostas marcadas "precisa confirmação" (19, 32, 33, 35, 36, 42, 45, 48, 50, 59, 62, 66, 68, 69, 70): a IA responde com o texto da base e oferece a confirmação da equipe.
+
+## 9. Configuração manual
 
 Nenhuma obrigatória. Depois de instalar: abra **Base de conhecimento → Comercial**, confira a chave Pix e os links e rode os 11 perfis no **Laboratório IA** antes de ligar a IA para clientes reais.
