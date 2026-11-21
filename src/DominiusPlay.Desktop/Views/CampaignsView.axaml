@@ -26,7 +26,9 @@
                 </DockPanel>
                 <TextBlock Text="{Binding Schedule}" Classes="muted" />
                 <TextBlock Text="{Binding Template}" Classes="muted" />
-                <TextBlock Text="{Binding Numbers}" FontSize="12" />
+                <TextBlock Text="{Binding Numbers}" FontSize="12" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Extras}" Classes="muted" />
+                <TextBlock Text="{Binding PauseReason}" Classes="error" IsVisible="{Binding HasPauseReason}" />
               </StackPanel>
             </Border>
           </DataTemplate>
@@ -43,7 +45,26 @@
             <ComboBox ItemsSource="{Binding ApprovedTemplates}" SelectedItem="{Binding Template}" PlaceholderText="Aprove um modelo em Mensagens" HorizontalAlignment="Stretch">
               <ComboBox.ItemTemplate><DataTemplate x:DataType="c:TemplateDto"><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
             </ComboBox>
+            <TextBlock Text="Agente de disparo" Classes="muted" />
+            <ComboBox ItemsSource="{Binding DispatchAgents}" SelectedItem="{Binding DispatchAgent}" PlaceholderText="Configuração global (sem agente)" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate><DataTemplate x:DataType="c:AgentDto"><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
+            </ComboBox>
             <TextBlock Text="Somente leads com estas tags (vírgula; vazio = todos autorizados)" Classes="muted" TextWrapping="Wrap" /><TextBox Text="{Binding TagFilter}" />
+            <TextBlock Text="Segmento (vazio = todos)" Classes="muted" /><TextBox Text="{Binding Segment}" Watermark="ex.: Revendedor" />
+            <TextBlock Text="Data de início (opcional, dd/mm/aaaa hh:mm)" Classes="muted" /><TextBox Text="{Binding StartDate}" />
+            <CheckBox Content="Personalizar cada abordagem com IA (a partir do modelo aprovado)" IsChecked="{Binding AiPersonalization}" />
+            <TextBlock Text="A IA só varia a redação: mantém empresa e opção SAIR, não inventa preço, link nem dados. Se falhar, vai o modelo aprovado. Desligado no modo Cloud API oficial." Classes="muted" TextWrapping="Wrap" />
+            <TextBlock Text="Prompt da campanha (para a personalização)" Classes="muted" /><TextBox Text="{Binding Prompt}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="50" />
+            <TextBlock Text="Acompanhamento (para quem não respondeu)" Classes="muted" />
+            <ComboBox ItemsSource="{Binding FollowUpTemplates}" SelectedItem="{Binding FollowUpTemplate}" PlaceholderText="Aprove um modelo de Acompanhamento em Mensagens" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate><DataTemplate x:DataType="c:TemplateDto"><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Text="Dias após a abordagem para cada etapa (ex.: 1,3,7; vazio = sem acompanhamento). Para sozinho se o contato responder." Classes="muted" TextWrapping="Wrap" />
+            <TextBox Text="{Binding FollowUpDays}" />
+            <Grid ColumnDefinitions="*,8,*">
+              <StackPanel><TextBlock Text="Pausar se falhas &gt; (%)" Classes="muted" /><NumericUpDown Value="{Binding MaxFailurePercent}" Minimum="1" Maximum="100" FormatString="0" /></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="Pausar se descadastros &gt; (%)" Classes="muted" /><NumericUpDown Value="{Binding MaxOptOutPercent}" Minimum="1" Maximum="100" FormatString="0" /></StackPanel>
+            </Grid>
             <Grid ColumnDefinitions="*,8,*">
               <StackPanel><TextBlock Text="Início (HH:mm)" Classes="muted" /><TextBox Text="{Binding StartTime}" /></StackPanel>
               <StackPanel Grid.Column="2"><TextBlock Text="Fim (HH:mm)" Classes="muted" /><TextBox Text="{Binding EndTime}" /></StackPanel>
@@ -64,6 +85,24 @@
             <Button Content="Salvar campanha" Command="{Binding SaveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
           </StackPanel>
           <TextBlock Text="Controle" Classes="h2" Margin="0,8,0,0" />
+          <Grid ColumnDefinitions="*,8,*">
+            <Button Content="Validar" Command="{Binding ValidateCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <Button Grid.Column="2" Content="Pré-visualizar abordagens" Command="{Binding PreviewCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+          </Grid>
+          <TextBlock Text="{Binding Validation}" TextWrapping="Wrap" FontSize="12" />
+          <ItemsControl ItemsSource="{Binding Previews}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="c:ApproachPreview">
+                <Border Classes="card" Margin="0,0,0,4">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding Contact}" Classes="muted" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Note}" Classes="muted" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
           <Button Classes="primary" Content="▶ Iniciar envio" Click="OnStart" IsVisible="{Binding CanStart}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
           <Button Content="❚❚ Pausar" Command="{Binding PauseCommand}" IsVisible="{Binding CanPause}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
           <Button Content="▶ Retomar" Command="{Binding ResumeCommand}" IsVisible="{Binding CanResume}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />

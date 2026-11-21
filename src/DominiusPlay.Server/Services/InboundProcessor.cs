@@ -20,7 +20,7 @@ public enum InboundOutcome { Stored, Duplicate, Ignored, StatusUpdated, Connecti
 /// </summary>
 public class InboundProcessor(CrmDbContext db, ConversationLocks locks, ConversationService conversations,
     InstanceStatusCache status, IHubContext<CrmHub> hub, AiDispatcher ai, DominiusPlay.Infrastructure.Security.SettingsStore settings,
-    TimeProvider clock, ILogger<InboundProcessor> log)
+    IntentRouter intents, HandoffService handoff, AutomationService automations, TimeProvider clock, ILogger<InboundProcessor> log)
 {
     public async Task<InboundOutcome> ProcessAsync(string json, CancellationToken ct = default)
     {
@@ -100,6 +100,9 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
 
         using var _ = await locks.AcquireAsync(lead.Id, ct);
         var ts = p.Timestamp ?? DateTimeOffset.UtcNow;
+        var firstInbound = !p.FromMe && !await db.Messages.AnyAsync(m => m.LeadId == lead.Id && m.Direction == MessageDirection.Entrada, ct);
+        string? handedTo = null;
+        var suppressAi = false;
         var message = new Message
         {
             LeadId = lead.Id, ExternalId = p.MessageId, InstanceName = p.Instance, Text = p.Text ?? "", Timestamp = ts,
@@ -107,6 +110,11 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
             Author = p.FromMe ? MessageAuthor.ManualNoAparelho : MessageAuthor.Contato,
             Status = p.FromMe ? (EvolutionWebhookParser.MapStatus(p.Status) ?? MessageStatus.EnviadaServidor) : MessageStatus.Recebida,
         };
+        if (!p.FromMe)
+        {
+            message.Intent = IntentDetector.Detect(p.Text, firstInbound);
+            if (message.Intent != IntentCategory.Nenhuma) lead.LastIntent = message.Intent;
+        }
         db.Messages.Add(message);
 
         if (p.FromMe)
@@ -124,13 +132,27 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
                 if (!await db.OptOuts.AnyAsync(o => o.Phone == lead.Phone, ct))
                     db.OptOuts.Add(new OptOut { Phone = lead.Phone, Reason = "Pedido do contato", Source = "WhatsApp" });
                 lead.Stage = KanbanStage.NaoTemInteresse;
-                lead.Mode = ConversationMode.Encerrado;
+                ConversationStateMachine.Apply(lead, ConversationTrigger.Descadastro);
                 lead.StageChanges.Add(new StageChange { LeadId = lead.Id, To = KanbanStage.NaoTemInteresse, ChangedBy = "Sistema", Reason = "Pedido de descadastro" });
                 db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "lead.optout", EntityType = "Lead", EntityId = lead.Id.ToString(), Details = Preview(p.Text) });
             }
-            else if (lead.Mode == ConversationMode.AguardandoContato)
+            else
             {
-                lead.Mode = ConversationMode.Ia;
+                var repliedToCampaign = lead.Mode == ConversationMode.Prospeccao;
+                ConversationStateMachine.Apply(lead, ConversationTrigger.ContatoRespondeu); // Disparo → Atendimento: só um agente fala
+                KanbanRules.AutoAdvance(lead, KanbanStage.Respondeu, "Contato respondeu à abordagem");
+                // respondeu = acompanhamentos automáticos pendentes são interrompidos (o SendGuard também bloqueia)
+                var followUps = await db.OutboundQueue.Where(q => q.LeadId == lead.Id && q.Kind == OutboundKind.Acompanhamento && q.Status == MessageStatus.NaFila).ToListAsync(ct);
+                foreach (var q in followUps) { q.Status = MessageStatus.Cancelada; q.LastError = "Contato respondeu"; q.UpdatedAt = clock.GetUtcNow(); }
+                // intenção com fluxo próprio (ex.: pedido de humano transfere na hora, sem depender da IA)
+                handedTo = await intents.RouteAsync(lead, message.Intent, ct);
+                // fluxos do construtor de automações (depois das regras fixas: descadastro e pedido de humano têm prioridade)
+                if (handedTo is null)
+                {
+                    var auto = await automations.OnInboundAsync(lead, message, repliedToCampaign, ct);
+                    suppressAi = auto.SuppressAi;
+                    handedTo = auto.HandedTo;
+                }
             }
             // Classificação inicial de dores (inferência — a IA da Fase 5 refina)
             foreach (var pain in PainClassifier.Classify(p.Text ?? ""))
@@ -144,11 +166,12 @@ public class InboundProcessor(CrmDbContext db, ConversationLocks locks, Conversa
         lead.UpdatedAt = DateTimeOffset.UtcNow;
         lead.ConcurrencyStamp = Guid.NewGuid();
         await db.SaveChangesAsync(ct);
-        if (!p.FromMe && lead.Mode == ConversationMode.Ia)
+        if (!p.FromMe && lead.Mode == ConversationMode.Ia && !suppressAi)
         {
             var wait = int.TryParse(await settings.GetAsync(DominiusPlay.Infrastructure.Security.SettingKeys.AiDebounceSeconds, ct), out var w) ? w : 6;
             ai.Schedule(lead.Id, clock.GetUtcNow().AddSeconds(Math.Clamp(wait, 0, 120)));
         }
+        if (handedTo is not null) await handoff.NotifyAsync(lead.Id, handedTo.Length == 0 ? null : handedTo, ct);
         await hub.Clients.All.SendAsync(HubEvents.MessageAdded, lead.Id, ct);
         await hub.Clients.All.SendAsync(HubEvents.LeadChanged, lead.Id, ct);
         return InboundOutcome.Stored;

@@ -75,7 +75,8 @@ public static class Api
                 l.ConsentStatus, l.ConsentAt, l.ConsentSource, l.CreatedAt,
                 l.Facts.OrderByDescending(f => f.CreatedAt).Select(f => new FactDto(f.Key, f.Value, f.Source, f.CreatedAt)).ToList(),
                 l.StageChanges.OrderByDescending(s => s.CreatedAt).Select(s => new StageChangeDto(s.From, s.To, s.ChangedBy, s.Reason, s.CreatedAt)).ToList(),
-                new RecommendationDto(rec.Profile.ToString(), rec.Plans.Select(p => $"{p.Name} — R$ {p.MonthlyPrice.ToString("N2", PtBr)}/mês").ToList(), rec.Rationale, rec.MissingInfo), l.SuggestedStage, l.SuggestedStageReason));
+                new RecommendationDto(rec.Profile.ToString(), rec.Plans.Select(p => $"{p.Name} — R$ {p.MonthlyPrice.ToString("N2", PtBr)}/mês").ToList(), rec.Rationale, rec.MissingInfo), l.SuggestedStage, l.SuggestedStageReason,
+                l.Company, l.Segment, l.QualificationScore, l.QualificationExplanation, l.LastIntent, l.HandoffAt, l.HandoffSummary, l.AttendanceAgentId));
         });
 
         api.MapPost("/leads", async (LeadUpsert r, CrmDbContext db, ClaimsPrincipal user) =>
@@ -86,7 +87,7 @@ public static class Api
             var blocked = await db.OptOuts.AnyAsync(o => o.Phone == ph.Normalized);
             var l = new Lead { Phone = ph.Normalized, ImportedAt = DateTimeOffset.UtcNow, Source = r.Source ?? "Cadastro manual" };
             Apply(l, r);
-            if (blocked) { l.ConsentStatus = ConsentStatus.Revogado; l.Stage = KanbanStage.NaoTemInteresse; l.Mode = ConversationMode.Encerrado; }
+            if (blocked) { l.ConsentStatus = ConsentStatus.Revogado; l.Stage = KanbanStage.NaoTemInteresse; ConversationStateMachine.Apply(l, ConversationTrigger.Bloquear); }
             db.Leads.Add(l);
             db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "lead.create", EntityType = "Lead", EntityId = l.Id.ToString() });
             await db.SaveChangesAsync();
@@ -144,6 +145,28 @@ public static class Api
             await db.SaveChangesAsync();
             return Results.Ok(new OperationResult(true, "Lead e dados associados excluídos"));
         }).RequireAuthorization(SupervisorPolicy);
+
+        // LGPD: anonimização (mantém números agregados, apaga dados pessoais e conteúdo das mensagens)
+        api.MapPost("/leads/{id:guid}/anonymize", async (Guid id, LgpdService lgpd, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
+        {
+            if (!await lgpd.AnonymizeAsync(id, user.Identity?.Name ?? "", "Pedido do titular / supervisor")) return Results.NotFound();
+            await hub.Clients.All.SendAsync(HubEvents.LeadChanged, id);
+            return Results.Ok(new OperationResult(true, "Contato anonimizado: dados pessoais e textos apagados, número na lista de descadastro."));
+        }).RequireAuthorization(SupervisorPolicy);
+
+        api.MapGet("/lgpd/retention", async (SettingsStore s) =>
+            new OperationResult(true, await s.GetAsync(LgpdService.RetentionDaysKey) ?? "0"));
+
+        api.MapPut("/lgpd/retention", async (int days, SettingsStore s, LgpdService lgpd, CrmDbContext db, ClaimsPrincipal user) =>
+        {
+            if (days is < 0 or > 3650) return Results.BadRequest(new OperationResult(false, "Informe de 0 (desligado) a 3650 dias"));
+            if (days is > 0 and < 30) return Results.BadRequest(new OperationResult(false, "Retenção mínima de 30 dias"));
+            await s.SetAsync(LgpdService.RetentionDaysKey, days.ToString());
+            db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "lgpd.retention", EntityType = "Setting", Details = $"{days} dias" });
+            await db.SaveChangesAsync();
+            var n = await lgpd.ApplyRetentionAsync(days, user.Identity?.Name ?? "");
+            return Results.Ok(new OperationResult(true, days == 0 ? "Retenção automática desligada." : $"Retenção de {days} dias salva. {n} contato(s) anonimizado(s) agora."));
+        }).RequireAuthorization(AdminPolicy);
 
         // ---------- Ações em lote (seleção na lista ou todos com uma tag) ----------
         api.MapPost("/leads/bulk", async (BulkLeadRequest r, CrmDbContext db, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
@@ -239,12 +262,39 @@ public static class Api
         });
 
         // ---------- Kanban ----------
-        api.MapGet("/kanban", async (CrmDbContext db) =>
+        api.MapGet("/kanban", async (CrmDbContext db, SettingsStore settings, Guid? agentId, Guid? campaignId) =>
         {
-            var leads = await db.Leads.Include(l => l.AssignedUser).AsNoTracking().ToListAsync();
-            return Enum.GetValues<KanbanStage>().Select(s => new KanbanColumn(s, KanbanRules.Title(s),
-                leads.Where(l => l.Stage == s).OrderByDescending(l => l.Priority).ThenByDescending(l => l.LastInteractionAt ?? l.CreatedAt).Select(l => l.ToCard()).ToList()));
+            var q = db.Leads.Include(l => l.AssignedUser).AsNoTracking();
+            if (agentId is { } aid) q = q.Where(l => l.AttendanceAgentId == aid);
+            if (campaignId is { } cid) q = q.Where(l => l.OriginCampaignId == cid);
+            var leads = await q.ToListAsync();
+            var agents = await db.AgentProfiles.AsNoTracking().ToDictionaryAsync(a => a.Id, a => a.Name);
+            var camps = await db.Campaigns.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name);
+            var stages = KanbanBoardConfig.Parse(await settings.GetAsync(KanbanBoardConfig.SettingKey));
+            return stages.Where(s => s.Visible || leads.Any(l => l.Stage == s.Stage)).Select(s => new KanbanColumn(s.Stage, s.Title,
+                leads.Where(l => l.Stage == s.Stage).OrderByDescending(l => l.Priority).ThenByDescending(l => l.LastInteractionAt ?? l.CreatedAt)
+                    .Select(l => l.ToCard() with
+                    {
+                        AgentName = l.AttendanceAgentId is { } a && agents.TryGetValue(a, out var an) ? an : null,
+                        CampaignName = l.OriginCampaignId is { } c && camps.TryGetValue(c, out var cn) ? cn : null,
+                    }).ToList()));
         });
+
+        api.MapGet("/kanban/stages", async (SettingsStore settings) =>
+            KanbanBoardConfig.Parse(await settings.GetAsync(KanbanBoardConfig.SettingKey)).Select(s => new KanbanStageDto(s.Stage, s.Title, s.Order, s.Visible, KanbanRules.Title(s.Stage))));
+
+        api.MapPut("/kanban/stages", async (List<KanbanStageDto> r, SettingsStore settings, CrmDbContext db, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
+        {
+            var merged = KanbanBoardConfig.Parse(System.Text.Json.JsonSerializer.Serialize(r.Select(x => new KanbanStageConfig(x.Stage, x.Title ?? "", x.Order, x.Visible))));
+            if (KanbanBoardConfig.Validate(r.Select(x => new KanbanStageConfig(x.Stage, x.Title ?? "", x.Order, x.Visible)).ToList()) is { } err)
+                return Results.BadRequest(new OperationResult(false, err));
+            await settings.SetAsync(KanbanBoardConfig.SettingKey, System.Text.Json.JsonSerializer.Serialize(merged));
+            db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "kanban.stages", EntityType = "Setting", EntityId = KanbanBoardConfig.SettingKey,
+                Details = string.Join(" | ", merged.Where(s => s.Visible).Select(s => s.Title)) });
+            await db.SaveChangesAsync();
+            await hub.Clients.All.SendAsync(HubEvents.LeadChanged, Guid.Empty);
+            return Results.Ok(new OperationResult(true, "Etapas do Kanban salvas."));
+        }).RequireAuthorization(AdminPolicy);
 
         api.MapPost("/kanban/{id:guid}/move", async (Guid id, MoveCardRequest r, CrmDbContext db, ConversationLocks locks, ClaimsPrincipal user, IHubContext<CrmHub> hub) =>
         {

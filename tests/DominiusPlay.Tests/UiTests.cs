@@ -48,6 +48,132 @@ public class UiTests
     }
 
     [AvaloniaFact]
+    public async Task Tela_de_agentes_de_atendimento_e_Testar_Agente()
+    {
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        using var f = new CrmFactory();
+        var http = await f.AdminAsync();
+        await f.ConfigureEvolutionAsync(http);
+        (await System.Net.Http.Json.HttpClientJsonExtensions.PutAsJsonAsync(http, "/api/ai/settings",
+            new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", "sk-ant-teste-123", 4000, "Lia", "", 100000, false, 0))).EnsureSuccessStatusCode();
+        var api = new ApiClient("http://localhost", f.Server.CreateHandler());
+        await api.LoginAsync("carlos", "SenhaForte123");
+        var main = new MainWindowViewModel();
+        var win = new MainWindow { DataContext = main, Width = 1440, Height = 880 };
+        win.Show();
+        await main.StartSessionAsync(new AppSession(api, new Realtime()));
+        await main.NavigateCommand.ExecuteAsync("atendimento");
+        await Pump(600);
+        var vm = Assert.IsType<AgentsViewModel>(main.Current);
+        Assert.Null(vm.Error);
+        Assert.Equal("Atendimento IPTV (padrão)", Assert.Single(vm.Agents).Name);
+        Assert.Equal(6, vm.Questions.Count);
+        Assert.Equal(11, vm.Intents.Count);
+        Shot(win, "15-agentes-atendimento");
+
+        f.Ai.Script.Enqueue(_ => FakeAi.Tools(("registrar_resposta_qualificacao", """{"chave":"ja_revende","resposta":"já revende há 2 anos","atende_criterio":true}""")));
+        f.Ai.Script.Enqueue(_ => FakeAi.Text("Que bom! Hoje você tem quantos clientes ativos, mais ou menos?"));
+        vm.TestInput = "Oi, já revendo IPTV faz 2 anos";
+        await vm.SendTestCommand.ExecuteAsync(null);
+        f.Ai.Script.Enqueue(_ => FakeAi.Text("Entendo, travamento derruba a renovação. Você usa qual painel hoje?"));
+        vm.TestInput = "uns 120, mas o servidor atual trava muito";
+        await vm.SendTestCommand.ExecuteAsync(null);
+        vm.TestInput = "quero falar com uma pessoa";
+        await vm.SendTestCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(vm.Error);
+        Assert.Equal(7, vm.TestLines.Count); // 3 do cliente, 3 do agente, 1 ficha
+        Assert.Contains("FICHA DA TRANSFERÊNCIA", vm.TestLines.Last().Text);
+        Assert.Equal("Qualificação: 15/100", vm.TestScore);
+        Assert.Equal(0, await f.WithDb(db => db.Messages.CountAsync()));
+        Shot(win, "15b-testar-agente");
+    }
+
+    [AvaloniaFact]
+    public async Task Tela_de_automacoes_valida_e_testa_sem_enviar()
+    {
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        using var f = new CrmFactory();
+        await f.AdminAsync();
+        var api = new ApiClient("http://localhost", f.Server.CreateHandler());
+        await api.LoginAsync("carlos", "SenhaForte123");
+        var main = new MainWindowViewModel();
+        var win = new MainWindow { DataContext = main, Width = 1440, Height = 880 };
+        win.Show();
+        await main.StartSessionAsync(new AppSession(api, new Realtime()));
+        await main.NavigateCommand.ExecuteAsync("automacoes");
+        await Pump(500);
+        var vm = Assert.IsType<AutomationsViewModel>(main.Current);
+        Assert.Null(vm.Error);
+        Assert.Equal(6, vm.Blocks.Count); // exemplo inicial
+        await vm.TestCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Empty(vm.Problems);
+        Assert.Contains("Adicionar tag: quer-preco", vm.Actions);
+        Shot(win, "17-automacoes");
+
+        // cria um ciclo sem espera: validação recusa
+        vm.Blocks.Single(b => b.Id == "5").Next = "3";
+        await vm.TestCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Contains(vm.Problems, p => p.Contains("circular"));
+        vm.Blocks.Single(b => b.Id == "5").Next = "9";
+        vm.Name = "Pedido de preço"; vm.Active = true;
+        await vm.SaveCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(vm.Error);
+        Assert.Single(vm.Flows);
+        Assert.True(vm.Flows[0].Active);
+        Assert.Equal(0, await f.WithDb(db => db.OutboundQueue.CountAsync()));
+    }
+
+    [AvaloniaFact]
+    public async Task Tela_de_agentes_de_disparo_e_campanha()
+    {
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
+        using var f = new CrmFactory();
+        var http = await f.AdminAsync();
+        await f.ConfigureEvolutionAsync(http);
+        (await System.Net.Http.Json.HttpClientJsonExtensions.PutAsJsonAsync(http, "/api/ai/settings",
+            new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", "sk-ant-teste-123", 4000, "Lia", "", 100000, false, 0))).EnsureSuccessStatusCode();
+        (await System.Net.Http.Json.HttpClientJsonExtensions.PostAsJsonAsync(http, "/api/agents", new AgentUpsert(AgentKind.Disparo, "Prospecção revenda", "Lia",
+            "Abordagem de revendedores", "Abrir conversa", "Dominius Play", "Consultiva", "Curto e cordial", "", "", "", "", "", "", "", AgentStatus.Ativo, true,
+            "09:00", "20:00", "1,2,3,4,5", "America/Sao_Paulo", "", "", 40, 600))).EnsureSuccessStatusCode();
+        var api = new ApiClient("http://localhost", f.Server.CreateHandler());
+        await api.LoginAsync("carlos", "SenhaForte123");
+        var main = new MainWindowViewModel();
+        var win = new MainWindow { DataContext = main, Width = 1440, Height = 880 };
+        win.Show();
+        await main.StartSessionAsync(new AppSession(api, new Realtime()));
+        await main.NavigateCommand.ExecuteAsync("disparo");
+        await Pump(600);
+        var vm = Assert.IsType<AgentsViewModel>(main.Current);
+        Assert.Null(vm.Error);
+        Assert.False(vm.IsAttendance);
+        Assert.Equal("Prospecção revenda", Assert.Single(vm.Agents).Name);
+        Assert.Single(vm.AttendanceAgents);
+        Assert.Equal(40, vm.DailyLimit);
+        Assert.Equal(10, vm.MinIntervalMinutes);
+
+        vm.TestInput = "não tenho interesse, me tira da lista";
+        await vm.SendTestCommand.ExecuteAsync(null);
+        await Pump();
+        Assert.Null(vm.Error);
+        Assert.Contains("descadastro", vm.TestLines.Last().Detail ?? "");
+        Assert.Equal("Conversa encerrada pelo agente.", vm.TestStatus);
+        Assert.Equal(0, await f.WithDb(db => db.OptOuts.CountAsync())); // simulação não grava nada
+        Shot(win, "16-agentes-disparo");
+
+        await main.NavigateCommand.ExecuteAsync("campanhas");
+        await Pump(600);
+        var camp = Assert.IsType<CampaignsViewModel>(main.Current);
+        Assert.Null(camp.Error);
+        Assert.Single(camp.DispatchAgents);
+        Assert.Equal("Prospecção revenda", camp.DispatchAgent?.Name);
+        Shot(win, "16b-campanha-disparo");
+    }
+
+    [AvaloniaFact]
     public async Task Fluxo_completo_das_telas()
     {
         System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("pt-BR");
@@ -71,13 +197,16 @@ public class UiTests
         await main.NavigateCommand.ExecuteAsync("kanban");
         await Pump();
         var kanban = Assert.IsType<KanbanViewModel>(main.Current);
-        Assert.Equal(6, kanban.Columns.Count);
-        Assert.Equal(["Primeiro contato", "Em fase de teste", "Em negociação", "Negócio fechado", "Em dúvidas", "Não tem interesse"], kanban.Columns.Select(c => c.Title));
+        Assert.Equal(11, kanban.Columns.Count); // "Em dúvidas" aparece porque tem card
+        Assert.Equal(["Primeiro contato", "Abordagem realizada", "Respondeu", "Em atendimento", "Qualificado", "Em fase de teste", "Proposta enviada",
+            "Em negociação", "Negócio fechado", "Não tem interesse", "Em dúvidas"], kanban.Columns.Select(c => c.Title));
         Shot(win, "02-kanban");
 
         // clique no card abre a conversa do WhatsApp em popup, sem sair do Kanban
         var joaoCard = kanban.Columns.SelectMany(c => c.Cards).First(c => c.Name == "João (exemplo)");
         var cardBorder = win.GetVisualDescendants().OfType<Border>().First(b => b.Name == "Card" && b.Tag is Guid g && g == joaoCard.Id);
+        cardBorder.BringIntoView(); // quadro com rolagem horizontal (11 etapas)
+        await Pump(200);
         var at = cardBorder.TranslatePoint(new Point(20, 20), win)!.Value;
         win.MouseDown(at, MouseButton.Left);
         win.MouseUp(at, MouseButton.Left);

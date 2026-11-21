@@ -41,9 +41,10 @@ public partial class MainWindowViewModel : ViewModelBase
 {
     public static readonly NavItem[] Menu =
     [
-        new("dashboard", "▦", "Dashboard"), new("conversas", "💬", "Conversas"), new("kanban", "▥", "Kanban"),
-        new("leads", "👥", "Leads"), new("campanhas", "📣", "Campanhas"), new("mensagens", "✉", "Mensagens"),
-        new("planos", "💲", "Planos"), new("conhecimento", "📚", "Base de conhecimento"), new("relatorios", "📊", "Relatórios"),
+        new("dashboard", "▦", "Visão geral"), new("disparo", "🚀", "Agentes de disparo"), new("atendimento", "🤖", "Agentes de atendimento"),
+        new("campanhas", "📣", "Campanhas"), new("leads", "👥", "Contatos"), new("conversas", "💬", "Caixa de entrada"), new("automacoes", "⚡", "Automações"),
+        new("kanban", "▥", "CRM Kanban"), new("conhecimento", "📚", "Base de conhecimento"), new("mensagens", "✉", "Mensagens"),
+        new("planos", "💲", "Planos"), new("relatorios", "📊", "Relatórios"),
         new("equipe", "👤", "Equipe"), new("integracoes", "🔌", "Integrações"), new("config", "⚙", "Configurações"),
     ];
 
@@ -107,6 +108,9 @@ public partial class MainWindowViewModel : ViewModelBase
                 "relatorios" => new ReportsViewModel(_session),
                 "equipe" => new TeamViewModel(_session),
                 "config" => new AiSettingsViewModel(_session),
+                "atendimento" => new AgentsViewModel(_session, AgentKind.Atendimento),
+                "disparo" => new AgentsViewModel(_session, AgentKind.Disparo),
+                "automacoes" => new AutomationsViewModel(_session),
                 _ => new PendingModuleViewModel(key, "", ""),
             };
             _pages[key] = vm;
@@ -190,6 +194,11 @@ public static class Ui
         KanbanStage.EmNegociacao => "#8B6FD6",
         KanbanStage.NegocioFechado => "#2E9E6E",
         KanbanStage.EmDuvidas => "#D9822B",
+        KanbanStage.AbordagemRealizada => "#4E9BB8",
+        KanbanStage.Respondeu => "#3FA7A0",
+        KanbanStage.EmAtendimento => "#6C8EE0",
+        KanbanStage.Qualificado => "#B58BE0",
+        KanbanStage.PropostaEnviada => "#D6A84E",
         _ => "#7A8194",
     };
 

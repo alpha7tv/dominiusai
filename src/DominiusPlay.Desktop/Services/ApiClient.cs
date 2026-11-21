@@ -46,7 +46,17 @@ public class ApiClient
         SetSession(await Read<LoginResponse>(await _http.PostAsJsonAsync("api/auth/setup", new SetupRequest(user, display, pass), Json)));
 
     public Task<DashboardDto> DashboardAsync() => Get<DashboardDto>("api/dashboard");
+    public Task<AgentsDashboardDto> AgentsDashboardAsync(DateTimeOffset? from, Guid? agentId, Guid? campaignId) =>
+        Get<AgentsDashboardDto>("api/dashboard/agents?" + string.Join("&", new[] {
+            from is { } f ? "from=" + Uri.EscapeDataString(f.ToString("O")) : null, agentId is { } a ? $"agentId={a}" : null, campaignId is { } c ? $"campaignId={c}" : null }.Where(x => x is not null)));
     public Task<List<KanbanColumn>> KanbanAsync() => Get<List<KanbanColumn>>("api/kanban");
+    public Task<List<AutomationFlowDto>> AutomationsAsync() => Get<List<AutomationFlowDto>>("api/automations");
+    public Task<AutomationFlowDto> CreateAutomationAsync(AutomationFlowUpsert f) => Post<AutomationFlowDto>("api/automations", f);
+    public Task<AutomationFlowDto> UpdateAutomationAsync(Guid id, AutomationFlowUpsert f) => Send<AutomationFlowDto>(HttpMethod.Put, $"api/automations/{id}", f);
+    public Task<OperationResult> DeleteAutomationAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/automations/{id}", null);
+    public Task<AutomationTestResponse> TestAutomationAsync(AutomationTestRequest r) => Post<AutomationTestResponse>("api/automations/test", r);
+    public Task<List<KanbanStageDto>> KanbanStagesAsync() => Get<List<KanbanStageDto>>("api/kanban/stages");
+    public Task<OperationResult> SaveKanbanStagesAsync(List<KanbanStageDto> s) => Send<OperationResult>(HttpMethod.Put, "api/kanban/stages", s);
     public Task<MoveCardResponse> MoveAsync(Guid id, KanbanStage to, string? reason, bool confirm) => Post<MoveCardResponse>($"api/kanban/{id}/move", new MoveCardRequest(to, reason, confirm));
     public Task<List<LeadCard>> LeadsAsync(string? q = null, ConsentStatus? consent = null) =>
         Get<List<LeadCard>>($"api/leads?take=2000{(string.IsNullOrWhiteSpace(q) ? "" : "&q=" + Uri.EscapeDataString(q))}{(consent is null ? "" : "&consent=" + consent)}");
@@ -55,6 +65,7 @@ public class ApiClient
     public Task<OperationResult> UpdateLeadAsync(Guid id, LeadUpsert l) => Send<OperationResult>(HttpMethod.Put, $"api/leads/{id}", l);
     public Task<OperationResult> ConsentAsync(Guid id, ConsentRequest r) => Post<OperationResult>($"api/leads/{id}/consent", r);
     public Task<OperationResult> DeleteLeadAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/leads/{id}", null);
+    public Task<OperationResult> AnonymizeLeadAsync(Guid id) => Post<OperationResult>($"api/leads/{id}/anonymize", null);
     public Task<BulkLeadResponse> BulkLeadsAsync(BulkLeadRequest r) => Post<BulkLeadResponse>(r.Action == BulkLeadAction.Excluir ? "api/leads/bulk-delete" : "api/leads/bulk", r);
     public Task<OperationResult> OptOutAsync(Guid id) => Post<OperationResult>($"api/leads/{id}/optout", null);
     public Task<List<LeadCard>> ConversationsAsync(string? q = null) => Get<List<LeadCard>>("api/conversations" + (string.IsNullOrWhiteSpace(q) ? "" : "?q=" + Uri.EscapeDataString(q)));
@@ -87,6 +98,17 @@ public class ApiClient
     public Task<ModelsResponse> AiModelsAsync() => Get<ModelsResponse>("api/ai/models");
     public Task<AiSimulateResponse> AiSimulateAsync(AiSimulateRequest r) => Post<AiSimulateResponse>("api/ai/simulate", r);
     public Task<AiSimulateResponse> SuggestAsync(Guid leadId) => Post<AiSimulateResponse>($"api/conversations/{leadId}/suggest", null);
+    public Task<List<AgentDto>> AgentsAsync(AgentKind kind) => Get<List<AgentDto>>($"api/agents?kind={kind}");
+    public Task<AgentDto> CreateAgentAsync(AgentUpsert a) => Post<AgentDto>("api/agents", a);
+    public Task<AgentDto> UpdateAgentAsync(Guid id, AgentUpsert a) => Send<AgentDto>(HttpMethod.Put, $"api/agents/{id}", a);
+    public Task<OperationResult> DeleteAgentAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/agents/{id}", null);
+    public Task<List<IntentInfo>> IntentsAsync() => Get<List<IntentInfo>>("api/agents/intents");
+    public Task<AgentTestResponse> TestAgentAsync(Guid? agentId, AgentTestRequest r) => Post<AgentTestResponse>(agentId is { } id ? $"api/agents/{id}/test" : "api/agents/global/test", r);
+    public Task<List<QualificationQuestionDto>> QuestionsAsync(Guid? agentId) => Get<List<QualificationQuestionDto>>("api/qualification-questions" + (agentId is { } id ? "?agentId=" + id : ""));
+    public Task<QualificationQuestionDto> CreateQuestionAsync(QualificationQuestionUpsert q) => Post<QualificationQuestionDto>("api/qualification-questions", q);
+    public Task<QualificationQuestionDto> UpdateQuestionAsync(Guid id, QualificationQuestionUpsert q) => Send<QualificationQuestionDto>(HttpMethod.Put, $"api/qualification-questions/{id}", q);
+    public Task<OperationResult> DeleteQuestionAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/qualification-questions/{id}", null);
+    public Task<OperationResult> HandoffAsync(Guid leadId, string? reason) => Post<OperationResult>($"api/leads/{leadId}/handoff", new HandoffRequest(reason));
     public Task<OperationResult> ApproveKnowledgeAsync(Guid id, bool approve) => Post<OperationResult>($"api/knowledge/{id}/approve?approve={approve}", null);
 
     public Task<EvolutionSettingsDto> EvolutionSettingsAsync() => Get<EvolutionSettingsDto>("api/integrations/evolution");
@@ -117,6 +139,8 @@ public class ApiClient
     public Task<List<CampaignDto>> CampaignsAsync() => Get<List<CampaignDto>>("api/campaigns");
     public Task<CampaignDto> CreateCampaignAsync(CampaignUpsert c) => Post<CampaignDto>("api/campaigns", c);
     public Task<CampaignDto> UpdateCampaignAsync(Guid id, CampaignUpsert c) => Send<CampaignDto>(HttpMethod.Put, $"api/campaigns/{id}", c);
+    public Task<CampaignValidation> ValidateCampaignAsync(Guid id) => Post<CampaignValidation>($"api/campaigns/{id}/validate", null);
+    public Task<List<ApproachPreview>> PreviewCampaignAsync(Guid id) => Post<List<ApproachPreview>>($"api/campaigns/{id}/preview", null);
     public Task<OperationResult> CampaignActionAsync(Guid id, string action) => Post<OperationResult>($"api/campaigns/{id}/{action}", null);
     // Fase 9
     public Task<ReportDto> ReportAsync(DateTimeOffset from, DateTimeOffset to) =>

@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.AgentsView" x:DataType="vm:AgentsViewModel">
+  <Grid ColumnDefinitions="230,*,370" RowDefinitions="Auto,*" Margin="24">
+    <StackPanel Grid.ColumnSpan="3" Spacing="4" Margin="0,0,0,12">
+      <TextBlock Text="{Binding Title}" Classes="h1" />
+      <TextBlock Text="{Binding Subtitle}" Classes="muted" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Info}" Classes="ok" /><TextBlock Text="{Binding Error}" Classes="error" />
+    </StackPanel>
+
+    <!-- lista -->
+    <DockPanel Grid.Row="1" Margin="0,0,12,0">
+      <Button DockPanel.Dock="Top" Classes="primary" Content="+ Novo agente" Command="{Binding NewCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,0,8" />
+      <ListBox ItemsSource="{Binding Agents}" SelectedItem="{Binding Selected}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="c:AgentDto">
+            <StackPanel Spacing="2" Margin="0,4">
+              <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{Binding Status}" Classes="muted" />
+                <TextBlock Text="· padrão" Classes="muted" IsVisible="{Binding IsDefault}" />
+                <TextBlock Text="{Binding Conversations, StringFormat='· {0} conversas'}" Classes="muted" />
+              </StackPanel>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+
+    <!-- editor -->
+    <Border Grid.Row="1" Grid.Column="1" Classes="panel" Margin="0,0,12,0" Padding="0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="16,8,16,12">
+          <Button Classes="primary" Content="Salvar" Command="{Binding SaveCommand}" />
+          <Button Classes="danger" Content="Excluir" Command="{Binding DeleteCommand}" IsVisible="{Binding !IsNew}" />
+          <TextBlock Text="Salvando…" Classes="muted" VerticalAlignment="Center" IsVisible="{Binding IsBusy}" />
+        </StackPanel>
+        <TabControl Margin="8,4,8,0">
+          <TabItem Header="Perfil" FontSize="16">
+            <ScrollViewer>
+              <StackPanel Spacing="6" Margin="8">
+                <Grid ColumnDefinitions="*,12,*,12,150">
+                  <StackPanel><TextBlock Text="Nome do agente (no CRM)" Classes="muted" /><TextBox Text="{Binding Name}" /></StackPanel>
+                  <StackPanel Grid.Column="2"><TextBlock Text="Nome com o cliente" ToolTip.Tip="Vazio = nome do assistente em Configurações" Classes="muted" /><TextBox Text="{Binding AssistantName}" /></StackPanel>
+                  <StackPanel Grid.Column="4"><TextBlock Text="Estado" Classes="muted" /><ComboBox ItemsSource="{x:Static vm:AgentsViewModel.Statuses}" SelectedIndex="{Binding StatusIndex}" HorizontalAlignment="Stretch" /></StackPanel>
+                </Grid>
+                <CheckBox Content="Agente padrão (atende conversas sem agente definido)" IsChecked="{Binding IsDefault}" />
+                <TextBlock Text="Empresa ou produto" Classes="muted" /><TextBox Text="{Binding Company}" />
+                <TextBlock Text="Descrição" Classes="muted" /><TextBox Text="{Binding Description}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
+                <TextBlock Text="Objetivos comerciais" Classes="muted" /><TextBox Text="{Binding Objective}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
+                <TextBlock Text="Personalidade" Classes="muted" /><TextBox Text="{Binding Personality}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
+                <TextBlock Text="Tom de comunicação" Classes="muted" /><TextBox Text="{Binding Tone}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
+                <TextBlock Text="Produtos e serviços (preços vêm só da tela Planos)" Classes="muted" /><TextBox Text="{Binding Products}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="60" />
+                <TextBlock Text="Respostas permitidas e respostas a objeções" Classes="muted" /><TextBox Text="{Binding AllowedAnswers}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120" />
+                <TextBlock Text="Restrições de negociação" Classes="muted" /><TextBox Text="{Binding Restrictions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
+                <TextBlock Text="Critérios de transferência para humano" Classes="muted" /><TextBox Text="{Binding HandoffCriteria}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
+                <TextBlock Text="Prompt principal (vazio = prompt de sistema global de Configurações). As regras fixas de segurança sempre valem." Classes="muted" TextWrapping="Wrap" />
+                <TextBox Text="{Binding Prompt}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80" />
+                <Grid ColumnDefinitions="*,12,*">
+                  <StackPanel><TextBlock Text="Modelo (vazio = global)" Classes="muted" /><TextBox Text="{Binding Model}" Watermark="claude-haiku-5-5" /></StackPanel>
+                  <StackPanel Grid.Column="2"><TextBlock Text="Modelo em negociação (vazio = global)" Classes="muted" /><TextBox Text="{Binding AdvancedModel}" Watermark="claude-sonnet-5-5" /></StackPanel>
+                </Grid>
+                <TextBlock Text="Horário de atendimento humano (fora dele a IA responde e avisa quando o time volta)" Classes="muted" TextWrapping="Wrap" Margin="0,6,0,0" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBox Text="{Binding StartTime}" Width="70" /><TextBlock Text="até" VerticalAlignment="Center" /><TextBox Text="{Binding EndTime}" Width="70" />
+                  <TextBox Text="{Binding TimeZoneId}" Width="180" />
+                </StackPanel>
+                <WrapPanel>
+                  <CheckBox Content="Seg" IsChecked="{Binding Mon}" Margin="0,0,8,0" /><CheckBox Content="Ter" IsChecked="{Binding Tue}" Margin="0,0,8,0" />
+                  <CheckBox Content="Qua" IsChecked="{Binding Wed}" Margin="0,0,8,0" /><CheckBox Content="Qui" IsChecked="{Binding Thu}" Margin="0,0,8,0" />
+                  <CheckBox Content="Sex" IsChecked="{Binding Fri}" Margin="0,0,8,0" /><CheckBox Content="Sáb" IsChecked="{Binding Sat}" Margin="0,0,8,0" />
+                  <CheckBox Content="Dom" IsChecked="{Binding Sun}" />
+                </WrapPanel>
+                <StackPanel Spacing="6" IsVisible="{Binding !IsAttendance}">
+                  <TextBlock Text="Agente de atendimento que assume quando o contato responde (vazio = o padrão)" Classes="muted" />
+                  <ComboBox ItemsSource="{Binding AttendanceAgents}" SelectedItem="{Binding AttendanceAgent}" HorizontalAlignment="Stretch" PlaceholderText="Agente de atendimento padrão">
+                    <ComboBox.ItemTemplate><DataTemplate x:DataType="c:AgentDto"><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                  <TextBlock Text="Instância do WhatsApp (vazio = a de Integrações)" Classes="muted" /><TextBox Text="{Binding InstanceName}" />
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Limite diário" VerticalAlignment="Center" /><NumericUpDown Value="{Binding DailyLimit}" Minimum="1" Maximum="1000" Width="130" FormatString="0" />
+                    <TextBlock Text="Intervalo mínimo (min)" VerticalAlignment="Center" /><NumericUpDown Value="{Binding MinIntervalMinutes}" Minimum="5" Maximum="240" Width="120" FormatString="0" />
+                  </StackPanel>
+                </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
+          </TabItem>
+          <TabItem Header="Qualificação" FontSize="16" IsVisible="{Binding IsAttendance}">
+            <DockPanel Margin="8">
+              <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+                <TextBlock Text="Perguntas feitas aos poucos, uma por mensagem. A pontuação (0–100) soma o peso das respostas que atendem ao critério. Use só critérios comerciais." Classes="muted" TextWrapping="Wrap" />
+                <Button Content="+ Pergunta" Command="{Binding AddQuestionCommand}" />
+              </StackPanel>
+              <ScrollViewer>
+                <ItemsControl ItemsSource="{Binding Questions}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:QuestionRow">
+                      <Border Classes="card" Margin="0,0,0,6">
+                        <StackPanel Spacing="4">
+                          <Grid ColumnDefinitions="50,8,170,8,*,8,80,8,Auto">
+                            <NumericUpDown Value="{Binding Order}" Minimum="0" Maximum="99" FormatString="0" ShowButtonSpinner="False" />
+                            <TextBox Grid.Column="2" Text="{Binding Key}" Watermark="chave" />
+                            <TextBox Grid.Column="4" Text="{Binding Question}" Watermark="Pergunta" />
+                            <NumericUpDown Grid.Column="6" Value="{Binding Weight}" Minimum="0" Maximum="40" FormatString="0" ShowButtonSpinner="False" />
+                            <Button Grid.Column="8" Content="✕" Command="{Binding $parent[UserControl].((vm:AgentsViewModel)DataContext).RemoveQuestionCommand}" CommandParameter="{Binding}" />
+                          </Grid>
+                          <Grid ColumnDefinitions="*,8,Auto,8,Auto">
+                            <TextBox Text="{Binding ScoringHint}" Watermark="Pontua se… (ex.: já possui clientes ativos)" />
+                            <CheckBox Grid.Column="2" Content="Ativa" IsChecked="{Binding Active}" />
+                            <CheckBox Grid.Column="4" Content="Todos os agentes" IsChecked="{Binding Global}" />
+                          </Grid>
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </DockPanel>
+          </TabItem>
+          <TabItem Header="Intenções" FontSize="16" IsVisible="{Binding IsAttendance}">
+            <ScrollViewer>
+              <StackPanel Spacing="4" Margin="8">
+                <TextBlock Text="O que fazer quando o sistema identifica cada intenção na mensagem do cliente. Pedido de descadastro sempre encerra e bloqueia novos contatos." Classes="muted" TextWrapping="Wrap" />
+                <ItemsControl ItemsSource="{Binding Intents}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:IntentRow">
+                      <Grid ColumnDefinitions="*,8,240" Margin="0,2">
+                        <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                        <ComboBox Grid.Column="2" ItemsSource="{x:Static vm:IntentRow.Actions}" SelectedIndex="{Binding ActionIndex}" IsEnabled="{Binding !Locked}" HorizontalAlignment="Stretch" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </ScrollViewer>
+          </TabItem>
+        </TabControl>
+      </DockPanel>
+    </Border>
+
+    <!-- Testar Agente -->
+    <Border Grid.Row="1" Grid.Column="2" Classes="panel">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Spacing="4">
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Reiniciar" Command="{Binding ResetTestCommand}" />
+            <TextBlock Text="Testar Agente" Classes="h2" VerticalAlignment="Center" />
+          </DockPanel>
+          <TextBlock Text="{Binding TestStatus}" Classes="muted" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding TestScore}" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+        </StackPanel>
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
+          <Button DockPanel.Dock="Right" Classes="primary" Content="Enviar" Command="{Binding SendTestCommand}" IsDefault="True" Margin="6,0,0,0" />
+          <TextBox Text="{Binding TestInput}" Watermark="Escreva como o cliente…" />
+        </DockPanel>
+        <Expander DockPanel.Dock="Bottom" Header="Memória e pontuação" Margin="0,6,0,0">
+          <TextBlock Text="{Binding TestMemory}" TextWrapping="Wrap" FontSize="12" />
+        </Expander>
+        <ScrollViewer Margin="0,8,0,0">
+          <ItemsControl ItemsSource="{Binding TestLines}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:TestLine">
+                <Border Classes="card" Margin="0,0,0,6">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding Who}" Classes="muted" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Text}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Detail}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+  </Grid>
+</UserControl>

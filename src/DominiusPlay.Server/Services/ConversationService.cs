@@ -1,6 +1,7 @@
 using DominiusPlay.Domain.Contracts;
 using DominiusPlay.Domain.Entities;
 using DominiusPlay.Domain.Enums;
+using DominiusPlay.Domain.Services;
 using DominiusPlay.Infrastructure.Data;
 using DominiusPlay.Server.Hubs;
 using Microsoft.AspNetCore.SignalR;
@@ -25,7 +26,7 @@ public class ConversationService(CrmDbContext db, ConversationLocks locks, IHubC
             return new(false, $"Conversa já está com {name}");
         }
         var cancelled = await CancelAutomatedAsync(leadId, reason, ct);
-        lead.Mode = ConversationMode.AtendimentoHumano;
+        ConversationStateMachine.Apply(lead, ConversationTrigger.HumanoAssumiu);
         lead.AssignedUserId = user.Id;
         lead.ConcurrencyStamp = Guid.NewGuid();
         lead.UpdatedAt = DateTimeOffset.UtcNow;
@@ -42,7 +43,7 @@ public class ConversationService(CrmDbContext db, ConversationLocks locks, IHubC
     {
         if (lead.Mode == ConversationMode.AtendimentoHumano) return;
         var cancelled = await CancelAutomatedAsync(lead.Id, "Mensagem manual detectada no aparelho", ct);
-        lead.Mode = ConversationMode.AtendimentoHumano;
+        ConversationStateMachine.Apply(lead, ConversationTrigger.MensagemManual);
         lead.ConcurrencyStamp = Guid.NewGuid();
         db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "conversation.manual-detected", EntityType = "Lead", EntityId = lead.Id.ToString(), Details = $"{cancelled} envio(s) automático(s) cancelado(s)" });
     }
@@ -55,7 +56,7 @@ public class ConversationService(CrmDbContext db, ConversationLocks locks, IHubC
         if (lead.Mode != ConversationMode.AtendimentoHumano && lead.Mode != ConversationMode.Pausado) return new(false, "Conversa não está em atendimento humano nem pausada");
         if (lead.AssignedUserId is { } owner && owner != user.Id && user.Role == UserRole.Atendente)
             return new(false, "Somente o atendente responsável ou um supervisor pode devolver esta conversa para a IA");
-        lead.Mode = ConversationMode.Ia;
+        ConversationStateMachine.Apply(lead, ConversationTrigger.DevolverIa);
         lead.ConcurrencyStamp = Guid.NewGuid();
         lead.UpdatedAt = DateTimeOffset.UtcNow;
         db.Messages.Add(new Message { LeadId = leadId, Direction = MessageDirection.Saida, Author = MessageAuthor.Sistema, Status = MessageStatus.Recebida,
@@ -74,13 +75,13 @@ public class ConversationService(CrmDbContext db, ConversationLocks locks, IHubC
         if (pause)
         {
             var cancelled = await CancelAutomatedAsync(leadId, "Conversa pausada", ct);
-            lead.Mode = ConversationMode.Pausado;
+            ConversationStateMachine.Apply(lead, ConversationTrigger.Pausar);
             db.AuditLogs.Add(new AuditLog { Actor = user.UserName, Action = "conversation.pause", EntityType = "Lead", EntityId = leadId.ToString(), Details = $"{cancelled} cancelado(s)" });
         }
         else
         {
             if (lead.Mode != ConversationMode.Pausado) return new(false, "Conversa não está pausada");
-            lead.Mode = ConversationMode.AguardandoContato;
+            ConversationStateMachine.Apply(lead, ConversationTrigger.Retomar);
             db.AuditLogs.Add(new AuditLog { Actor = user.UserName, Action = "conversation.resume", EntityType = "Lead", EntityId = leadId.ToString() });
         }
         lead.ConcurrencyStamp = Guid.NewGuid();
@@ -106,7 +107,7 @@ public class ConversationService(CrmDbContext db, ConversationLocks locks, IHubC
         return new(true, null, item.Id);
     }
 
-    private async Task<int> CancelAutomatedAsync(Guid leadId, string reason, CancellationToken ct)
+    public async Task<int> CancelAutomatedAsync(Guid leadId, string reason, CancellationToken ct)
     {
         var pending = await db.OutboundQueue
             .Where(q => q.LeadId == leadId && (q.Status == MessageStatus.NaFila) && AutomatedKinds.Contains(q.Kind)).ToListAsync(ct);

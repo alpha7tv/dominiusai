@@ -88,12 +88,20 @@ builder.Services.AddHttpClient<IAiProvider, AnthropicAiClient>(c => c.Timeout = 
 builder.Services.AddScoped<AiAgent>();
 builder.Services.AddScoped<AiResponder>();
 builder.Services.AddScoped<CampaignService>();
+builder.Services.AddScoped<AgentResolver>();
+builder.Services.AddScoped<ApproachGenerator>();
+builder.Services.AddScoped<HandoffService>();
+builder.Services.AddScoped<AutomationService>();
+builder.Services.AddScoped<LgpdService>();
+builder.Services.AddScoped<IntentRouter>();
+builder.Services.AddSingleton<AgentTestSessions>();
 builder.Services.AddSingleton(new DataPaths(dataDir));
 if (builder.Configuration.GetValue("Workers:Enabled", true))
 {
     builder.Services.AddHostedService<OutboundQueueWorker>();
     builder.Services.AddHostedService<InstanceMonitorWorker>();
     builder.Services.AddHostedService<AiWorker>();
+    builder.Services.AddHostedService<RetentionWorker>();
 }
 
 var app = builder.Build();
@@ -102,9 +110,10 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CrmDbContext>();
     await db.Database.EnsureCreatedAsync();
-    var upgraded = await SchemaUpgrader.UpgradeSqliteAsync(db); // banco de versão anterior: adiciona colunas/tabelas novas
+    var upgraded = await SchemaUpgrader.UpgradeAsync(db); // banco de versão anterior: adiciona colunas/tabelas novas
     if (upgraded.Count > 0) app.Logger.LogInformation("Banco atualizado: {Changes}", string.Join(", ", upgraded));
     await SeedData.EnsureSeededAsync(db);
+    await AgentSeed.EnsureAsync(db, scope.ServiceProvider.GetRequiredService<SettingsStore>());
 }
 
 app.UseRateLimiter();
@@ -113,6 +122,9 @@ app.UseAuthorization();
 app.MapCrmApi();
 app.MapAiApi();
 app.MapPhasesApi();
+app.MapAgentsApi();
+app.MapDashboardApi();
+app.MapAutomationsApi();
 app.MapHub<CrmHub>("/hubs/crm");
 app.Run();
 

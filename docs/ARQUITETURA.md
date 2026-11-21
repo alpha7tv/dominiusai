@@ -136,3 +136,12 @@ Contatos com endereçamento `@lid` usam `key.remoteJidAlt` para obter o número.
 - **Fase 8 — Modelos e campanhas:** modelos versionados (`EmRevisao` → `Aprovado` pelo admin, com nome do template do canal oficial quando houver). Validação: variáveis conhecidas (`{nome}`, `{, nome}`, `{assistente}`) e identificação como assistente virtual. Alerta de similaridade (Jaccard ≥ 80%). Campanha: rascunho → iniciar (enfileira leads elegíveis: consentimento válido, "Primeiro contato", nunca contatados, fora do bloqueio, filtro de tags; reveza as versões aprovadas; espaçamento ≥ 5 min) → pausar/retomar/cancelar → concluída automaticamente quando a fila esvazia. Cada envio continua passando pelo SendGuard.
 - **Fase 9 — Relatórios e LGPD:** `GET /api/reports?from&to` (funil, fechamentos por plano, perdas, dores, status das mensagens, desempenho por modelo, atendimento por pessoa/IA, origens), `GET /api/export/leads.csv` e `messages.csv` (`;`, UTF-8 com BOM, fórmulas neutralizadas), `GET /api/leads/{id}/export` (JSON do titular), `POST /api/maintenance/backup` (`VACUUM INTO`), `POST /api/maintenance/purge?days=`.
 - **Fase 10 — Instalador:** `.github/workflows/build-windows.yml` (build, testes, publish, Inno Setup, instalação silenciosa com serviço, `/health`, desinstalação).
+
+## 9. Agentes de IA, integração e automações (v0.4.0)
+
+Detalhes completos em `docs/AUDITORIA-AGENTES.md` (seção 5). Resumo:
+
+- **Máquina de estados da conversa** (`ConversationStateMachine`): `AguardandoContato` e `Prospeccao` pertencem ao Agente de Disparo, `Ia` ao Agente de Atendimento, `AtendimentoHumano` ao atendente, `Pausado`/`Encerrado` a ninguém. Toda mudança de modo passa por `Apply(lead, gatilho)` e o `SendGuard` recusa envios de quem não tem a palavra.
+- **Fluxo**: campanha envia a abordagem (Prospecção, card em "Abordagem realizada") → contato responde (acompanhamentos cancelados, modo IA, card em "Respondeu") → regras fixas (descadastro, pedido de humano) → automações ativas → Agente de Atendimento vinculado ao disparo responde com o contexto da campanha (card em "Em atendimento", "Qualificado" com pontuação ≥ 60) → transferência com ficha quando preciso.
+- **Automações** (`AutomationEngine` puro no domínio, `AutomationService` no servidor): blocos em JSON, validação de ciclos/conflitos, simulação sem efeitos e aplicação das ações pelas mesmas regras do Kanban, da fila e da transferência.
+- **LGPD** (`LgpdService`): anonimização e retenção diária configurável.

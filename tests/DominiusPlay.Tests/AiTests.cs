@@ -162,7 +162,7 @@ public class AiTests
         Assert.Contains("ASSISTENTE VIRTUAL", system);
         Assert.Contains("R$ 250,00", system);
         Assert.Equal("claude-haiku-5-5", f.Ai.Models[0]); // atendimento usa o modelo rápido
-        Assert.All(f.Ai.Requests, r => Assert.Equal(7, r.Tools!.Count));
+        Assert.All(f.Ai.Requests, r => Assert.Equal(9, r.Tools!.Count));
         Assert.True(f.Ai.Requests[0].AllowTools);
         // segunda chamada reenviou a resposta com ferramentas e os resultados, nessa ordem
         Assert.IsType<AiAssistantToolCalls>(f.Ai.Requests[1].Turns[^2]);
@@ -198,8 +198,8 @@ public class AiTests
         using var f = new CrmFactory();
         var c = await f.AdminAsync();
         await EnableAi(f, c);
-        var id = await Inbound(f, "M1", "Quero falar com um atendente");
-        f.Ai.Script.Enqueue(_ => FakeAi.Tools(("transferir_para_humano", """{"motivo":"cliente pediu"}""")));
+        var id = await Inbound(f, "M1", "Tenho uma dúvida sobre o pagamento do plano");
+        f.Ai.Script.Enqueue(_ => FakeAi.Tools(("transferir_para_humano", """{"motivo":"pagamento"}""")));
         f.Ai.Script.Enqueue(_ => FakeAi.Text("Claro! Um atendente da equipe vai continuar seu atendimento."));
         Assert.Equal(AiReplyOutcome.Replied, await Respond(f, id));
         var lead = await f.WithDb(db => db.Leads.AsNoTracking().SingleAsync());
@@ -329,7 +329,7 @@ public class AiTests
         Assert.Equal("ephemeral", body["system"]![0]!["cache_control"]!["type"]!.GetValue<string>());
         Assert.Equal("low", body["output_config"]!["effort"]!.GetValue<string>());
         Assert.Null(body["temperature"]); Assert.Null(body["tool_choice"]);
-        Assert.Equal(7, body["tools"]!.AsArray().Count);
+        Assert.Equal(9, body["tools"]!.AsArray().Count);
         Assert.Equal("object", body["tools"]![1]!["input_schema"]!["type"]!.GetValue<string>());
         Assert.Equal(["user", "assistant", "user"], body["messages"]!.AsArray().Select(m => m!["role"]!.GetValue<string>()));
 

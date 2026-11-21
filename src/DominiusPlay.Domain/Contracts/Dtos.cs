@@ -12,7 +12,8 @@ public sealed record SetupStatus(bool NeedsSetup);
 public sealed record LeadCard(
     Guid Id, string Name, string Phone, string PhoneFormatted, KanbanStage Stage, ConversationMode Mode, Priority Priority,
     string? InterestPlanCode, int? ActiveClients, PainCategory MainPain, string? LastMessagePreview, DateTimeOffset? LastInteractionAt,
-    string? AssignedTo, string? NextAction, ConsentStatus Consent, string Tags, KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null);
+    string? AssignedTo, string? NextAction, ConsentStatus Consent, string Tags, KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null,
+    string? Company = null, string? AgentName = null, string? CampaignName = null, int? Score = null);
 
 public sealed record LeadDetail(
     Guid Id, string Name, string Phone, string PhoneFormatted, string? City, string? State, string? Source, string? Notes, string Tags,
@@ -21,7 +22,9 @@ public sealed record LeadDetail(
     Guid? AssignedUserId, string? AssignedTo, string? NextAction, DateTimeOffset? LastInteractionAt, string? ConversationSummary,
     ConsentStatus Consent, DateTimeOffset? ConsentAt, string? ConsentSource, DateTimeOffset CreatedAt,
     IReadOnlyList<FactDto> Facts, IReadOnlyList<StageChangeDto> StageHistory, RecommendationDto? Recommendation,
-    KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null)
+    KanbanStage? SuggestedStage = null, string? SuggestedStageReason = null,
+    string? Company = null, string? Segment = null, int? QualificationScore = null, string? QualificationExplanation = null,
+    IntentCategory LastIntent = IntentCategory.Nenhuma, DateTimeOffset? HandoffAt = null, string? HandoffSummary = null, Guid? AttendanceAgentId = null)
 {
     /// <summary>Nome para exibir: o número formatado quando o lead não tem nome.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -54,6 +57,21 @@ public sealed record MoveCardRequest(KanbanStage To, string? Reason, bool Commer
 public sealed record MoveCardResponse(bool Applied, bool IsSuggestion, string? Message);
 
 public sealed record KanbanColumn(KanbanStage Stage, string Title, IReadOnlyList<LeadCard> Cards);
+/// <summary>Indicadores dos agentes (período, agente, campanha). Entrega só conta o que o provedor confirmou.</summary>
+public sealed record AgentsDashboardDto(int Imported, int Eligible, int ActiveCampaigns, int Sent, int Delivered, int Replies, double ResponseRate,
+    int Qualified, int Handoffs, int Proposals, int Sales, int OptOuts, int Errors, long AiTokens, IReadOnlyList<CampaignConversionDto> ByCampaign, string Note);
+public sealed record CampaignConversionDto(Guid Id, string Name, int Sent, int Replied, int Qualified, int Sales, double ResponseRate, double ConversionRate);
+
+public sealed record AutomationFlowDto(Guid Id, string Name, string Description, DominiusPlay.Domain.Services.AutomationTrigger Trigger, bool Active,
+    IReadOnlyList<DominiusPlay.Domain.Services.AutomationBlock> Blocks, int Version, string UpdatedBy, DateTimeOffset UpdatedAt, int Runs);
+public sealed record AutomationFlowUpsert(string Name, string? Description, DominiusPlay.Domain.Services.AutomationTrigger Trigger, bool Active,
+    IReadOnlyList<DominiusPlay.Domain.Services.AutomationBlock> Blocks);
+public sealed record AutomationTestRequest(IReadOnlyList<DominiusPlay.Domain.Services.AutomationBlock> Blocks, string Message, bool ConsentValid = true,
+    bool OptedOut = false, KanbanStage Stage = KanbanStage.Respondeu, string? Tags = null, int Score = 0, ConversationMode Mode = ConversationMode.Ia,
+    string? Segment = null, string? Campaign = null, bool RepliedToCampaign = true);
+public sealed record AutomationTestResponse(bool Valid, IReadOnlyList<string> Problems, string Intent, IReadOnlyList<string> Trace, IReadOnlyList<string> Actions, bool AiWouldReply);
+
+public sealed record KanbanStageDto(KanbanStage Stage, string Title, int Order, bool Visible, string DefaultTitle);
 
 public sealed record MessageDto(Guid Id, MessageDirection Direction, MessageAuthor Author, string Text, MessageStatus Status,
     DateTimeOffset Timestamp, string? Error, string? SentBy);
@@ -110,9 +128,19 @@ public sealed record ChangePasswordRequest(string Current, string NewPassword);
 
 public sealed record CampaignDto(Guid Id, string Name, CampaignStatus Status, string InstanceName, string StartTime, string EndTime, string AllowedDays,
     int MaxContacts, int MinIntervalSeconds, int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter, DateTimeOffset? StartedAt,
-    int Queued, int Sent, int Delivered, int Replied, int Failed, int Cancelled, int Eligible);
+    int Queued, int Sent, int Delivered, int Replied, int Failed, int Cancelled, int Eligible,
+    Guid? DispatchAgentId = null, string Segment = "", string Prompt = "", DateTimeOffset? StartDate = null, bool AiPersonalization = false,
+    Guid? FollowUpTemplateId = null, string FollowUpDays = "", int MaxFailurePercent = 20, int MaxOptOutPercent = 10, string? PauseReason = null,
+    int OptOuts = 0, int SimilarityAlerts = 0, int FollowUpsSent = 0);
 public sealed record CampaignUpsert(string Name, string StartTime, string EndTime, string AllowedDays, int MaxContacts, int MinIntervalSeconds,
-    int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter);
+    int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter,
+    Guid? DispatchAgentId = null, string? Segment = null, string? Prompt = null, DateTimeOffset? StartDate = null, bool AiPersonalization = false,
+    Guid? FollowUpTemplateId = null, string? FollowUpDays = null, int MaxFailurePercent = 20, int MaxOptOutPercent = 10);
+
+/// <summary>Resultado da validação da campanha antes de iniciar: problemas impedem o início; avisos não.</summary>
+public sealed record CampaignValidation(bool Ok, int Eligible, IReadOnlyList<string> Problems, IReadOnlyList<string> Warnings);
+/// <summary>Prévia de abordagem personalizada para um contato elegível (nada é salvo nem enviado).</summary>
+public sealed record ApproachPreview(string Contact, string Text, string Note);
 
 public sealed record ReportDto(DateTimeOffset From, DateTimeOffset To, int NewLeads, int Contacted, int Replied, int Closed, int Lost,
     IReadOnlyList<ReportRow> Funnel, IReadOnlyList<ReportRow> ClosedByPlan, IReadOnlyList<ReportRow> LossReasons, IReadOnlyList<ReportRow> Pains,
@@ -138,9 +166,35 @@ public sealed record AiSimulateRequest(IReadOnlyList<SimTurn> Turns);
 public sealed record AiSimulateResponse(bool Ok, string? Reply, IReadOnlyList<string> Actions, bool Transferred, string? Error, int Tokens);
 public sealed record ModelsResponse(bool Ok, IReadOnlyList<string> Models, string? Error);
 
+// ---------- Agentes de IA (v0.4) ----------
+
+public sealed record AgentDto(Guid Id, AgentKind Kind, string Name, string AssistantName, string Description, string Objective, string Company, string Personality, string Tone,
+    string Prompt, string ProductsAndServices, string AllowedAnswers, string NegotiationRestrictions, string HandoffCriteria, string Model, string AdvancedModel,
+    AgentStatus Status, bool IsDefault, string StartTime, string EndTime, string AllowedDays, string TimeZoneId, string IntentActions,
+    string InstanceName, int DailyLimit, int MinIntervalSeconds, Guid? AttendanceAgentId, int Conversations);
+
+public sealed record AgentUpsert(AgentKind Kind, string Name, string? AssistantName, string? Description, string? Objective, string? Company, string? Personality, string? Tone,
+    string? Prompt, string? ProductsAndServices, string? AllowedAnswers, string? NegotiationRestrictions, string? HandoffCriteria, string? Model, string? AdvancedModel,
+    AgentStatus Status, bool IsDefault, string StartTime, string EndTime, string AllowedDays, string? TimeZoneId, string? IntentActions,
+    string? InstanceName = null, int DailyLimit = 50, int MinIntervalSeconds = 300, Guid? AttendanceAgentId = null);
+
+public sealed record QualificationQuestionDto(Guid Id, Guid? AgentId, int Order, string Key, string Question, int Weight, string ScoringHint, bool Active);
+public sealed record QualificationQuestionUpsert(Guid? AgentId, int Order, string Key, string Question, int Weight, string? ScoringHint, bool Active);
+
+public sealed record IntentInfo(IntentCategory Intent, string Title, IntentAction DefaultAction);
+
+/// <summary>Testar Agente: conversa simulada de vários turnos. SessionId mantém a memória (fatos, qualificação) entre os turnos; nada é salvo nem enviado.</summary>
+public sealed record AgentTestRequest(Guid? SessionId, string Message, bool Reset = false);
+public sealed record AgentTestResponse(Guid SessionId, bool Ok, string? Reply, IReadOnlyList<string> Actions, bool Transferred, bool Closed, string? Error, int Tokens,
+    string DetectedIntent, string FinalIntent, int? Score, string? ScoreExplanation, string? HandoffSummary, IReadOnlyList<string> Memory, string Model);
+
+public sealed record HandoffRequest(string? Reason);
+
 public static class HubEvents
 {
     public const string LeadChanged = "leadChanged";
     public const string MessageAdded = "messageAdded";
     public const string ConnectionChanged = "connectionChanged";
+    /// <summary>Conversa transferida para humano (leadId, nome do atendente atribuído ou null).</summary>
+    public const string Handoff = "handoff";
 }

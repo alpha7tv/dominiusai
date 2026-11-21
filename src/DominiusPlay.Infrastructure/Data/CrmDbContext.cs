@@ -26,6 +26,9 @@ public class CrmDbContext(DbContextOptions<CrmDbContext> options) : DbContext(op
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<AppSetting> Settings => Set<AppSetting>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<AgentProfile> AgentProfiles => Set<AgentProfile>();
+    public DbSet<QualificationQuestion> QualificationQuestions => Set<QualificationQuestion>();
+    public DbSet<AutomationFlow> AutomationFlows => Set<AutomationFlow>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -71,6 +74,8 @@ public class CrmDbContext(DbContextOptions<CrmDbContext> options) : DbContext(op
         b.Entity<User>().HasIndex(x => x.UserName).IsUnique();
         b.Entity<AppSetting>().HasKey(x => x.Key);
         b.Entity<AuditLog>().HasIndex(x => x.CreatedAt);
+        b.Entity<AgentProfile>(e => { e.HasIndex(x => new { x.Kind, x.Status }); e.Property(x => x.Name).HasMaxLength(120); });
+        b.Entity<QualificationQuestion>().HasIndex(x => new { x.AgentId, x.Order });
 
         // SQLite não ordena/compara DateTimeOffset nativamente: armazenar como ticks UTC (long).
         if (Database.IsSqlite())

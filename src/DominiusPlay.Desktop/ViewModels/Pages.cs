@@ -1,3 +1,4 @@
+using DominiusPlay.Domain.Services;
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -29,27 +30,76 @@ public partial class LeadCardVm(LeadCard c) : ObservableObject
     public string Consent => Ui.Consent(Model.Consent);
     public string Stage => Ui.Stage(Model.Stage);
     public string Tags => Model.Tags;
+    /// <summary>Empresa · campanha de origem · agente responsável (o que existir).</summary>
+    public string Origin => string.Join(" · ", new[] { Model.Company, Model.CampaignName is { } c ? "Campanha: " + c : null, Model.AgentName is { } a ? "Agente: " + a : null }.Where(x => !string.IsNullOrWhiteSpace(x)));
+    public string Score => Model.Score is { } s and > 0 ? $"Qualificação {s}/100" : "";
     public bool HasSuggestion => Model.SuggestedStage is not null;
     public string SuggestionText => Model.SuggestedStage is { } st ? $"IA sugere: {Ui.Stage(st)}" + (Model.SuggestedStageReason is { Length: > 0 } r ? $" ({r})" : "") : "";
 }
 
 public record Stat(string Key, int Value);
 
+public record IdOption(Guid? Id, string Name);
+
 public partial class DashboardViewModel(AppSession s) : ViewModelBase
 {
     [ObservableProperty] private DashboardDto? _data;
+    [ObservableProperty] private AgentsDashboardDto? _agentsData;
     public ObservableCollection<Stat> Stages { get; } = new();
     public ObservableCollection<Stat> Pains { get; } = new();
+    public ObservableCollection<CampaignConversionDto> Conversions { get; } = new();
+
+    // filtros do painel dos agentes
+    public static string[] Periods { get; } = ["Últimos 7 dias", "Últimos 30 dias", "Últimos 90 dias", "Todo o período"];
+    [ObservableProperty] private int _periodIndex = 1;
+    public ObservableCollection<IdOption> AgentOptions { get; } = new();
+    public ObservableCollection<IdOption> CampaignOptions { get; } = new();
+    [ObservableProperty] private IdOption? _agentFilter;
+    [ObservableProperty] private IdOption? _campaignFilter;
+    private bool _loadingFilters;
 
     public override Task OnActivatedAsync() => Refresh();
+
+    partial void OnPeriodIndexChanged(int value) { if (!_loadingFilters) _ = Run(LoadAgents); }
+    partial void OnAgentFilterChanged(IdOption? value) { if (!_loadingFilters) _ = Run(LoadAgents); }
+    partial void OnCampaignFilterChanged(IdOption? value) { if (!_loadingFilters) _ = Run(LoadAgents); }
+
+    private async Task LoadAgents()
+    {
+        DateTimeOffset? from = PeriodIndex switch { 0 => DateTimeOffset.UtcNow.AddDays(-7), 1 => DateTimeOffset.UtcNow.AddDays(-30), 2 => DateTimeOffset.UtcNow.AddDays(-90), _ => null };
+        AgentsData = await s.Api.AgentsDashboardAsync(from, AgentFilter?.Id, CampaignFilter?.Id);
+        Conversions.Clear(); foreach (var r in AgentsData.ByCampaign) Conversions.Add(r);
+    }
 
     [RelayCommand]
     private Task Refresh() => Run(async () =>
     {
+        _loadingFilters = true;
+        try
+        {
+            var keepA = AgentFilter?.Id; var keepC = CampaignFilter?.Id;
+            AgentOptions.Clear(); AgentOptions.Add(new(null, "Todos os agentes"));
+            foreach (var a in (await s.Api.AgentsAsync(AgentKind.Disparo)).Concat(await s.Api.AgentsAsync(AgentKind.Atendimento)))
+                AgentOptions.Add(new(a.Id, (a.Kind == AgentKind.Disparo ? "Disparo: " : "Atendimento: ") + a.Name));
+            CampaignOptions.Clear(); CampaignOptions.Add(new(null, "Todas as campanhas"));
+            foreach (var c in await s.Api.CampaignsAsync()) CampaignOptions.Add(new(c.Id, c.Name));
+            AgentFilter = AgentOptions.FirstOrDefault(o => o.Id == keepA) ?? AgentOptions[0];
+            CampaignFilter = CampaignOptions.FirstOrDefault(o => o.Id == keepC) ?? CampaignOptions[0];
+        }
+        finally { _loadingFilters = false; }
+        await LoadAgents();
         Data = await s.Api.DashboardAsync();
         Stages.Clear(); foreach (var kv in Data.ByStage) Stages.Add(new(kv.Key, kv.Value));
         Pains.Clear(); foreach (var kv in Data.TopPains) Pains.Add(new(kv.Key, kv.Value));
     });
+}
+
+public partial class StageRowVm : ObservableObject
+{
+    public KanbanStage Stage { get; init; }
+    public string DefaultTitle { get; init; } = "";
+    [ObservableProperty] private string _title = "";
+    [ObservableProperty] private bool _visible = true;
 }
 
 public partial class KanbanColumnVm : ObservableObject
@@ -81,6 +131,36 @@ public partial class KanbanViewModel : ViewModelBase
     public Task OpenChatAsync(Guid leadId) => Chat.OpenAsync(leadId);
 
     public override Task OnActivatedAsync() => Refresh();
+
+    // ---------- etapas configuráveis (administrador) ----------
+    public ObservableCollection<StageRowVm> StageRows { get; } = new();
+    [ObservableProperty] private bool _showStages;
+    [ObservableProperty] private StageRowVm? _selectedStage;
+
+    [RelayCommand]
+    private Task ToggleStages() => Run(async () =>
+    {
+        ShowStages = !ShowStages;
+        if (!ShowStages) return;
+        StageRows.Clear();
+        foreach (var st in await _s.Api.KanbanStagesAsync())
+            StageRows.Add(new StageRowVm { Stage = st.Stage, DefaultTitle = st.DefaultTitle, Title = st.Title, Visible = st.Visible });
+    });
+
+    [RelayCommand]
+    private void StageUp(StageRowVm? r) { if (r is not null && StageRows.IndexOf(r) is var i and > 0) StageRows.Move(i, i - 1); }
+
+    [RelayCommand]
+    private void StageDown(StageRowVm? r) { if (r is not null && StageRows.IndexOf(r) is var i && i >= 0 && i < StageRows.Count - 1) StageRows.Move(i, i + 1); }
+
+    [RelayCommand]
+    private Task SaveStages() => Run(async () =>
+    {
+        var r = await _s.Api.SaveKanbanStagesAsync(StageRows.Select((x, i) => new KanbanStageDto(x.Stage, x.Title, i + 1, x.Visible, x.DefaultTitle)).ToList());
+        Info = r.Message;
+        ShowStages = false;
+        await RefreshCore();
+    });
 
     [RelayCommand]
     public Task Refresh() => Run(async () =>
@@ -182,7 +262,7 @@ public partial class ConversationsViewModel : ViewModelBase
 
     public bool CanTakeOver => Detail is not null && Detail.Mode != ConversationMode.AtendimentoHumano;
     public bool CanReturn => Detail is not null && Detail.Mode is ConversationMode.AtendimentoHumano or ConversationMode.Pausado;
-    public string ModeText => Detail is null ? "" : Ui.Mode(Detail.Mode) + (Detail.AssignedTo is null ? "" : " · " + Detail.AssignedTo);
+    public string ModeText => Detail is null ? "" : Ui.Mode(Detail.Mode) + " · fala agora: " + ConversationStateMachine.SpeakerTitle(ConversationStateMachine.Speaker(Detail.Mode)) + (Detail.AssignedTo is null ? "" : " · " + Detail.AssignedTo);
     public string ExperienceText => Detail?.Experience switch { IptvExperience.JaTrabalha => "Já trabalha com revenda", IptvExperience.Iniciante => "Está começando", _ => "Não informado" };
     public string PainText => Detail is null ? "" : Ui.Pain(Detail.MainPain);
     public string StageText => Detail is null ? "" : Ui.Stage(Detail.Stage);
@@ -481,6 +561,13 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     {
         await write(await s.Api.DownloadAsync($"api/leads/{id}/export"));
         Info = $"Dados exportados para {fileName}";
+    });
+
+    public Task AnonymizeSelectedAsync() => Run(async () =>
+    {
+        if (Selected is null) return;
+        Info = (await s.Api.AnonymizeLeadAsync(Selected.Id)).Message;
+        await RefreshCore();
     });
 
     public Task DeleteSelectedAsync() => Run(async () =>

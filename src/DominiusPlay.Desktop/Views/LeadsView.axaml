@@ -113,6 +113,7 @@
             <Button Content="Registrar consentimento" Command="{Binding RegisterConsentCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
             <Button Classes="danger" Content="Descadastrar (não enviar mais)" Command="{Binding OptOutSelectedCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
             <Button Content="Exportar dados do titular (LGPD)" Click="OnExportLgpd" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+            <Button Content="Anonimizar contato (LGPD)" Click="OnAnonymizeLead" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,0,6" />
             <Button Classes="danger" Content="Excluir lead e todos os dados (LGPD)" Click="OnDeleteLead" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
           </StackPanel>
         </Border>
