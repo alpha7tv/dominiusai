@@ -14,7 +14,7 @@ public sealed record ApproachResult(string Text, bool Personalized, string Note,
 /// A variação não serve para driblar filtros: só redação diferente, mesma identidade, mesmo objetivo e mesma opção de saída.
 /// Se a IA falhar, o texto não passar no ApproachValidator ou ficar quase igual a envios recentes, usa-se o modelo aprovado.
 /// </summary>
-public class ApproachGenerator(CrmDbContext db, AiAgent agent, IAiProvider provider, TimeProvider clock)
+public class ApproachGenerator(CrmDbContext db, AiAgent agent, IAiProvider provider, TimeProvider clock, KnowledgeBaseService kbs)
 {
     /// <summary>Similaridade (Jaccard de palavras) a partir da qual a mensagem é considerada repetida demais.</summary>
     public const double SimilarityAlert = 0.85;
@@ -50,6 +50,12 @@ Responda somente com o texto da mensagem.
         }
         if (!string.IsNullOrWhiteSpace(campaign.Objective)) sb.AppendLine("Objetivo da campanha: " + campaign.Objective);
         if (!string.IsNullOrWhiteSpace(campaign.Prompt)) sb.AppendLine("Instruções da campanha: " + campaign.Prompt);
+        // Base Dominius Play liberada para o Disparo (Base de conhecimento → Acesso dos agentes): fatos oficiais só para não contradizer
+        if ((await kbs.AccessAsync(ct)).Dispatch)
+        {
+            var cc = await kbs.ConfigAsync(ct);
+            sb.AppendLine($"FATOS OFICIAIS (não acrescente nada que o modelo aprovado não diga; servem só para não contradizer): empresa {cc.CompanyName}; teste somente do serviço ({cc.TestHours} h); não existe teste do painel; pagamento via {cc.PaymentMethods}.");
+        }
 
         var user = new StringBuilder();
         user.AppendLine("MODELO APROVADO:\n" + approvedText + "\n");

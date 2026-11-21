@@ -43,7 +43,7 @@ public partial class MainWindowViewModel : ViewModelBase
     [
         new("dashboard", "▦", "Visão geral"), new("disparo", "🚀", "Agentes de disparo"), new("atendimento", "🤖", "Agentes de atendimento"),
         new("campanhas", "📣", "Campanhas"), new("leads", "👥", "Contatos"), new("conversas", "💬", "Caixa de entrada"), new("automacoes", "⚡", "Automações"),
-        new("kanban", "▥", "CRM Kanban"), new("conhecimento", "📚", "Base de conhecimento"), new("mensagens", "✉", "Mensagens"),
+        new("kanban", "▥", "CRM Kanban"), new("conhecimento", "📚", "Base de conhecimento"), new("laboratorio", "🧪", "Laboratório IA"), new("mensagens", "✉", "Mensagens"),
         new("planos", "💲", "Planos"), new("relatorios", "📊", "Relatórios"),
         new("equipe", "👤", "Equipe"), new("integracoes", "🔌", "Integrações"), new("config", "⚙", "Configurações"),
     ];
@@ -101,7 +101,8 @@ public partial class MainWindowViewModel : ViewModelBase
                 "kanban" => new KanbanViewModel(_session),
                 "leads" => new LeadsViewModel(_session),
                 "planos" => new PlansViewModel(_session),
-                "conhecimento" => new KnowledgeViewModel(_session),
+                "conhecimento" => new KbViewModel(_session),
+                "laboratorio" => new LabViewModel(_session),
                 "mensagens" => new TemplatesViewModel(_session),
                 "integracoes" => new IntegrationsViewModel(_session),
                 "campanhas" => new CampaignsViewModel(_session),

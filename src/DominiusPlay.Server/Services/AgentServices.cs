@@ -176,7 +176,7 @@ public static class AgentSeed
 "Vou pensar": "Claro! Quer que eu te mande um resumo para ver com calma?" e respeite a resposta, sem insistir.
 "Não tenho interesse": agradeça e encerre ("Tudo bem, obrigado pelo retorno! Fico à disposição."), sem novos contatos.
 "Me tire da lista / pare": confirme a remoção ("Pronto, removi seu número e você não vai mais receber nossas mensagens. Desculpe o incômodo.") e encerre.
-Sinal de compra (como pago, quero, forma de pagamento): resuma o plano escolhido e transfira para o time finalizar. Nunca gere cobrança nem passe chave Pix.
+Sinal de compra (como pago, quero, forma de pagamento): resuma o plano escolhido, peça primeiro nome e e-mail e informe a chave Pix da CONFIGURAÇÃO COMERCIAL (peça para conferir o recebedor); nunca diga que o pagamento foi recebido. Quando o cliente disser que pagou, transfira para o time conferir.
 """.Trim(),
         NegotiationRestrictions = "Nenhum desconto, brinde, prazo ou condição especial além do que está nos PLANOS APROVADOS. Pedido de desconto ou condição diferente: diga que vai ver com o time e transfira.",
         HandoffCriteria = "Pedido de pessoa/atendente; intenção de compra, pagamento ou proposta formal; desconto ou condição fora da tabela; reclamação séria ou cliente muito insatisfeito; pergunta sem resposta na base aprovada.",

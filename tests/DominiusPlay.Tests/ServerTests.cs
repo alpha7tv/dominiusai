@@ -144,7 +144,7 @@ public class ServerTests
         using var f = new CrmFactory();
         var c = await f.AdminAsync();
         var plans = await c.GetFromJsonAsync<List<PlanDto>>("/api/plans");
-        Assert.Equal(5, plans!.Count);
+        Assert.Equal(8, plans!.Count);
         Assert.Equal(250m, plans.Single(p => p.Code == "APONTAMENTO_SIGMA_600").MonthlyPrice);
         // nova versão entra como rascunho; só vira ativa após aprovação, que arquiva a anterior
         var v2 = await (await c.PostAsJsonAsync("/api/plans", new PlanUpsert("APONTAMENTO_SIGMA_600", "Apontamento Sigma 600", 270m, null, 600, "d", "b", "", "", "", null, null))).Content.ReadFromJsonAsync<PlanDto>();

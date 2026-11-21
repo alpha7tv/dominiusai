@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.LabView" x:DataType="vm:LabViewModel">
+  <Grid ColumnDefinitions="340,*" RowDefinitions="Auto,*" Margin="24">
+    <StackPanel Grid.ColumnSpan="2" Spacing="4" Margin="0,0,0,12">
+      <TextBlock Text="Laboratório de Atendimento IA" Classes="h1" />
+      <TextBlock Text="Simule clientes antes de ligar a IA com clientes reais. Nada é enviado no WhatsApp e nenhum pagamento é feito." Classes="muted" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Error}" Classes="error" />
+    </StackPanel>
+    <DockPanel Grid.Row="1" Margin="0,0,12,0">
+      <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,8,0,0">
+        <TextBlock Text="Mensagens do cliente (uma por linha; pode editar)" Classes="muted" />
+        <TextBox Text="{Binding Messages}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120" />
+        <CheckBox Content="Gerar também a resposta do Claude (usa tokens)" IsChecked="{Binding UseAi}" />
+        <Button Classes="primary" Content="Simular atendimento" Command="{Binding SimulateCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+      </StackPanel>
+      <ListBox ItemsSource="{Binding Scenarios}" SelectedItem="{Binding SelectedScenario}" Background="Transparent">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="c:LabScenarioDto">
+            <TextBlock Text="{Binding Title}" Margin="2,4" />
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+    <DockPanel Grid.Row="1" Grid.Column="1">
+      <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,6">
+        <TextBlock Text="{Binding Title}" Classes="h2" />
+        <TextBlock Text="{Binding AiNote}" Classes="muted" TextWrapping="Wrap" />
+      </StackPanel>
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Steps}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:LabStepView">
+              <Border Classes="panel" Margin="0,0,0,8">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="{Binding Header}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Analysis}" Classes="muted" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Found}" Classes="muted" TextWrapping="Wrap" />
+                  <Border Classes="card" Padding="10"><TextBlock Text="{Binding Reply}" TextWrapping="Wrap" /></Border>
+                  <TextBlock Text="{Binding AiReply}" TextWrapping="Wrap" IsVisible="{Binding HasAi}" />
+                  <TextBlock Text="{Binding Product}" Classes="muted" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Memory}" Classes="muted" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Action}" Foreground="{StaticResource AccentBrush}" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding Handoff}" Classes="ok" IsVisible="{Binding HasHandoff}" />
+                  <TextBlock Text="{Binding Alerts}" Classes="error" IsVisible="{Binding HasAlerts}" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
+</UserControl>

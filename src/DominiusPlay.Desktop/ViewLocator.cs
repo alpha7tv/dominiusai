@@ -16,6 +16,8 @@ public class ViewLocator : IDataTemplate
         KanbanViewModel => new KanbanView(),
         LeadsViewModel => new LeadsView(),
         PlansViewModel => new PlansView(),
+        KbViewModel => new KbView(),
+        LabViewModel => new LabView(),
         KnowledgeViewModel => new KnowledgeView(),
         TemplatesViewModel => new TemplatesView(),
         IntegrationsViewModel => new IntegrationsView(),

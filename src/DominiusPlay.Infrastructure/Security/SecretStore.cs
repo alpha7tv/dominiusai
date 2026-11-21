@@ -55,6 +55,11 @@ public static class SettingKeys
     public const string AiDailyTokenLimit = "ai.dailyTokenLimit";
     public const string AiTyping = "ai.typingIndicator";
     public const string AiDebounceSeconds = "ai.debounceSeconds";
+    public const string CommercialConfig = "commercial.config"; // JSON editável (Pix, links, prazos, regras)
+    public const string ActiveLimits20261121 = "commercial.limits.2026-11-21";      // Apontamento até 600 ativos, Franquia sem limite de ativos
+    public const string CommercialAnswers20261121 = "commercial.answers.2026-11-21"; // Mensalista 50 ativo, pós-pago ligado, Master a partir de R$ 100, disparo consulta a base
+    public const string KbAccess = "kb.access";                 // agentes que consultam a base Dominius Play: "Atendimento" / "Atendimento,Disparo"
+    public const string CommercialTable202611 = "commercial.table.2026-11"; // tabela oficial nov/2026 aplicada
     public static string AiUsage(DateOnly d) => $"ai.usage.{d:yyyyMMdd}";
 }
 

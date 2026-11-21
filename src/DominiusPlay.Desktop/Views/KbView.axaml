@@ -1,0 +1,243 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:DominiusPlay.Desktop.ViewModels"
+             xmlns:c="using:DominiusPlay.Domain.Contracts"
+             x:Class="DominiusPlay.Desktop.Views.KbView" x:DataType="vm:KbViewModel">
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Top" Spacing="4" Margin="0,0,0,8">
+      <TextBlock Text="Base de conhecimento · Dominius Play" Classes="h1" />
+      <TextBlock Text="Separada do prompt do agente: o que você publica aqui a IA consulta na próxima mensagem, sem reiniciar. Preços vêm dos Planos aprovados; Pix, links e prazos da aba Comercial." Classes="muted" TextWrapping="Wrap" />
+      <TextBlock Text="{Binding Info}" Classes="ok" /><TextBlock Text="{Binding Error}" Classes="error" />
+    </StackPanel>
+    <TabControl SelectedIndex="{Binding Tab}">
+      <!-- ============ Perguntas e respostas ============ -->
+      <TabItem Header="Perguntas e respostas" FontSize="16">
+        <Grid ColumnDefinitions="380,*" Margin="0,8,0,0">
+          <DockPanel Margin="0,0,12,0">
+            <StackPanel DockPanel.Dock="Top" Spacing="6" Margin="0,0,0,8">
+              <Grid ColumnDefinitions="*,6,Auto">
+                <TextBox Text="{Binding Search}" Watermark="Pesquisar pergunta, resposta ou palavra-chave" />
+                <Button Grid.Column="2" Content="Buscar" Command="{Binding FindCommand}" IsDefault="True" />
+              </Grid>
+              <Grid ColumnDefinitions="*,6,Auto">
+                <ComboBox ItemsSource="{x:Static vm:KbViewModel.StatusFilters}" SelectedIndex="{Binding StatusFilter}" HorizontalAlignment="Stretch" />
+                <Button Grid.Column="2" Classes="primary" Content="+ Nova" Command="{Binding NewCommand}" />
+              </Grid>
+              <TextBlock Text="{Binding Summary}" Classes="muted" TextWrapping="Wrap" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="Exportar" Click="OnExport" />
+                <Button Content="Importar…" Click="OnImport" />
+              </StackPanel>
+            </StackPanel>
+            <ListBox ItemsSource="{Binding Entries}" SelectedItem="{Binding Selected}" Background="Transparent">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="c:KbEntryDto">
+                  <StackPanel Margin="2,3" Spacing="1">
+                    <TextBlock TextWrapping="Wrap" FontWeight="SemiBold"><Run Text="{Binding Code}" Foreground="{StaticResource AccentBrush}" /><Run Text="  " /><Run Text="{Binding Question}" /></TextBlock>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="{Binding Category}" Classes="muted" />
+                      <TextBlock Text="{Binding Status}" Classes="muted" />
+                      <TextBlock Text="· confirmar com a equipe" Classes="muted" IsVisible="{Binding NeedsConfirmation}" />
+                    </StackPanel>
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </DockPanel>
+          <Border Grid.Column="1" Classes="panel" Padding="0">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="16,8,16,12">
+                <Button Classes="primary" Content="Salvar" Command="{Binding SaveCommand}" />
+                <Button Content="Testar antes de publicar" Command="{Binding TestCurrentCommand}" />
+                <Button Content="Publicar" Command="{Binding PublishCommand}" IsVisible="{Binding !IsNew}" />
+                <Button Content="Desativar" Command="{Binding DeactivateCommand}" IsVisible="{Binding !IsNew}" />
+                <Button Content="Histórico" Command="{Binding LoadHistoryCommand}" IsVisible="{Binding !IsNew}" />
+                <Button Classes="danger" Content="Excluir" Click="OnDelete" IsVisible="{Binding !IsNew}" />
+              </StackPanel>
+              <ScrollViewer>
+                <StackPanel Spacing="6" Margin="16,12">
+                  <TextBlock Text="{Binding Meta}" Classes="muted" />
+                  <Grid ColumnDefinitions="130,10,*,10,110,10,140">
+                    <StackPanel><TextBlock Text="ID" Classes="muted" /><TextBox Text="{Binding Code}" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Categoria" Classes="muted" />
+                      <AutoCompleteBox Text="{Binding Category}" ItemsSource="{Binding Categories}" FilterMode="Contains" MinimumPrefixLength="0" /></StackPanel>
+                    <StackPanel Grid.Column="4"><TextBlock Text="Prioridade (1–5)" Classes="muted" /><NumericUpDown Value="{Binding Priority}" Minimum="1" Maximum="5" Increment="1" FormatString="0" /></StackPanel>
+                    <StackPanel Grid.Column="6"><TextBlock Text="Situação" Classes="muted" /><ComboBox ItemsSource="{x:Static vm:KbViewModel.StatusNames}" SelectedIndex="{Binding StatusIndex}" HorizontalAlignment="Stretch" /></StackPanel>
+                  </Grid>
+                  <TextBlock Text="Pergunta principal" Classes="muted" /><TextBox Text="{Binding Question}" />
+                  <TextBlock Text="Variações (outras formas de perguntar, uma por linha)" Classes="muted" />
+                  <TextBox Text="{Binding Variations}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" />
+                  <TextBlock Text="Resposta oficial — use marcadores como {pix}, {link_teste}, {preco:MENSALISTA_10} para valores editáveis" Classes="muted" TextWrapping="Wrap" />
+                  <TextBox Text="{Binding Answer}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" />
+                  <Border Classes="card" Padding="10" IsVisible="{Binding Preview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Como a IA recebe (valores preenchidos)" Classes="muted" />
+                      <TextBlock Text="{Binding Preview}" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding Warnings}" Classes="error" />
+                    </StackPanel>
+                  </Border>
+                  <Grid ColumnDefinitions="*,10,*">
+                    <StackPanel><TextBlock Text="Palavras-chave (vírgula)" Classes="muted" /><TextBox Text="{Binding Keywords}" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Produtos relacionados (códigos dos planos)" Classes="muted" /><TextBox Text="{Binding Products}" /></StackPanel>
+                  </Grid>
+                  <Grid ColumnDefinitions="*,10,Auto">
+                    <StackPanel><TextBlock Text="Fonte da informação" Classes="muted" /><TextBox Text="{Binding Source}" /></StackPanel>
+                    <CheckBox Grid.Column="2" VerticalAlignment="Bottom" Content="Precisa de confirmação da equipe" IsChecked="{Binding NeedsConfirmation}" />
+                  </Grid>
+                  <ItemsControl ItemsSource="{Binding History}" Margin="0,8,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="c:KbRevisionDto">
+                        <Border Classes="card" Padding="8" Margin="0,2">
+                          <StackPanel Spacing="2">
+                            <TextBlock Classes="muted"><Run Text="Versão " /><Run Text="{Binding Version}" /><Run Text=" · " /><Run Text="{Binding Action}" /><Run Text=" · " /><Run Text="{Binding ChangedBy}" /><Run Text=" · " /><Run Text="{Binding At, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" /><Run Text=" · " /><Run Text="{Binding Status}" /></TextBlock>
+                            <TextBlock Text="{Binding Answer}" TextWrapping="Wrap" />
+                          </StackPanel>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </ScrollViewer>
+            </DockPanel>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <!-- ============ Testar ============ -->
+      <TabItem Header="Testar perguntas" FontSize="16">
+        <DockPanel Margin="0,8,0,0">
+          <StackPanel DockPanel.Dock="Top" Spacing="6">
+            <TextBlock Text="Escreva como o cliente escreveria. A busca inclui rascunhos, para você testar antes de publicar." Classes="muted" />
+            <Grid ColumnDefinitions="*,8,Auto">
+              <TextBox Text="{Binding TestQuestion}" />
+              <Button Grid.Column="2" Classes="primary" Content="Testar" Command="{Binding TestCommand}" />
+            </Grid>
+            <TextBlock Text="{Binding TestSummary}" TextWrapping="Wrap" />
+          </StackPanel>
+          <ScrollViewer Margin="0,8,0,0">
+            <ItemsControl ItemsSource="{Binding TestResults}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="c:KbTestMatch">
+                  <Border Classes="panel" Margin="0,4">
+                    <StackPanel Spacing="4">
+                      <TextBlock FontWeight="SemiBold" TextWrapping="Wrap"><Run Text="{Binding Code}" Foreground="{StaticResource AccentBrush}" /><Run Text="  " /><Run Text="{Binding Question}" /></TextBlock>
+                      <TextBlock Classes="muted"><Run Text="{Binding Category}" /><Run Text=" · relevância " /><Run Text="{Binding Score, StringFormat='{}{0:0.00}'}" /><Run Text=" · " /><Run Text="{Binding Status}" /></TextBlock>
+                      <TextBlock Text="{Binding RenderedAnswer}" TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+
+      <!-- ============ Comercial ============ -->
+      <TabItem Header="Comercial" FontSize="16">
+        <Grid ColumnDefinitions="*,16,340" Margin="0,8,0,0">
+          <Border Classes="panel" Padding="0">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Spacing="8" Margin="16,8,16,12">
+                <Button Classes="primary" Content="Salvar configuração comercial" Command="{Binding SaveCommercialCommand}" />
+                <TextBlock Text="{Binding CommercialInfo}" Classes="ok" VerticalAlignment="Center" />
+              </StackPanel>
+              <ScrollViewer>
+                <StackPanel Spacing="6" Margin="16,12">
+                  <TextBlock Text="Preços e créditos dos planos ficam em Planos (versionados e aprovados). Aqui ficam os dados que a IA informa ao cliente." Classes="muted" TextWrapping="Wrap" />
+                  <TextBlock Text="Pagamento" Classes="h2" />
+                  <Grid ColumnDefinitions="*,10,*">
+                    <StackPanel><TextBlock Text="Chave Pix" Classes="muted" /><TextBox Text="{Binding PixKey}" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Formas de pagamento" Classes="muted" /><TextBox Text="{Binding PaymentMethods}" /></StackPanel>
+                  </Grid>
+                  <TextBlock Text="A IA sempre pede para o cliente conferir o recebedor e nunca confirma pagamento." Classes="muted" />
+                  <TextBlock Text="Links e aplicativos" Classes="h2" Margin="0,8,0,0" />
+                  <Grid ColumnDefinitions="*,10,*,10,*">
+                    <StackPanel><TextBlock Text="Site" Classes="muted" /><TextBox Text="{Binding Site}" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Link do teste" Classes="muted" /><TextBox Text="{Binding TestUrl}" /></StackPanel>
+                    <StackPanel Grid.Column="4"><TextBlock Text="Player web" Classes="muted" /><TextBox Text="{Binding PlayerUrl}" /></StackPanel>
+                  </Grid>
+                  <Grid ColumnDefinitions="120,10,*,10,120,10,*">
+                    <StackPanel><TextBlock Text="Código app oficial" Classes="muted" /><TextBox Text="{Binding AppCode}" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Link app oficial" Classes="muted" /><TextBox Text="{Binding AppLink}" /></StackPanel>
+                    <StackPanel Grid.Column="4"><TextBlock Text="Código app P2P" Classes="muted" /><TextBox Text="{Binding P2pCode}" /></StackPanel>
+                    <StackPanel Grid.Column="6"><TextBlock Text="Link app P2P" Classes="muted" /><TextBox Text="{Binding P2pLink}" /></StackPanel>
+                  </Grid>
+                  <Grid ColumnDefinitions="*,10,*,10,*">
+                    <StackPanel><TextBlock Text="Apps Smart TV antigas" Classes="muted" /><TextBox Text="{Binding SmartTvApps}" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Parceiros ativos (vazio = buscando)" Classes="muted" /><TextBox Text="{Binding ActivePartnerApps}" /></StackPanel>
+                    <StackPanel Grid.Column="4"><TextBlock Text="Parceiros que encerraram" Classes="muted" /><TextBox Text="{Binding FormerPartnerApps}" /></StackPanel>
+                  </Grid>
+                  <TextBlock Text="Prazos operacionais" Classes="h2" Margin="0,8,0,0" />
+                  <Grid ColumnDefinitions="*,10,*,10,*,10,*">
+                    <StackPanel><TextBlock Text="Teste do serviço (horas)" Classes="muted" /><NumericUpDown Value="{Binding TestHours}" Minimum="1" Maximum="72" FormatString="0" /></StackPanel>
+                    <StackPanel Grid.Column="2"><TextBlock Text="Liberação após Pix (min)" Classes="muted" /><NumericUpDown Value="{Binding PanelReleaseMinutes}" Minimum="1" Maximum="1440" FormatString="0" /></StackPanel>
+                    <StackPanel Grid.Column="4"><TextBlock Text="Entrega da franquia (h)" Classes="muted" /><NumericUpDown Value="{Binding FranchiseDeliveryHours}" Minimum="1" Maximum="720" FormatString="0" /></StackPanel>
+                    <StackPanel Grid.Column="6"><TextBlock Text="Anos de mercado" Classes="muted" /><NumericUpDown Value="{Binding YearsInMarket}" Minimum="0" Maximum="100" FormatString="0" /></StackPanel>
+                  </Grid>
+                  <TextBlock Text="Contratação e suporte" Classes="h2" Margin="0,8,0,0" />
+                  <TextBlock Text="Dados pedidos para contratar" Classes="muted" /><TextBox Text="{Binding ContractRequirements}" TextWrapping="Wrap" />
+                  <TextBlock Text="Configurações de suporte" Classes="muted" /><TextBox Text="{Binding SupportInfo}" TextWrapping="Wrap" />
+                  <TextBlock Text="Regras" Classes="h2" Margin="0,8,0,0" />
+                  <TextBlock Text="Regras de créditos" Classes="muted" /><TextBox Text="{Binding CreditRules}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90" />
+                  <TextBlock Text="Regras de subpainéis (Master)" Classes="muted" /><TextBox Text="{Binding SubpanelRules}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" />
+                  <StackPanel Orientation="Horizontal" Spacing="8"><TextBlock Text="Mensalistas a partir de (R$) já saem com Master:" Classes="muted" VerticalAlignment="Center" /><NumericUpDown Value="{Binding MasterMinPrice}" Minimum="0" FormatString="N2" Width="140" /></StackPanel>
+                  <TextBlock Text="Ofertas" Classes="h2" Margin="0,8,0,0" />
+                  <Grid ColumnDefinitions="Auto,10,*">
+                    <CheckBox Content="Oferecer painel dividido entre amigos" IsChecked="{Binding FriendSplitEnabled}" VerticalAlignment="Bottom" />
+                    <StackPanel Grid.Column="2"><TextBlock Text="Plano usado na divisão" Classes="muted" /><TextBox Text="{Binding FriendSplitPlanCode}" /></StackPanel>
+                  </Grid>
+                  <TextBlock Text="Ofertas promocionais vigentes (vazio = nenhuma)" Classes="muted" /><TextBox Text="{Binding Promotions}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="40" />
+                  <Grid ColumnDefinitions="Auto,10,*,10,140">
+                    <CheckBox Content="Modalidade pós-paga por login ativo habilitada" IsChecked="{Binding PostPaidEnabled}" VerticalAlignment="Top" />
+                    <StackPanel Grid.Column="2"><TextBlock Text="Valor por login ativo (uma faixa por linha)" Classes="muted" /><TextBox Text="{Binding PostPaidTiers}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="70" /></StackPanel>
+                    <StackPanel Grid.Column="4"><TextBlock Text="Taxa de adesão (R$)" Classes="muted" /><NumericUpDown Value="{Binding PostPaidAdhesionFee}" Minimum="0" FormatString="N2" /></StackPanel>
+                  </Grid>
+                </StackPanel>
+              </ScrollViewer>
+            </DockPanel>
+          </Border>
+          <StackPanel Grid.Column="2" Spacing="8">
+            <Border Classes="panel">
+              <StackPanel Spacing="6">
+                <TextBlock Text="Quais agentes consultam esta base" Classes="h2" />
+                <CheckBox Content="Agente de atendimento" IsChecked="{Binding AttendanceAccess}" />
+                <CheckBox Content="Agente de disparo (só fatos, sem acrescentar à abordagem)" IsChecked="{Binding DispatchAccess}" />
+              </StackPanel>
+            </Border>
+            <Border Classes="panel">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Marcadores disponíveis" Classes="h2" />
+                <ItemsControl ItemsSource="{Binding Placeholders}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="c:ReportRow">
+                      <TextBlock TextWrapping="Wrap" FontSize="12"><Run Text="{Binding Label}" Foreground="{StaticResource AccentBrush}" /><Run Text="  " /><Run Text="{Binding Detail}" /></TextBlock>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+            <Border Classes="panel">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Histórico de alterações" Classes="h2" />
+                <ItemsControl ItemsSource="{Binding CommercialHistory}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="c:CommercialHistoryDto">
+                      <StackPanel Margin="0,2">
+                        <TextBlock Classes="muted"><Run Text="{Binding At, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}" /><Run Text=" · " /><Run Text="{Binding Actor}" /></TextBlock>
+                        <TextBlock Text="{Binding Details}" TextWrapping="Wrap" FontSize="12" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Grid>
+      </TabItem>
+
+      <!-- ============ Artigos antigos ============ -->
+      <TabItem Header="Artigos do site (antigos)" FontSize="16">
+        <ContentControl Content="{Binding Legacy}" />
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</UserControl>

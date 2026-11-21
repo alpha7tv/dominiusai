@@ -162,7 +162,7 @@ public class AiTests
         Assert.Contains("ASSISTENTE VIRTUAL", system);
         Assert.Contains("R$ 250,00", system);
         Assert.Equal("claude-haiku-5-5", f.Ai.Models[0]); // atendimento usa o modelo rápido
-        Assert.All(f.Ai.Requests, r => Assert.Equal(9, r.Tools!.Count));
+        Assert.All(f.Ai.Requests, r => Assert.Equal(10, r.Tools!.Count)); // inclui consultar_base_conhecimento (v0.4.1)
         Assert.True(f.Ai.Requests[0].AllowTools);
         // segunda chamada reenviou a resposta com ferramentas e os resultados, nessa ordem
         Assert.IsType<AiAssistantToolCalls>(f.Ai.Requests[1].Turns[^2]);
@@ -329,7 +329,7 @@ public class AiTests
         Assert.Equal("ephemeral", body["system"]![0]!["cache_control"]!["type"]!.GetValue<string>());
         Assert.Equal("low", body["output_config"]!["effort"]!.GetValue<string>());
         Assert.Null(body["temperature"]); Assert.Null(body["tool_choice"]);
-        Assert.Equal(9, body["tools"]!.AsArray().Count);
+        Assert.Equal(10, body["tools"]!.AsArray().Count);
         Assert.Equal("object", body["tools"]![1]!["input_schema"]!["type"]!.GetValue<string>());
         Assert.Equal(["user", "assistant", "user"], body["messages"]!.AsArray().Select(m => m!["role"]!.GetValue<string>()));
 
