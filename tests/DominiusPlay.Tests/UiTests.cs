@@ -303,7 +303,7 @@ public class UiTests
 
         await main.NavigateCommand.ExecuteAsync("planos");
         await Pump();
-        Assert.Equal(5, Assert.IsType<PlansViewModel>(main.Current).Plans.Count);
+        Assert.Equal(7, Assert.IsType<PlansViewModel>(main.Current).Plans.Count);
         Shot(win, "06-planos");
 
         await main.NavigateCommand.ExecuteAsync("integracoes");
@@ -318,12 +318,31 @@ public class UiTests
 
         await main.NavigateCommand.ExecuteAsync("conhecimento");
         await Pump();
-        var kb = Assert.IsType<KnowledgeViewModel>(main.Current);
+        var kbPage = Assert.IsType<KbViewModel>(main.Current);
+        Assert.Contains("75 perguntas", kbPage.Summary);
+        Shot(win, "08-base-dominius-play");
+        kbPage.Tab = 2; await Pump();
+        Assert.Equal("supertv.tech@gmail.com", kbPage.PixKey);
+        Shot(win, "08b-base-comercial");
+        kbPage.TestQuestion = "achei caro, meu amigo também quer trabalhar";
+        await kbPage.TestCommand.ExecuteAsync(null); kbPage.Tab = 1; await Pump();
+        Assert.NotEmpty(kbPage.TestResults);
+        Shot(win, "08c-base-testar");
+        await main.NavigateCommand.ExecuteAsync("laboratorio");
+        await Pump();
+        var lab = Assert.IsType<LabViewModel>(main.Current);
+        lab.SelectedScenario = lab.Scenarios.First(x => x.Key == "amigo");
+        await lab.SimulateCommand.ExecuteAsync(null); await Pump();
+        Assert.Equal(2, lab.Steps.Count);
+        Shot(win, "08d-laboratorio-atendimento");
+        await main.NavigateCommand.ExecuteAsync("conhecimento");
+        kbPage.Tab = 3; await Pump();
+        var kb = kbPage.Legacy;
         kb.Selected = kb.Articles.First(a => a.Title == "Canais e horário");
         await kb.ApproveCommand.ExecuteAsync(null);
         await Pump();
         Assert.Equal(ApprovalStatus.Aprovado, kb.Selected!.Approval);
-        Shot(win, "08-base-conhecimento");
+        Shot(win, "08e-base-artigos-antigos");
 
         await main.NavigateCommand.ExecuteAsync("config");
         await Pump();

@@ -145,3 +145,13 @@ Detalhes completos em `docs/AUDITORIA-AGENTES.md` (seção 5). Resumo:
 - **Fluxo**: campanha envia a abordagem (Prospecção, card em "Abordagem realizada") → contato responde (acompanhamentos cancelados, modo IA, card em "Respondeu") → regras fixas (descadastro, pedido de humano) → automações ativas → Agente de Atendimento vinculado ao disparo responde com o contexto da campanha (card em "Em atendimento", "Qualificado" com pontuação ≥ 60) → transferência com ficha quando preciso.
 - **Automações** (`AutomationEngine` puro no domínio, `AutomationService` no servidor): blocos em JSON, validação de ciclos/conflitos, simulação sem efeitos e aplicação das ações pelas mesmas regras do Kanban, da fila e da transferência.
 - **LGPD** (`LgpdService`): anonimização e retenção diária configurável.
+
+## 10. Base de conhecimento comercial Dominius Play (v0.4.1)
+
+Detalhes em `docs/BASE-CONHECIMENTO-DOMINIUS.md`. Resumo:
+
+- **Tabelas novas**: `KbEntries` (75 perguntas oficiais; código único por base, categoria, variações, palavras-chave, produtos, prioridade, situação, fonte, precisa confirmação, versão) e `KbEntryRevisions` (cópia completa de cada versão). Configuração comercial em `Settings["commercial.config"]` (JSON) e acesso dos agentes em `Settings["kb.access"]`.
+- **Separada do prompt**: a cada mensagem, `KnowledgeBaseService` monta um bloco com a configuração comercial vigente, o perfil comercial, o gatilho e as 3 respostas mais relevantes (busca determinística em `KnowledgeMatcher`, sem banco vetorial). Valores ficam como marcadores (`{pix}`, `{preco:MENSALISTA_10}`) preenchidos pela configuração e pelos Planos aprovados.
+- **Ferramenta** `consultar_base_conhecimento` e **conferência** `ReplySafetyGuard` antes do envio.
+- **API**: `/api/kb` (CRUD, status, histórico, teste, importação/exportação, acesso), `/api/commercial` (+ histórico), `/api/lab/scenarios` e `/api/lab/run`. Escrita só para Administrador.
+- **Telas**: Base de conhecimento (abas Perguntas, Testar, Comercial, Artigos antigos) e Laboratório IA.

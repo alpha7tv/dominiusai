@@ -13,11 +13,15 @@ public sealed record Recommendation(CustomerProfile Profile, IReadOnlyList<Plan>
 /// </summary>
 public static class PlanRecommender
 {
+    /// <summary>Plano da tabela anterior (arquivado na atualização comercial de nov/2026; mantido para históricos).</summary>
     public const string Mensalista50 = "MENSALISTA_50";
-    public const string Mensalista100 = "MENSALISTA_100";
-    public const string Sigma600 = "APONTAMENTO_SIGMA_600";
-    public const string ApontamentoIlimitado = "APONTAMENTO_ILIMITADO";
-    public const string Franquia = "FRANQUIA_COMPLETA";
+    public const string Mensalista10 = PlanCodes.Mensalista10;
+    public const string Mensalista100 = PlanCodes.Mensalista100;
+    public const string Mensalista200 = PlanCodes.Mensalista200;
+    public const string Mensalista500 = PlanCodes.Mensalista500;
+    public const string Sigma600 = PlanCodes.Apontamento600;
+    public const string ApontamentoIlimitado = PlanCodes.ApontamentoIlimitado;
+    public const string Franquia = PlanCodes.Franquia;
 
     public static Recommendation Recommend(Lead lead, IEnumerable<Plan> plans, DateTimeOffset now, bool wantsOwnBrand = false)
     {
@@ -42,7 +46,7 @@ public static class PlanRecommender
 
         if (lead.Experience == IptvExperience.Iniciante)
         {
-            var codes = lead.ActiveClients is > 50 ? new[] { Mensalista100 } : new[] { Mensalista50, Mensalista100 };
+            var codes = lead.ActiveClients is > 50 ? new[] { Mensalista100 } : new[] { Mensalista10, Mensalista100 };
             return new(CustomerProfile.A_Iniciante, Pick(codes), "Está começando e busca investimento reduzido.", null);
         }
 

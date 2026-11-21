@@ -85,6 +85,7 @@ builder.Services.AddScoped<InboundProcessor>();
 builder.Services.AddScoped<OutboundQueueProcessor>();
 builder.Services.AddSingleton<AiDispatcher>();
 builder.Services.AddHttpClient<IAiProvider, AnthropicAiClient>(c => c.Timeout = TimeSpan.FromSeconds(90));
+builder.Services.AddScoped<KnowledgeBaseService>();
 builder.Services.AddScoped<AiAgent>();
 builder.Services.AddScoped<AiResponder>();
 builder.Services.AddScoped<CampaignService>();
@@ -125,6 +126,7 @@ app.MapPhasesApi();
 app.MapAgentsApi();
 app.MapDashboardApi();
 app.MapAutomationsApi();
+app.MapKnowledgeBaseApi();
 app.MapHub<CrmHub>("/hubs/crm");
 app.Run();
 

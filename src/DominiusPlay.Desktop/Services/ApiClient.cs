@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DominiusPlay.Domain.Contracts;
+using DominiusPlay.Domain.Entities;
 using DominiusPlay.Domain.Enums;
 
 namespace DominiusPlay.Desktop.Services;
@@ -158,6 +159,27 @@ public class ApiClient
     public Task<OperationResult> BackupAsync() => Post<OperationResult>("api/maintenance/backup", null);
     public Task<OperationResult> PurgeAsync(int days) => Post<OperationResult>($"api/maintenance/purge?days={days}", null);
     public Task<List<ReportRow>> BackupsAsync() => Get<List<ReportRow>>("api/maintenance/backups");
+
+    // Base Dominius Play, Comercial e Laboratório (v0.4.1)
+    public Task<List<KbEntryDto>> KbAsync(string? q = null, KbStatus? status = null) =>
+        Get<List<KbEntryDto>>("api/kb?" + (string.IsNullOrWhiteSpace(q) ? "" : "q=" + Uri.EscapeDataString(q) + "&") + (status is null ? "" : "status=" + (int)status));
+    public Task<List<string>> KbCategoriesAsync() => Get<List<string>>("api/kb/categories");
+    public Task<List<ReportRow>> KbPlaceholdersAsync() => Get<List<ReportRow>>("api/kb/placeholders");
+    public Task<KbEntryDto> CreateKbAsync(KbEntryUpsert r) => Post<KbEntryDto>("api/kb", r);
+    public Task<KbEntryDto> UpdateKbAsync(Guid id, KbEntryUpsert r) => Send<KbEntryDto>(HttpMethod.Put, $"api/kb/{id}", r);
+    public Task<OperationResult> SetKbStatusAsync(Guid id, KbStatus status) => Post<OperationResult>($"api/kb/{id}/status?status={(int)status}", null);
+    public Task<OperationResult> DeleteKbAsync(Guid id) => Send<OperationResult>(HttpMethod.Delete, $"api/kb/{id}", null);
+    public Task<List<KbRevisionDto>> KbHistoryAsync(Guid id) => Get<List<KbRevisionDto>>($"api/kb/{id}/history");
+    public Task<KbTestResponse> TestKbAsync(KbTestRequest r) => Post<KbTestResponse>("api/kb/test", r);
+    public Task<List<KbEntryUpsert>> ExportKbAsync() => Get<List<KbEntryUpsert>>("api/kb/export");
+    public Task<KbImportResult> ImportKbAsync(KbImportRequest r) => Post<KbImportResult>("api/kb/import", r);
+    public Task<KbAccessDto> KbAccessAsync() => Get<KbAccessDto>("api/kb/access");
+    public Task<OperationResult> SaveKbAccessAsync(KbAccessDto r) => Send<OperationResult>(HttpMethod.Put, "api/kb/access", r);
+    public Task<DominiusPlay.Domain.Services.CommercialConfig> CommercialAsync() => Get<DominiusPlay.Domain.Services.CommercialConfig>("api/commercial");
+    public Task<OperationResult> SaveCommercialAsync(DominiusPlay.Domain.Services.CommercialConfig c) => Send<OperationResult>(HttpMethod.Put, "api/commercial", c);
+    public Task<List<CommercialHistoryDto>> CommercialHistoryAsync() => Get<List<CommercialHistoryDto>>("api/commercial/history");
+    public Task<List<LabScenarioDto>> LabScenariosAsync() => Get<List<LabScenarioDto>>("api/lab/scenarios");
+    public Task<LabResponse> RunLabAsync(LabRequest r) => Post<LabResponse>("api/lab/run", r);
 
     private async Task<T> Get<T>(string url) => await Read<T>(await Wrap(() => _http.GetAsync(url)));
     private Task<T> Post<T>(string url, object? body) => Send<T>(HttpMethod.Post, url, body);

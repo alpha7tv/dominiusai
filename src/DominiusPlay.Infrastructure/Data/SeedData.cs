@@ -1,6 +1,7 @@
 using DominiusPlay.Domain.Entities;
 using DominiusPlay.Domain.Enums;
 using DominiusPlay.Domain.Services;
+using DominiusPlay.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace DominiusPlay.Infrastructure.Data;
@@ -18,51 +19,105 @@ public static class SeedData
         if (!await db.KnowledgeArticles.AnyAsync(ct)) db.KnowledgeArticles.AddRange(SiteKnowledge());
         if (!await db.MessageTemplates.AnyAsync(ct)) db.MessageTemplates.AddRange(Templates());
         await db.SaveChangesAsync(ct);
+        await EnsureCommercialAsync(db, ct);
     }
 
+    /// <summary>Tabela comercial oficial (Prompt Mestre, novembro de 2026). Também usada para atualizar bancos antigos.</summary>
     public static IEnumerable<Plan> CampaignPlans()
     {
-        var by = "Administrador (campanha)";
+        var by = "Administrador (tabela oficial nov/2026)";
+        const string credits = "Créditos acumulativos com mensalidade em dia. 1 crédito = 1 ativação de 30 dias; renovação consome outro crédito; 12 meses = 12 créditos. Créditos não são ilimitados.";
+        Plan M(string code, string name, decimal price, int c, int order, string profile, string extra = "") => new()
+        {
+            Code = code, Name = name, MonthlyPrice = price, Credits = c, SortOrder = order,
+            Description = $"Plano mensalista com {c} créditos (custo de {CreditMath.Money(CreditMath.CostPerCredit(price, c))} por crédito). 1 crédito = 1 ativação de 30 dias." + extra,
+            Benefits = $"{c} créditos por mês\nCréditos acumulativos com pagamento em dia\nPainel de gerenciamento pelo navegador",
+            Limits = credits, TargetProfile = profile, Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
+        };
+        yield return M(PlanCodes.Mensalista10, "Mensalista 10", 30m, 10, 1, "Iniciante com investimento reduzido");
+        yield return M(PlanCodes.Mensalista100, "Mensalista 100", 80m, 100, 2, "Revendedores em início ou expansão");
+        yield return M(PlanCodes.Mensalista200, "Mensalista 200", 100m, 200, 3, "Revendedores em expansão");
+        yield return M(PlanCodes.Mensalista500, "Mensalista 500", 200m, 500, 4, "Operação maior ou painel Master dividido entre amigos",
+            " Com permissão Master, permite criar subpainéis (os créditos dos sub-revendedores saem do saldo principal).");
         yield return new Plan
         {
-            Code = PlanRecommender.Mensalista50, Name = "Mensalista 50", MonthlyPrice = 50m, Credits = 50, SortOrder = 1,
-            Description = "Plano mensal por créditos. 1 crédito corresponde a uma ativação de 30 dias, conforme a regra comercial.",
-            Benefits = "50 créditos por mês\nOperação por créditos",
-            Limits = "Confirmar no cadastro se os créditos são acumulativos e quais permissões estão incluídas.",
-            TargetProfile = "Iniciante com investimento reduzido", Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
+            Code = PlanCodes.Apontamento600, Name = "Apontamento Sigma 600", MonthlyPrice = 250m, MaxActiveLogins = 600, SortOrder = 5,
+            Description = "Apontamento em painel compatível (ex.: Sigma): o cliente mantém o próprio painel e usa a infraestrutura da Dominius Play.",
+            Benefits = "Até 600 logins ativos\nDNS exclusiva conforme condições técnicas\nContinua usando o próprio painel compatível",
+            TechnicalRequirements = "Confirmar compatibilidade técnica do painel antes da contratação.",
+            TargetProfile = "Revendedor com painel próprio até 600 ativos", Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
         };
         yield return new Plan
         {
-            Code = PlanRecommender.Mensalista100, Name = "Mensalista 100", MonthlyPrice = 80m, Credits = 100, SortOrder = 2,
-            Description = "Plano mensal com 100 créditos. Condições de créditos conforme cadastro comercial.",
-            Benefits = "100 créditos por mês", Limits = "Condições de créditos conforme cadastro comercial.",
-            TargetProfile = "Revendedores em início ou expansão", Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
+            Code = PlanCodes.ApontamentoIlimitado, Name = "Apontamento Ilimitado", MonthlyPrice = 500m, MaxActiveLogins = null, SortOrder = 6,
+            Description = "Apontamento sem limite contratual de ativos, para operações de maior volume.",
+            Benefits = "Sem limite contratual de ativos",
+            Limits = "Não é capacidade técnica ilimitada de conexões simultâneas: condições de uso e capacidade devem ser verificadas pela equipe.",
+            TargetProfile = "Revendedor com painel próprio acima de 600 ativos", Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
         };
         yield return new Plan
         {
-            Code = PlanRecommender.Sigma600, Name = "Apontamento Sigma 600", MonthlyPrice = 250m, MaxActiveLogins = 600, SortOrder = 3,
-            Description = "O cliente continua utilizando seu Painel Sigma, com a infraestrutura de servidores da Dominius Play.",
-            Benefits = "Até 600 logins ativos\nDNS exclusiva incluída\nContinua usando o próprio Painel Sigma",
-            TechnicalRequirements = "Confirmar requisitos técnicos de integração antes da contratação.",
-            TargetProfile = "Revendedor com Painel Sigma até 600 ativos", Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
-        };
-        yield return new Plan
-        {
-            Code = PlanRecommender.ApontamentoIlimitado, Name = "Apontamento Ilimitado", MonthlyPrice = 500m, MaxActiveLogins = null, SortOrder = 4,
-            Description = "Sem limite contratado de ativos, destinado a operações de maior volume.",
-            Benefits = "Sem limite contratado de ativos",
-            Limits = "Os limites físicos de infraestrutura, políticas de uso e condições técnicas continuam valendo e devem ser informados.",
-            TargetProfile = "Revendedor Sigma acima de 600 ativos", Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
-        };
-        yield return new Plan
-        {
-            Code = PlanRecommender.Franquia, Name = "Franquia Completa", MonthlyPrice = 650m, SortOrder = 5,
+            Code = PlanCodes.Franquia, Name = "Franquia Completa", MonthlyPrice = 650m, SortOrder = 7,
             Description = "Operação sob a marca comercial do cliente.",
-            Benefits = "Painel administrativo exclusivo\nDNS exclusiva\nAplicativo com marca personalizada\nIdentidade visual própria\nCréditos ilimitados conforme condições contratuais",
+            Benefits = "Painel de gerenciamento\nDNS exclusiva\nAplicativo personalizado com a marca do cliente\nEstrutura comercial personalizada",
             Limits = "Personalização e controle administrativo não significam propriedade dos servidores nem direitos de distribuição de conteúdos.",
-            TechnicalRequirements = "Prazo estimado de entrega de até 4 horas após confirmação dos requisitos, quando tecnicamente viável (não prometer de forma incondicional).",
+            TechnicalRequirements = "Entrega prevista em até 4 horas após a confirmação do pagamento e dos requisitos, sujeita à disponibilidade técnica e à validação da equipe.",
             TargetProfile = "Cliente que quer marca própria", Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
         };
+    }
+
+    public const string DefaultPixSentence = "Nunca gere cobrança nem passe chave Pix.";
+    public const string NewPixSentence = "Pagamento: informe a chave Pix da CONFIGURAÇÃO COMERCIAL e peça para conferir o recebedor no app do banco; nunca diga que o pagamento foi recebido (quem confirma é o sistema financeiro/equipe).";
+
+    /// <summary>
+    /// Base Dominius Play (75 perguntas), configuração comercial e tabela oficial de nov/2026 em bancos novos ou antigos.
+    /// Aditivo e idempotente: nunca apaga contatos, campanhas, agentes nem entradas editadas pelo administrador.
+    /// </summary>
+    public static async Task<IReadOnlyList<string>> EnsureCommercialAsync(CrmDbContext db, CancellationToken ct = default)
+    {
+        var changes = new List<string>();
+        async Task<AppSetting?> S(string k) => await db.Settings.FirstOrDefaultAsync(x => x.Key == k, ct);
+        if (await S(SettingKeys.CommercialConfig) is null)
+        {
+            db.Settings.Add(new AppSetting { Key = SettingKeys.CommercialConfig, Value = new CommercialConfig().ToJson() });
+            changes.Add("configuração comercial");
+        }
+        if (await S(SettingKeys.KbAccess) is null) db.Settings.Add(new AppSetting { Key = SettingKeys.KbAccess, Value = "Atendimento" });
+        if (!await db.KbEntries.AnyAsync(e => e.Base == DominiusKnowledge.BaseName, ct))
+        {
+            foreach (var e in DominiusKnowledge.Entries())
+            {
+                db.KbEntries.Add(e);
+                db.KbEntryRevisions.Add(KbHistory.Revision(e, "criada", e.UpdatedBy));
+            }
+            db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "kb.seed", EntityType = "KbEntry", Details = "Base Dominius Play: 75 perguntas e respostas" });
+            changes.Add("base Dominius Play (75)");
+        }
+        await db.SaveChangesAsync(ct);
+
+        if (await S(SettingKeys.CommercialTable202611) is null)
+        {
+            var all = await db.Plans.ToListAsync(ct);
+            var now = DateTimeOffset.UtcNow;
+            foreach (var official in CampaignPlans())
+            {
+                var current = all.Where(p => p.Code == official.Code && p.Approval == ApprovalStatus.Aprovado).OrderByDescending(p => p.Version).FirstOrDefault();
+                if (current is not null && current.MonthlyPrice == official.MonthlyPrice && current.Credits == official.Credits && current.MaxActiveLogins == official.MaxActiveLogins) continue;
+                foreach (var old in all.Where(p => p.Code == official.Code && p.Approval == ApprovalStatus.Aprovado)) { old.Approval = ApprovalStatus.Arquivado; old.UpdatedAt = now; }
+                official.Version = all.Where(p => p.Code == official.Code).Select(p => p.Version).DefaultIfEmpty(0).Max() + 1;
+                db.Plans.Add(official);
+                changes.Add($"plano {official.Name} v{official.Version}");
+            }
+            foreach (var legacy in all.Where(p => p.Code == PlanRecommender.Mensalista50 && p.Approval == ApprovalStatus.Aprovado))
+            { legacy.Approval = ApprovalStatus.Arquivado; legacy.UpdatedAt = now; changes.Add("Mensalista 50 arquivado (fora da tabela oficial)"); }
+            foreach (var agent in await db.AgentProfiles.Where(a => a.AllowedAnswers.Contains(DefaultPixSentence)).ToListAsync(ct))
+            { agent.AllowedAnswers = agent.AllowedAnswers.Replace(DefaultPixSentence, NewPixSentence); changes.Add($"agente {agent.Name}: regra do Pix"); }
+            db.Settings.Add(new AppSetting { Key = SettingKeys.CommercialTable202611, Value = "true" });
+            if (changes.Count > 0)
+                db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "commercial.upgrade", EntityType = "Plan", Details = "Tabela oficial nov/2026: " + string.Join(", ", changes) });
+            await db.SaveChangesAsync(ct);
+        }
+        return changes;
     }
 
     private static IEnumerable<KnowledgeArticle> SiteKnowledge()

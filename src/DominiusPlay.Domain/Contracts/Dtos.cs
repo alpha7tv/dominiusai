@@ -198,3 +198,24 @@ public static class HubEvents
     /// <summary>Conversa transferida para humano (leadId, nome do atendente atribuído ou null).</summary>
     public const string Handoff = "handoff";
 }
+
+// ---------- Base de conhecimento Dominius Play, Comercial e Laboratório (v0.4.1) ----------
+public sealed record KbEntryDto(Guid Id, string Base, string Code, string Category, string Question, string Variations, string Answer, string RenderedAnswer,
+    string Keywords, string Products, int Priority, DominiusPlay.Domain.Entities.KbStatus Status, string Source, bool NeedsConfirmation, int Version,
+    DateTimeOffset UpdatedAt, string UpdatedBy, IReadOnlyList<string> Warnings);
+public sealed record KbEntryUpsert(string Code, string Category, string Question, string Variations, string Answer, string Keywords, string Products,
+    int Priority, DominiusPlay.Domain.Entities.KbStatus Status, string Source, bool NeedsConfirmation);
+public sealed record KbRevisionDto(int Version, string Action, string ChangedBy, DateTimeOffset At, string Question, string Answer, string Status);
+public sealed record KbTestRequest(string Question, bool IncludeDrafts = true, IReadOnlyList<string>? Products = null);
+public sealed record KbTestMatch(string Code, string Category, string Question, double Score, string RenderedAnswer, DominiusPlay.Domain.Entities.KbStatus Status, bool NeedsConfirmation, IReadOnlyList<string> Warnings);
+public sealed record KbTestResponse(IReadOnlyList<KbTestMatch> Matches, string Profile, string Trigger, string? OfferMessage, string Intent);
+public sealed record KbImportRequest(IReadOnlyList<KbEntryUpsert> Entries, bool Overwrite);
+public sealed record KbImportResult(int Created, int Updated, int Skipped, IReadOnlyList<string> Errors);
+public sealed record KbAccessDto(bool Attendance, bool Dispatch);
+public sealed record CommercialHistoryDto(DateTimeOffset At, string Actor, string Details);
+public sealed record LabRequest(string? Scenario, IReadOnlyList<string>? Messages, bool UseAi = false);
+public sealed record LabScenarioDto(string Key, string Title, IReadOnlyList<string> Messages);
+public sealed record LabStepDto(int Index, string Message, string Intent, string Profile, string Trigger, string? Category, string? MatchedCode, string? MatchedQuestion,
+    double Score, string? Reply, string? Product, IReadOnlyList<string> MemoryUsed, string SuggestedAction, IReadOnlyList<string> Alerts, bool Handoff, bool OptOut,
+    string? AiReply, IReadOnlyList<string> AiAlerts, IReadOnlyList<string> AiActions);
+public sealed record LabResponse(string Title, IReadOnlyList<LabStepDto> Steps, bool AiUsed, string? AiError);
