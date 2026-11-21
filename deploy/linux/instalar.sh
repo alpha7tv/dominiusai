@@ -122,7 +122,7 @@ if [ -n "$DOMINIO" ]; then
   echo "==> nginx + HTTPS para $DOMINIO"
   apt-get install -y -qq nginx certbot python3-certbot-nginx >/dev/null
   cat > /etc/nginx/sites-available/$SVC <<NGINX
-map \$http_upgrade \$connection_upgrade { default upgrade; '' close; }
+map \$http_upgrade \$dominius_connection_upgrade { default upgrade; '' close; }
 server {
     listen 80;
     server_name $DOMINIO;
@@ -135,7 +135,7 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Upgrade \$http_upgrade;        # SignalR (tempo real)
-        proxy_set_header Connection \$connection_upgrade;
+        proxy_set_header Connection \$dominius_connection_upgrade;
         proxy_read_timeout 120s;
     }
 }
