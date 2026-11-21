@@ -15,7 +15,7 @@ DATA_DIR=/var/lib/dominius-crm
 SRC_DIR=/opt/dominius-crm-src
 DOTNET_DIR=/usr/share/dotnet
 SVC=dominius-crm
-PORTA=5080
+PORTA="${PORTA:-5080}"
 
 [ "$(id -u)" -eq 0 ] || { echo "Rode como root (sudo bash instalar.sh)"; exit 1; }
 
@@ -62,7 +62,16 @@ if [ -f "$DATA_DIR/crm.db" ]; then
   sqlite3 "$DATA_DIR/crm.db" ".backup '$DATA_DIR/backups/antes-atualizar-$(date +%Y%m%d-%H%M%S).db'" && echo "    backup do banco feito"
 fi
 
-systemctl stop "$SVC" 2>/dev/null || true
+# VPS compartilhada: não mexe em nada que já esteja usando as portas
+systemctl stop "$SVC" 2>/dev/null || true; sleep 1
+if ss -ltn "( sport = :$PORTA )" | grep -q LISTEN; then
+  echo "!! A porta $PORTA já está em uso por outro serviço:"; ss -ltnp "( sport = :$PORTA )"
+  echo "   Rode de novo escolhendo outra porta, ex.: PORTA=5090 bash instalar.sh $DOMINIO"; exit 1
+fi
+if [ -n "$DOMINIO" ] && ! command -v nginx >/dev/null && ss -ltn '( sport = :80 or sport = :443 )' | grep -q LISTEN; then
+  echo "!! As portas 80/443 já estão ocupadas por outro programa (não é nginx):"; ss -ltnp '( sport = :80 or sport = :443 )'
+  echo "   Aponte o proxy que já existe para http://127.0.0.1:$PORTA, ou rode sem domínio."; exit 1
+fi
 mkdir -p "$APP_DIR"
 # Preserva appsettings.json já editado (ex.: PostgreSQL) em atualizações
 [ -f "$APP_DIR/appsettings.json" ] && cp "$APP_DIR/appsettings.json" /tmp/dominius-appsettings.bak
@@ -132,7 +141,6 @@ server {
 }
 NGINX
   ln -sf /etc/nginx/sites-available/$SVC /etc/nginx/sites-enabled/$SVC
-  rm -f /etc/nginx/sites-enabled/default
   nginx -t -q && systemctl reload nginx
   if [ ! -d "/etc/letsencrypt/live/$DOMINIO" ]; then
     if [ -n "$EMAIL_SSL" ]; then EM=(-m "$EMAIL_SSL"); else EM=(--register-unsafely-without-email); fi
