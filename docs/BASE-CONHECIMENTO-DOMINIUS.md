@@ -61,7 +61,7 @@ Leitura: toda a equipe. Alterações: somente Administrador (o atendente recebe 
 
 ## 6. Testes
 
-`dotnet test`: 223 testes passando (177 anteriores ajustados + 46 novos). Os 35 da parte 13 estão em `KnowledgeBaseTests` com o número no nome (T01…T35).
+`dotnet test`: 224 testes passando (177 anteriores ajustados + 47 novos). Os 35 da parte 13 estão em `KnowledgeBaseTests` com o número no nome (T01…T35).
 
 ## 7. Confirmações de Carlos (21/11/2026) — versão 0.4.2
 
@@ -70,13 +70,14 @@ Leitura: toda a equipe. Alterações: somente Administrador (o atendente recebe 
 | Mensalista 50 | Ativo | Volta à tabela oficial (R$ 50, 50 créditos). Quem instalou a primeira 0.4.1 recebe uma nova versão aprovada; a arquivada fica no histórico. Aparece na resposta DP-041 (pacotes). |
 | Pós-pago | R$ 60,00 de adesão do painel + R$ 5,00 por login ativo | Ligado por padrão. Faixas antigas trocadas por "R$ 5,00 por login ativo" (só se ainda eram as faixas antigas). Respostas DP-009, DP-044 e DP-047 usam `{adesao_pospago}` e `{pospago}`; DP-044 deixou de "precisar confirmação". |
 | Master | Planos de R$ 100,00 para cima | Novo campo "Mensalistas a partir de (R$) já saem com Master" (padrão R$ 100). Hoje: Mensalista 200 (R$ 100) e Mensalista 500 (R$ 200). Marcadores `{master_minimo}` e `{planos_master}`; respostas DP-053 e DP-072 e o bloco do prompt dizem quais planos têm Master. |
+| Limite de ativos | Apontamento de R$ 250 até 600 ativos; Franquia sem limite | Plano Franquia e respostas DP-016 e DP-017 dizem "sem limite de ativos"; DP-017 cita os 600 ativos do apontamento (marca `commercial.limits.2026-11-21`). |
 | Agente de disparo consulta a base | Sim | Acesso padrão "Atendimento,Disparo"; bancos existentes recebem "Disparo". |
 
 A atualização roda uma vez (marca `commercial.answers.2026-11-21`), fica na Auditoria e **não mexe** em respostas, chave Pix ou valores que o administrador já editou.
 
 ## 8. Ainda precisa de confirmação
 
-1. Apontamento e Franquia não são planos de créditos; a regra do Master foi aplicada só aos mensalistas. Se também saem com Master, avise.
+1. Permissão Master no Apontamento e na Franquia: não confirmada; a regra do Master vale só para os mensalistas de R$ 100 para cima.
 2. Respostas marcadas "precisa confirmação" (19, 32, 33, 35, 36, 42, 45, 48, 50, 59, 62, 66, 68, 69, 70): a IA responde com o texto da base e oferece a confirmação da equipe.
 
 ## 9. Configuração manual

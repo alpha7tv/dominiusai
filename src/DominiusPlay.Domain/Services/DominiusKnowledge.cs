@@ -35,6 +35,8 @@ public static class DominiusKnowledge
 
     /// <summary>Respostas reescritas com as confirmações de Carlos (21/11/2026): Mensalista 50, pós-pago e Master.</summary>
     public static readonly int[] RevisedOn20261121 = [9, 41, 44, 47, 53, 72];
+    /// <summary>Limites de ativos confirmados por Carlos (21/11/2026): Apontamento até 600, Franquia sem limite.</summary>
+    public static readonly int[] RevisedOn20261121Limits = [16, 17];
     public const string SeedAuthor = "Sistema (carga inicial)";
 
     public static IReadOnlyList<KbEntry> Entries() =>
@@ -102,11 +104,11 @@ public static class DominiusKnowledge
             "apontamento, meu painel, painel próprio, estrutura, sigma", AP + "," + AI, 1),
         E(16, CatPrincipais, "Quanto custa ter uma franquia completa?",
             ["Qual o valor da franquia?", "Quanto custa a franquia?", "Preço da franquia completa"],
-            "Nossa franquia completa custa {preco:FRANQUIA_COMPLETA} mensais e inclui painel, DNS exclusiva e aplicativo personalizado.",
-            "franquia, franquia completa", FR, 1),
+            "Nossa franquia completa custa {preco:FRANQUIA_COMPLETA} mensais e inclui painel, DNS exclusiva e aplicativo personalizado, sem limite de ativos.",
+            "franquia, franquia completa, limite de ativos", FR, 1),
         E(17, CatPrincipais, "Qual a diferença entre mensalista, apontamento e franquia?",
             ["Qual a diferença entre os planos?", "Mensalista ou apontamento ou franquia?", "Qual modalidade é melhor para mim?"],
-            "No mensalista, você administra ativações por créditos. No apontamento, mantém seu painel compatível e utiliza nossa infraestrutura. Na franquia, recebe uma estrutura mais completa e personalizada.",
+            "No mensalista, você administra ativações por créditos. No apontamento, mantém seu painel compatível e utiliza nossa infraestrutura: o plano de {preco:APONTAMENTO_SIGMA_600} comporta até {logins:APONTAMENTO_SIGMA_600} ativos. Na franquia, recebe uma estrutura mais completa e personalizada, sem limite de ativos.",
             "diferença, mensalista, apontamento, franquia, modalidade", Mensalistas + "," + AP + "," + FR, 2),
         E(18, CatPrincipais, "Quanto posso lucrar revendendo?",
             ["Quanto dá para ganhar?", "Dá lucro?", "Qual o lucro da revenda?", "Quanto eu ganho por mês?"],

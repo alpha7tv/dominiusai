@@ -63,12 +63,15 @@ public static class SeedData
         {
             Code = PlanCodes.Franquia, Name = "Franquia Completa", MonthlyPrice = 650m, SortOrder = 8,
             Description = "Operação sob a marca comercial do cliente.",
-            Benefits = "Painel de gerenciamento\nDNS exclusiva\nAplicativo personalizado com a marca do cliente\nEstrutura comercial personalizada",
+            Benefits = FranchiseBenefits,
             Limits = "Personalização e controle administrativo não significam propriedade dos servidores nem direitos de distribuição de conteúdos.",
             TechnicalRequirements = "Entrega prevista em até 4 horas após a confirmação do pagamento e dos requisitos, sujeita à disponibilidade técnica e à validação da equipe.",
             TargetProfile = "Cliente que quer marca própria", Approval = ApprovalStatus.Aprovado, ApprovedBy = by, IsCampaignPrice = true,
         };
     }
+
+    public const string LegacyFranchiseBenefits = "Painel de gerenciamento\nDNS exclusiva\nAplicativo personalizado com a marca do cliente\nEstrutura comercial personalizada";
+    public const string FranchiseBenefits = LegacyFranchiseBenefits + "\nSem limite de ativos";
 
     public const string DefaultPixSentence = "Nunca gere cobrança nem passe chave Pix.";
     public const string NewPixSentence = "Pagamento: informe a chave Pix da CONFIGURAÇÃO COMERCIAL e peça para conferir o recebedor no app do banco; nunca diga que o pagamento foi recebido (quem confirma é o sistema financeiro/equipe).";
@@ -149,25 +152,48 @@ public static class SeedData
             if (acc is not null && !acc.Value.Contains("Disparo", StringComparison.OrdinalIgnoreCase))
             { acc.Value = string.IsNullOrWhiteSpace(acc.Value) ? "Atendimento,Disparo" : acc.Value + ",Disparo"; done.Add("agente de disparo consulta a base"); }
             // 4. respostas reescritas, só onde o administrador ainda não editou
-            var codes = DominiusKnowledge.RevisedOn20261121.Select(DominiusKnowledge.Code).ToList();
-            var seeds = DominiusKnowledge.Entries().Where(e => codes.Contains(e.Code)).ToDictionary(e => e.Code);
-            foreach (var e in await db.KbEntries.Where(e => e.Base == DominiusKnowledge.BaseName && codes.Contains(e.Code)).ToListAsync(ct))
-            {
-                if (e.UpdatedBy != DominiusKnowledge.SeedAuthor || e.Version != 1) continue;
-                var seed = seeds[e.Code];
-                if (e.Answer == seed.Answer && e.Products == seed.Products && e.NeedsConfirmation == seed.NeedsConfirmation) continue;
-                e.Answer = seed.Answer; e.Products = seed.Products; e.Keywords = seed.Keywords; e.NeedsConfirmation = seed.NeedsConfirmation;
-                e.Version++; e.UpdatedAt = now;
-                db.KbEntryRevisions.Add(KbHistory.Revision(e, "editada", "Sistema (confirmação comercial 21/11/2026)"));
-                done.Add($"resposta {e.Code}");
-            }
+            done.AddRange(await ReviseSeedAnswersAsync(db, DominiusKnowledge.RevisedOn20261121, now, ct));
             db.Settings.Add(new AppSetting { Key = SettingKeys.CommercialAnswers20261121, Value = "true" });
             if (done.Count > 0)
                 db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "commercial.upgrade", EntityType = "Plan", Details = "Confirmações comerciais de 21/11/2026: " + string.Join(", ", done) });
             await db.SaveChangesAsync(ct);
             changes.AddRange(done);
         }
+
+        if (await S(SettingKeys.ActiveLimits20261121) is null)
+        {
+            var now = DateTimeOffset.UtcNow;
+            // Franquia sem limite de ativos (Apontamento 600 já tinha o limite de 600); texto do plano só se ainda for o original
+            var done = new List<string>();
+            foreach (var fr in await db.Plans.Where(p => p.Code == PlanCodes.Franquia && p.Approval == ApprovalStatus.Aprovado).ToListAsync(ct))
+                if (fr.Benefits == LegacyFranchiseBenefits) { fr.Benefits = FranchiseBenefits; fr.UpdatedAt = now; done.Add("Franquia: sem limite de ativos"); }
+            done.AddRange(await ReviseSeedAnswersAsync(db, DominiusKnowledge.RevisedOn20261121Limits, now, ct));
+            db.Settings.Add(new AppSetting { Key = SettingKeys.ActiveLimits20261121, Value = "true" });
+            if (done.Count > 0)
+                db.AuditLogs.Add(new AuditLog { Actor = "Sistema", Action = "commercial.upgrade", EntityType = "Plan", Details = "Limites de ativos (21/11/2026): " + string.Join(", ", done) });
+            await db.SaveChangesAsync(ct);
+            changes.AddRange(done);
+        }
         return changes;
+    }
+
+    /// <summary>Troca respostas da carga inicial pelo texto novo, só onde o administrador nunca editou (com histórico).</summary>
+    private static async Task<List<string>> ReviseSeedAnswersAsync(CrmDbContext db, IEnumerable<int> numbers, DateTimeOffset now, CancellationToken ct)
+    {
+        var done = new List<string>();
+        var codes = numbers.Select(DominiusKnowledge.Code).ToList();
+        var seeds = DominiusKnowledge.Entries().Where(e => codes.Contains(e.Code)).ToDictionary(e => e.Code);
+        foreach (var e in await db.KbEntries.Where(e => e.Base == DominiusKnowledge.BaseName && codes.Contains(e.Code)).ToListAsync(ct))
+        {
+            if (e.UpdatedBy != DominiusKnowledge.SeedAuthor || e.Version != 1) continue;
+            var seed = seeds[e.Code];
+            if (e.Answer == seed.Answer && e.Products == seed.Products && e.NeedsConfirmation == seed.NeedsConfirmation) continue;
+            e.Answer = seed.Answer; e.Products = seed.Products; e.Keywords = seed.Keywords; e.NeedsConfirmation = seed.NeedsConfirmation;
+            e.Version++; e.UpdatedAt = now;
+            db.KbEntryRevisions.Add(KbHistory.Revision(e, "editada", "Sistema (confirmação comercial 21/11/2026)"));
+            done.Add($"resposta {e.Code}");
+        }
+        return done;
     }
 
     private static IEnumerable<KnowledgeArticle> SiteKnowledge()

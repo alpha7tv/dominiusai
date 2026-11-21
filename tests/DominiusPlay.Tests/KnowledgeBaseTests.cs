@@ -635,6 +635,30 @@ public class KnowledgeBaseTests
     }
 
     [Fact]
+    public async Task Apontamento_ate_600_ativos_e_Franquia_sem_limite()
+    {
+        Assert.Equal(600, P(PlanCodes.Apontamento600).MaxActiveLogins);
+        Assert.Null(P(PlanCodes.Franquia).MaxActiveLogins);
+        Assert.Contains("sem limite de ativos", Reply("Quanto custa a franquia?"));
+        var diff = Reply("Qual a diferença entre mensalista, apontamento e franquia?");
+        Assert.Contains("R$ 250,00 comporta até 600 ativos", diff); Assert.Contains("sem limite de ativos", diff);
+
+        // quem já tinha a base antiga recebe o texto novo
+        using var f = new CrmFactory();
+        await f.WithDb(async db =>
+        {
+            db.Settings.Remove(await db.Settings.SingleAsync(s => s.Key == SettingKeys.ActiveLimits20261121));
+            (await db.Plans.SingleAsync(p => p.Code == PlanCodes.Franquia)).Benefits = SeedData.LegacyFranchiseBenefits;
+            (await db.KbEntries.SingleAsync(x => x.Code == "DP-016")).Answer = "Nossa franquia completa custa {preco:FRANQUIA_COMPLETA} mensais.";
+            return await db.SaveChangesAsync();
+        });
+        var changes = await f.WithDb(db => SeedData.EnsureCommercialAsync(db));
+        Assert.Contains("Franquia: sem limite de ativos", changes); Assert.Contains("resposta DP-016", changes);
+        Assert.Contains("Sem limite de ativos", await f.WithDb(db => db.Plans.Where(p => p.Code == PlanCodes.Franquia).Select(p => p.Benefits).SingleAsync()));
+        Assert.Empty(await f.WithDb(db => SeedData.EnsureCommercialAsync(db)));
+    }
+
+    [Fact]
     public void Todas_as_respostas_oficiais_passam_na_conferencia()
     {
         foreach (var e in Entries)
