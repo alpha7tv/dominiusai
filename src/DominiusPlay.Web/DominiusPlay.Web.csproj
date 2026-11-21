@@ -13,6 +13,8 @@
     <!-- O cliente da API usa System.Text.Json por reflexão (DTOs do Domain): não cortar o código do app nem do Domain -->
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <TrimMode>partial</TrimMode>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <NoWarn>$(NoWarn);MVVMTK0034</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\DominiusPlay.Desktop\**\*.cs" Exclude="..\DominiusPlay.Desktop\Program.cs;..\DominiusPlay.Desktop\obj\**;..\DominiusPlay.Desktop\bin\**" LinkBase="Shared" />
