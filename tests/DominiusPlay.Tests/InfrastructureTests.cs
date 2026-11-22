@@ -307,4 +307,52 @@ public class EvolutionTests
         Assert.Equal("T", w["headers"]!["x-dominius-token"]!.GetValue<string>());
         Assert.Contains("MESSAGES_UPSERT", w["events"]!.AsArray().Select(e => e!.GetValue<string>()));
     }
+
+    private sealed class Raw(HttpStatusCode code, string body, string mediaType) : HttpMessageHandler
+    {
+        public HttpRequestMessage? Last;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        {
+            Last = r;
+            return Task.FromResult(new HttpResponseMessage(code) { Content = new StringContent(body, Encoding.UTF8, mediaType) });
+        }
+    }
+
+    [Fact]
+    public async Task Url_com_usuario_e_senha_vira_autenticacao_basica()
+    {
+        var h = new Raw(HttpStatusCode.OK, """{"instance":{"state":"open"}}""", "application/json");
+        var cfg = new EvolutionConfig("https://admin:s%40nha@evo.exemplo.com:8444/", "IANOVO", "SECRET");
+        var st = await new EvolutionApiClient(new HttpClient(h)).GetConnectionStateAsync(cfg);
+        Assert.True(st.IsOpen);
+        Assert.Equal("https://evo.exemplo.com:8444/instance/connectionState/IANOVO", h.Last!.RequestUri!.AbsoluteUri);
+        Assert.Equal("Basic", h.Last.Headers.Authorization!.Scheme);
+        Assert.Equal("admin:s@nha", Encoding.UTF8.GetString(Convert.FromBase64String(h.Last.Headers.Authorization.Parameter!)));
+        Assert.Equal("SECRET", h.Last.Headers.GetValues("apikey").Single());
+    }
+
+    [Fact]
+    public async Task Erro_401_do_nginx_explica_em_portugues()
+    {
+        var html = "<html><head><title>401 Authorization Required</title></head><body><center><h1>401 Authorization Required</h1></center><hr><center>nginx</center></body></html>";
+        var r = await new EvolutionApiClient(new HttpClient(new Raw(HttpStatusCode.Unauthorized, html, "text/html"))).SendTextAsync(Cfg, "1", "x");
+        Assert.False(r.Success);
+        Assert.Contains("nginx", r.Error);
+        Assert.Contains("usuario:senha@", r.Error);
+        Assert.DoesNotContain("<html", r.Error);
+        var k = await new EvolutionApiClient(new HttpClient(new Raw(HttpStatusCode.Unauthorized, """{"status":401,"error":"Unauthorized"}""", "application/json"))).SendTextAsync(Cfg, "1", "x");
+        Assert.Contains("API Key", k.Error);
+    }
+
+    [Fact]
+    public void Senha_da_url_volta_mascarada_e_e_reaproveitada()
+    {
+        const string stored = "https://admin:segredo@evo.exemplo.com:8444";
+        var masked = DominiusPlay.Server.Services.EvolutionGateway.MaskUrl(stored)!;
+        Assert.Equal("https://admin:****@evo.exemplo.com:8444", masked);
+        Assert.Equal(stored, DominiusPlay.Server.Services.EvolutionGateway.UnmaskUrl(masked, stored));
+        Assert.Equal("https://evo.exemplo.com:8444", DominiusPlay.Server.Services.EvolutionGateway.UnmaskUrl("https://evo.exemplo.com:8444", stored));
+        Assert.Equal("https://outro:****@evo.exemplo.com:8444", DominiusPlay.Server.Services.EvolutionGateway.UnmaskUrl("https://outro:****@evo.exemplo.com:8444", stored));
+        Assert.Equal("https://evo.exemplo.com", DominiusPlay.Server.Services.EvolutionGateway.MaskUrl("https://evo.exemplo.com"));
+    }
 }

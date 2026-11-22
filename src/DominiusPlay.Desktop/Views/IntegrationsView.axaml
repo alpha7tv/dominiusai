@@ -11,6 +11,7 @@
           <StackPanel Spacing="8">
             <TextBlock Text="Servidor (sua VPS)" Classes="h2" />
             <TextBlock Text="URL do servidor" Classes="muted" /><TextBox Text="{Binding BaseUrl}" Watermark="https://evolution.seudominio.com" />
+            <TextBlock Classes="muted" FontSize="11" TextWrapping="Wrap" Text="Endereço da Evolution API (não do CRM). Se o nginx da Evolution pede usuário e senha, use https://usuario:senha@evolution.seudominio.com — a senha fica criptografada." />
             <TextBlock Text="Nome da instância" Classes="muted" /><TextBox Text="{Binding InstanceName}" />
             <TextBlock Text="Chave de API (apikey)" Classes="muted" />
             <TextBox Text="{Binding ApiKey}" PasswordChar="●" Watermark="Deixe em branco para manter a chave atual" />
