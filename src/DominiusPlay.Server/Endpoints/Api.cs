@@ -401,14 +401,16 @@ public static class Api
         // ---------- Integrações: Evolution API ----------
         var integ = api.MapGroup("/integrations/evolution");
         integ.MapGet("/", async (SettingsStore s) => new EvolutionSettingsDto(
-            await s.GetAsync(SettingKeys.EvolutionUrl), await s.GetAsync(SettingKeys.EvolutionInstance), await s.HasAsync(SettingKeys.EvolutionApiKey),
+            EvolutionGateway.MaskUrl(await s.GetAsync(SettingKeys.EvolutionUrl)), await s.GetAsync(SettingKeys.EvolutionInstance), await s.HasAsync(SettingKeys.EvolutionApiKey),
             await s.GetAsync(SettingKeys.EvolutionIntegration), await s.GetAsync(SettingKeys.WebhookPublicUrl), "/webhooks/evolution", await s.HasAsync(SettingKeys.WebhookToken)));
         integ.MapPut("/", async (EvolutionSettingsUpdate r, SettingsStore s, CrmDbContext db, ClaimsPrincipal user) =>
         {
             if (!Uri.TryCreate(r.BaseUrl.Trim(), UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Scheme != "http"))
                 return Results.BadRequest(new OperationResult(false, "URL do servidor inválida"));
             if (string.IsNullOrWhiteSpace(r.InstanceName)) return Results.BadRequest(new OperationResult(false, "Informe o nome da instância"));
-            await s.SetAsync(SettingKeys.EvolutionUrl, uri.ToString().TrimEnd('/'));
+            // URL com usuário:senha (nginx com senha na frente da Evolution) fica criptografada; a senha volta mascarada.
+            var newUrl = EvolutionGateway.UnmaskUrl(r.BaseUrl.Trim(), await s.GetAsync(SettingKeys.EvolutionUrl)).TrimEnd('/');
+            await s.SetAsync(SettingKeys.EvolutionUrl, newUrl, secret: !string.IsNullOrEmpty(uri.UserInfo));
             await s.SetAsync(SettingKeys.EvolutionInstance, r.InstanceName.Trim());
             if (!string.IsNullOrWhiteSpace(r.ApiKey)) await s.SetAsync(SettingKeys.EvolutionApiKey, r.ApiKey.Trim(), secret: true);
             if (r.IntegrationMode is not null) await s.SetAsync(SettingKeys.EvolutionIntegration, r.IntegrationMode);

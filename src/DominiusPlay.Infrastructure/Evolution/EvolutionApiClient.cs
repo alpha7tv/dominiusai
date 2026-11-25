@@ -33,7 +33,9 @@ public interface IEvolutionApi
 ///   POST /chat/whatsappNumbers/{instance} { numbers: [...] }
 ///   POST /webhook/set/{instance}  { webhook: { enabled, url, headers, byEvents, base64, events } }
 ///   GET  /webhook/find/{instance}
-/// Autenticação: header "apikey".
+/// Autenticação: header "apikey". Se a URL tiver usuário e senha (https://usuario:senha@host), eles são
+/// enviados como autenticação básica (Authorization: Basic) para passar por um nginx protegido com senha
+/// na frente da Evolution; o usuário e a senha saem da URL e nunca vão no caminho da requisição.
 /// </summary>
 public class EvolutionApiClient(HttpClient http) : IEvolutionApi
 {
@@ -42,8 +44,10 @@ public class EvolutionApiClient(HttpClient http) : IEvolutionApi
 
     private HttpRequestMessage Req(HttpMethod m, EvolutionConfig cfg, string path, object? body = null)
     {
-        var r = new HttpRequestMessage(m, cfg.BaseUrl.TrimEnd('/') + path);
+        var (baseUrl, basic) = SplitCredentials(cfg.BaseUrl);
+        var r = new HttpRequestMessage(m, baseUrl.TrimEnd('/') + path);
         r.Headers.Add("apikey", cfg.ApiKey);
+        if (basic is not null) r.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basic);
         if (body is not null) r.Content = JsonContent.Create(body);
         return r;
     }
@@ -56,7 +60,7 @@ public class EvolutionApiClient(HttpClient http) : IEvolutionApi
         {
             using var res = await http.SendAsync(Req(HttpMethod.Get, cfg, $"/instance/connectionState/{Inst(cfg)}"), ct);
             var body = await res.Content.ReadAsStringAsync(ct);
-            if (!res.IsSuccessStatusCode) return new(true, null, $"HTTP {(int)res.StatusCode}: {Trim(body)}");
+            if (!res.IsSuccessStatusCode) return new(true, null, HttpError(res, body));
             var node = JsonNode.Parse(body);
             var state = node?["instance"]?["state"]?.GetValue<string>() ?? node?["state"]?.GetValue<string>();
             return new(true, state, null);
@@ -73,7 +77,7 @@ public class EvolutionApiClient(HttpClient http) : IEvolutionApi
         {
             using var res = await http.SendAsync(Req(HttpMethod.Post, cfg, $"/message/sendText/{Inst(cfg)}", new { number, text }), ct);
             var body = await res.Content.ReadAsStringAsync(ct);
-            if (!res.IsSuccessStatusCode) return new(false, null, null, $"HTTP {(int)res.StatusCode}: {Trim(body)}", (int)res.StatusCode);
+            if (!res.IsSuccessStatusCode) return new(false, null, null, HttpError(res, body), (int)res.StatusCode);
             var node = JsonNode.Parse(body);
             return new(true, node?["key"]?["id"]?.GetValue<string>(), node?["status"]?.GetValue<string>(), null, (int)res.StatusCode);
         }
@@ -120,9 +124,31 @@ public class EvolutionApiClient(HttpClient http) : IEvolutionApi
         {
             using var res = await http.SendAsync(req, ct);
             var body = await res.Content.ReadAsStringAsync(ct);
-            return (res.IsSuccessStatusCode, res.IsSuccessStatusCode ? body : $"HTTP {(int)res.StatusCode}: {Trim(body)}");
+            return (res.IsSuccessStatusCode, res.IsSuccessStatusCode ? body : HttpError(res, body));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { return (false, ex.Message); }
+    }
+
+    /// <summary>Separa "https://usuario:senha@host" em URL sem credenciais + valor Base64 da autenticação básica.</summary>
+    public static (string Url, string? Basic) SplitCredentials(string url)
+    {
+        if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var u) || string.IsNullOrEmpty(u.UserInfo)) return (url, null);
+        var clean = new UriBuilder(u) { UserName = "", Password = "" }.Uri.GetLeftPart(UriPartial.Path);
+        var raw = Uri.UnescapeDataString(u.UserInfo);
+        return (clean, Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(raw)));
+    }
+
+    /// <summary>Monta a mensagem de erro HTTP, explicando em português os 401 mais comuns.</summary>
+    private static string HttpError(HttpResponseMessage res, string body)
+    {
+        var code = (int)res.StatusCode;
+        if (code == 401 && body.Contains("<html", StringComparison.OrdinalIgnoreCase))
+            return "HTTP 401: o servidor web (nginx) na frente da Evolution API pediu usuário e senha antes de chegar na Evolution. " +
+                   "Confira a URL do servidor em Integrações (deve ser o endereço da Evolution API) ou, se esse nginx tem senha de propósito, " +
+                   "informe-a na própria URL: https://usuario:senha@seu-servidor.";
+        if (code == 401)
+            return $"HTTP 401: a Evolution API recusou a API Key. Confira a API Key em Integrações. ({Trim(body)})";
+        return $"HTTP {code}: {Trim(body)}";
     }
 
     private static string Trim(string s) => s.Length > 500 ? s[..500] + "…" : s;
