@@ -48,9 +48,10 @@ public static class Api
         var api = app.MapGroup("/api").RequireAuthorization();
 
         // ---------- Leads ----------
-        api.MapGet("/leads", async (CrmDbContext db, string? q, KanbanStage? stage, ConsentStatus? consent, int? take) =>
+        api.MapGet("/leads", async (CrmDbContext db, string? q, KanbanStage? stage, ConsentStatus? consent, int? take, Guid? batch) =>
         {
             var query = db.Leads.Include(l => l.AssignedUser).AsNoTracking().AsQueryable();
+            if (batch is { } bid) query = query.Where(l => l.ImportBatchId == bid);
             if (stage is not null) query = query.Where(l => l.Stage == stage);
             if (consent is not null) query = query.Where(l => l.ConsentStatus == consent);
             if (!string.IsNullOrWhiteSpace(q))
@@ -227,7 +228,7 @@ public static class Api
         }).RequireAuthorization(SupervisorPolicy);
 
         // ---------- Importação ----------
-        api.MapPost("/import/file", async (IFormFile file, [FromForm] string? source, [FromForm] string? tags, [FromForm] string? consentSource, LeadImportService svc, ClaimsPrincipal user) =>
+        api.MapPost("/import/file", async (IFormFile file, [FromForm] string? source, [FromForm] string? tags, [FromForm] string? consentSource, [FromForm] string? batchName, LeadImportService svc, ClaimsPrincipal user) =>
         {
             var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
             await using var s = file.OpenReadStream();
@@ -243,7 +244,7 @@ public static class Api
             }
             catch (Exception ex) { return Results.BadRequest(new OperationResult(false, "Não foi possível ler o arquivo", ex.Message)); }
             if (rows.Count == 0) return Results.BadRequest(new OperationResult(false, "Nenhum número encontrado no arquivo. Use uma coluna com os números de WhatsApp (com DDD), um por linha."));
-            var r = await svc.ImportAsync(rows, new(file.FileName, ext.TrimStart('.').ToUpperInvariant(), user.Identity?.Name ?? "", source, tags, BatchConsentSource: consentSource));
+            var r = await svc.ImportAsync(rows, new(file.FileName, ext.TrimStart('.').ToUpperInvariant(), user.Identity?.Name ?? "", source, tags, BatchConsentSource: consentSource, BatchName: batchName));
             return Results.Ok(ToResponse(r));
         }).DisableAntiforgery();
 
@@ -251,9 +252,49 @@ public static class Api
         {
             var rows = LeadFileParser.ParsePaste(r.Text);
             if (rows.Count == 0) return Results.BadRequest(new OperationResult(false, "Nada para importar"));
-            var res = await svc.ImportAsync(rows, new("Copiar/colar", "COLAR", user.Identity?.Name ?? "", r.Source, r.Tags, BatchConsentSource: r.ConsentSource));
+            var res = await svc.ImportAsync(rows, new("Copiar/colar", "COLAR", user.Identity?.Name ?? "", r.Source, r.Tags, BatchConsentSource: r.ConsentSource, BatchName: r.BatchName));
             return Results.Ok(ToResponse(res));
         });
+
+        // Listas (pastas) de importação: para filtrar leads e escolher o público da campanha
+        api.MapGet("/import/batches", async (CrmDbContext db) =>
+        {
+            var counts = await db.Leads.AsNoTracking().Where(l => l.ImportBatchId != null).GroupBy(l => l.ImportBatchId)
+                .Select(g => new { Id = g.Key!.Value, Count = g.Count() }).ToDictionaryAsync(x => x.Id, x => x.Count);
+            var batches = await db.ImportBatches.AsNoTracking().ToListAsync();
+            return batches.OrderByDescending(b => b.UpdatedAt)
+                .Select(b => new ImportBatchDto(b.Id, b.Name, b.FileName, b.Format, b.CreatedAt, b.UpdatedAt, counts.GetValueOrDefault(b.Id),
+                    b.Created, b.Updated, b.Duplicates, b.Invalid, b.ImportedBy)).ToList();
+        });
+
+        api.MapPut("/import/batches/{id:guid}", async (Guid id, ImportBatchRename r, CrmDbContext db, ClaimsPrincipal user) =>
+        {
+            var b = await db.ImportBatches.FirstOrDefaultAsync(x => x.Id == id);
+            if (b is null) return Results.NotFound();
+            var name = (r.Name ?? "").Trim();
+            if (name.Length == 0) return Results.BadRequest(new OperationResult(false, "Informe o nome da lista"));
+            if (name.Length > 80) name = name[..80];
+            var lower = name.ToLower();
+            var target = await db.ImportBatches.FirstOrDefaultAsync(x => x.Id != id && x.Name.ToLower() == lower);
+            if (target is null)
+            {
+                b.Name = name; b.UpdatedAt = DateTimeOffset.UtcNow;
+                db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "import.batch.rename", EntityType = "ImportBatch", EntityId = id.ToString(), Details = name });
+                await db.SaveChangesAsync();
+                return Results.Ok(new OperationResult(true, $"Lista renomeada para \"{name}\""));
+            }
+            // já existe uma lista com esse nome: junta as duas
+            var leads = await db.Leads.Where(l => l.ImportBatchId == id).ToListAsync();
+            foreach (var l in leads) l.ImportBatchId = target.Id;
+            target.TotalRows += b.TotalRows; target.Created += b.Created; target.Updated += b.Updated; target.Duplicates += b.Duplicates;
+            target.Invalid += b.Invalid; target.Blocked += b.Blocked; target.UpdatedAt = DateTimeOffset.UtcNow;
+            foreach (var c in await db.Campaigns.Where(c => c.ImportBatchIds.Contains(id.ToString())).ToListAsync())
+                c.ImportBatchIds = string.Join(",", CampaignService.ParseIds(c.ImportBatchIds).Select(x => x == id ? target.Id : x).Distinct());
+            db.ImportBatches.Remove(b);
+            db.AuditLogs.Add(new AuditLog { Actor = user.Identity?.Name ?? "", Action = "import.batch.merge", EntityType = "ImportBatch", EntityId = target.Id.ToString(), Details = $"{leads.Count} leads juntados em \"{target.Name}\"" });
+            await db.SaveChangesAsync();
+            return Results.Ok(new OperationResult(true, $"Já existia a lista \"{target.Name}\": os {leads.Count} leads foram juntados a ela"));
+        }).RequireAuthorization(SupervisorPolicy);
 
         api.MapPost("/import/optouts", async (OptOutImportRequest r, LeadImportService svc, ClaimsPrincipal user) =>
         {
@@ -482,7 +523,7 @@ public static class Api
 
     private static ImportResponse ToResponse(ImportResult r) => new(r.BatchId, r.Total, r.Created, r.Updated, r.Duplicates, r.Invalid, r.Blocked, r.WithConsent,
         r.Rows.Where(x => x.Outcome is ImportRowOutcome.Invalid or ImportRowOutcome.DuplicateInFile or ImportRowOutcome.Blocked)
-            .Take(500).Select(x => new ImportRowDto(x.Line, x.RawPhone, x.Outcome.ToString(), x.Message)).ToList());
+            .Take(500).Select(x => new ImportRowDto(x.Line, x.RawPhone, x.Outcome.ToString(), x.Message)).ToList(), r.BatchName);
 
     private static List<string> SplitTags(string? tags) =>
         (tags ?? "").Split([',', ';', '|'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

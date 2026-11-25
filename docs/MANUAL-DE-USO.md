@@ -145,8 +145,13 @@ Menu **Contatos**.
 
 ### Importar
 - **Importar números**: arquivo CSV, TXT ou XLSX com uma coluna de números com DDD (com ou sem cabeçalho), ou cole os números um por linha. Não precisa de nome.
+- **Nome da lista**: dê um nome à importação (ex.: `Leads Nov 25` ou `Grupos IPTV`). Ela vira uma pasta que você escolhe depois na campanha. Importar de novo com o mesmo nome acrescenta os números novos à mesma lista.
+- **Números repetidos são ignorados automaticamente**: quem já existe no sistema (de qualquer lista) não entra de novo nem muda de lista. O resumo mostra quantos "já existiam".
 - Informe **Origem** e **Tags** (ex.: `iptv, feira2026`).
 - **Autorização da lista**: escreva como esses números autorizaram contato (ex.: "pediram informações no Instagram"). Se deixar em branco, os números ficam **pendentes** e **não recebem mensagens** até você registrar a autorização. Isso protege você na LGPD e nas regras do WhatsApp.
+
+### Listas importadas
+No topo da tela, o filtro **Lista** mostra só os contatos de uma importação. Com uma lista escolhida, dá para **Renomear lista** (ex.: chamar as importações antigas de `Primeiros 700`). Renomear para o nome de outra lista junta as duas.
 
 ### Autorizar depois
 - Selecione vários na lista → escreva a origem da autorização → **Autorizar selecionados**.
@@ -165,9 +170,10 @@ Menu **Agentes de disparo** → **+ Novo agente**: nome, instância do WhatsApp 
 ### Campanha
 Menu **Campanhas** → **+ Nova campanha**.
 1. **Nome**, **Modelo de mensagem** (só aprovados) e **Agente de disparo**.
-2. Filtro de público: **tags** e **segmento** (vazio = todos os autorizados).
+2. Filtro de público: **Listas de leads** (marque uma ou mais; nenhuma = todas), **Importados de / até** (período da importação, dd/mm/aaaa), **tags** e **segmento** (vazio = todos os autorizados).
+   O sistema **nunca envia duas vezes para o mesmo número**: quem já recebeu mensagem, de qualquer campanha ou agente, fica de fora sozinho, e um envio repetido que chegue à fila é cancelado antes de sair.
 3. **Data de início** (opcional), **horário** (início/fim) e **dias permitidos**.
-4. **Máx. contatos**, **Limite/dia** e **Intervalo (min)** (mínimo de 5 minutos entre abordagens).
+4. **Máx. contatos**, **Limite/dia** e **Intervalo (min)** (mínimo de 15 minutos entre abordagens).
 5. **Personalizar cada abordagem com IA** (opcional): a IA só varia a redação a partir do modelo aprovado, mantém empresa e opção SAIR e não inventa preço nem link. Fica desligado no modo Cloud API.
 6. **Acompanhamento**: modelo aprovado de Acompanhamento e dias de cada etapa (ex.: `1,3,7`). Para sozinho quando o contato responde.
 7. **Pausar se falhas > %** e **Pausar se descadastros > %**: a campanha se pausa sozinha se algo der errado.

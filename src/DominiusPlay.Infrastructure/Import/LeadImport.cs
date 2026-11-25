@@ -36,7 +36,7 @@ public enum ImportRowOutcome { Created, Updated, DuplicateInFile, Invalid, Block
 public sealed record ImportRowResult(int Line, string? RawPhone, string? Phone, ImportRowOutcome Outcome, string? Message);
 
 public sealed record ImportResult(Guid BatchId, int Total, int Created, int Updated, int Duplicates, int Invalid, int Blocked,
-    int WithConsent, IReadOnlyList<ImportRowResult> Rows);
+    int WithConsent, IReadOnlyList<ImportRowResult> Rows, string BatchName = "");
 
 public static class LeadFileParser
 {
@@ -200,17 +200,29 @@ public static class LeadFileParser
 public class LeadImportService(CrmDbContext db)
 {
     public sealed record Options(string FileName, string Format, string ImportedBy, string? DefaultSource, string? DefaultTags,
-        bool UpdateExisting = true, string? BatchConsentSource = null);
+        bool UpdateExisting = true, string? BatchConsentSource = null, string? BatchName = null);
 
     /// <summary>
     /// Importa linhas: normaliza telefone, descarta inválidos, detecta duplicados no arquivo e no banco,
     /// respeita lista de bloqueio e só registra consentimento quando a linha traz origem verificável.
     /// Importar NÃO autoriza envio: sem consentimento o lead fica "Pendente" e fora de qualquer disparo.
+    /// Números que já existem no sistema não entram na lista desta importação (continuam na lista de origem):
+    /// só recebem dados que faltavam e o consentimento, se a linha trouxer.
+    /// Com nome de lista: se já existir uma lista com esse nome, os números novos são acrescentados a ela.
     /// </summary>
     public async Task<ImportResult> ImportAsync(IReadOnlyList<RawLeadRow> rows, Options opt, CancellationToken ct = default)
     {
-        var batch = new ImportBatch { FileName = opt.FileName, Format = opt.Format, ImportedBy = opt.ImportedBy, TotalRows = rows.Count };
+        var name = (opt.BatchName ?? "").Trim();
+        if (name.Length > 80) name = name[..80];
+        var lowerName = name.ToLower();
+        var batch = name.Length == 0 ? null : await db.ImportBatches.FirstOrDefaultAsync(b => b.Name.ToLower() == lowerName, ct);
+        var isNewBatch = batch is null;
+        batch ??= new ImportBatch { Name = name, FileName = opt.FileName, Format = opt.Format, ImportedBy = opt.ImportedBy };
+        if (!isNewBatch) { batch.FileName = opt.FileName; batch.Format = opt.Format; batch.ImportedBy = opt.ImportedBy; }
+        batch.TotalRows += rows.Count;
+        int created = 0, updated = 0, duplicates = 0, invalid = 0, blockedCount = 0;
         var now = DateTimeOffset.UtcNow;
+        batch.UpdatedAt = now;
         var results = new List<ImportRowResult>();
         var seen = new HashSet<string>();
         var normalized = rows.Select(r => (Row: r, Res: PhoneNormalizer.Normalize(r.Phone))).ToList();
@@ -221,9 +233,9 @@ public class LeadImportService(CrmDbContext db)
 
         foreach (var (row, res) in normalized)
         {
-            if (!res.IsValid) { batch.Invalid++; results.Add(new(row.LineNumber, row.Phone, null, ImportRowOutcome.Invalid, res.Error)); continue; }
+            if (!res.IsValid) { invalid++; results.Add(new(row.LineNumber, row.Phone, null, ImportRowOutcome.Invalid, res.Error)); continue; }
             var phone = res.Normalized;
-            if (!seen.Add(phone)) { batch.Duplicates++; results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.DuplicateInFile, "Número repetido no arquivo")); continue; }
+            if (!seen.Add(phone)) { duplicates++; results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.DuplicateInFile, "Número repetido no arquivo")); continue; }
 
             var isBlocked = blocked.Contains(phone);
             var consent = ParseConsent(row, opt.FileName) ?? BatchConsent(opt);
@@ -236,12 +248,12 @@ public class LeadImportService(CrmDbContext db)
                     lead.City ??= Clean(row.City); lead.State ??= Clean(row.State)?.ToUpperInvariant();
                     lead.Company ??= Clean(row.Company); lead.Segment ??= Clean(row.Segment); lead.ConsentPurpose ??= Clean(row.ConsentPurpose);
                     if (!string.IsNullOrWhiteSpace(row.Notes)) lead.Notes = string.Join("\n", new[] { lead.Notes, row.Notes.Trim() }.Where(s => !string.IsNullOrWhiteSpace(s)));
-                    lead.Tags = MergeTags(lead.Tags, row.Tags, opt.DefaultTags);
+                    lead.Tags = MergeTags(lead.Tags, row.Tags); // as tags da importação são da lista nova: não vão para quem já existia
                     lead.UpdatedAt = now;
                     if (consent is not null && !isBlocked && lead.ConsentStatus != ConsentStatus.Revogado) { ApplyConsent(lead, consent, opt.ImportedBy); withConsent++; }
                 }
-                batch.Updated++;
-                results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.Updated, "Contato já existia — dados complementados"));
+                updated++;
+                results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.Updated, "Número já existia no sistema: ignorado nesta lista"));
                 continue;
             }
 
@@ -256,14 +268,15 @@ public class LeadImportService(CrmDbContext db)
             else if (consent is not null) { ApplyConsent(lead, consent, opt.ImportedBy); withConsent++; }
             db.Leads.Add(lead);
             existing[phone] = lead;
-            if (isBlocked) { batch.Blocked++; results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.Blocked, "Número na lista de bloqueio — cadastrado sem envio")); }
-            else { batch.Created++; results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.Created, consent is null ? "Sem consentimento: ficará em pendências" : null)); }
+            if (isBlocked) { blockedCount++; results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.Blocked, "Número na lista de bloqueio — cadastrado sem envio")); }
+            else { created++; results.Add(new(row.LineNumber, row.Phone, phone, ImportRowOutcome.Created, consent is null ? "Sem consentimento: ficará em pendências" : null)); }
         }
-        db.ImportBatches.Add(batch);
+        batch.Created += created; batch.Updated += updated; batch.Duplicates += duplicates; batch.Invalid += invalid; batch.Blocked += blockedCount;
+        if (isNewBatch) db.ImportBatches.Add(batch);
         db.AuditLogs.Add(new AuditLog { Actor = opt.ImportedBy, Action = "leads.import", EntityType = "ImportBatch", EntityId = batch.Id.ToString(),
-            Details = $"{opt.Format} {opt.FileName}: {batch.Created} novos, {batch.Updated} atualizados, {batch.Duplicates} duplicados, {batch.Invalid} inválidos, {batch.Blocked} bloqueados" });
+            Details = $"{opt.Format} {opt.FileName}{(name.Length > 0 ? $" → lista \"{name}\"" : "")}: {created} novos, {updated} já existiam (ignorados), {duplicates} duplicados, {invalid} inválidos, {blockedCount} bloqueados" });
         await db.SaveChangesAsync(ct);
-        return new(batch.Id, rows.Count, batch.Created, batch.Updated, batch.Duplicates, batch.Invalid, batch.Blocked, withConsent, results);
+        return new(batch.Id, rows.Count, created, updated, duplicates, invalid, blockedCount, withConsent, results, batch.Name);
     }
 
     private sealed record ParsedConsent(string Source, DateTimeOffset At);

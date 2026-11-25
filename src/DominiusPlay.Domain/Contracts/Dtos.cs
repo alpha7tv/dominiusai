@@ -80,9 +80,13 @@ public sealed record SendMessageRequest(string Text);
 public sealed record SendMessageResponse(bool Queued, string? Reason, Guid? QueueItemId);
 
 public sealed record ImportResponse(Guid BatchId, int Total, int Created, int Updated, int Duplicates, int Invalid, int Blocked,
-    int WithConsent, IReadOnlyList<ImportRowDto> Problems);
+    int WithConsent, IReadOnlyList<ImportRowDto> Problems, string BatchName = "");
 public sealed record ImportRowDto(int Line, string? RawPhone, string Outcome, string? Message);
-public sealed record PasteImportRequest(string Text, string? Source, string? Tags, string? ConsentSource = null);
+public sealed record PasteImportRequest(string Text, string? Source, string? Tags, string? ConsentSource = null, string? BatchName = null);
+/// <summary>Lista (pasta) de leads importados. Leads = quantos contatos pertencem a ela hoje.</summary>
+public sealed record ImportBatchDto(Guid Id, string Name, string FileName, string Format, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    int Leads, int Created, int AlreadyExisted, int Duplicates, int Invalid, string ImportedBy);
+public sealed record ImportBatchRename(string Name);
 public sealed record OptOutImportRequest(string Text, string Reason);
 
 public sealed record PlanDto(Guid Id, string Code, string Name, int Version, decimal MonthlyPrice, int? Credits, int? MaxActiveLogins,
@@ -131,11 +135,13 @@ public sealed record CampaignDto(Guid Id, string Name, CampaignStatus Status, st
     int Queued, int Sent, int Delivered, int Replied, int Failed, int Cancelled, int Eligible,
     Guid? DispatchAgentId = null, string Segment = "", string Prompt = "", DateTimeOffset? StartDate = null, bool AiPersonalization = false,
     Guid? FollowUpTemplateId = null, string FollowUpDays = "", int MaxFailurePercent = 20, int MaxOptOutPercent = 10, string? PauseReason = null,
-    int OptOuts = 0, int SimilarityAlerts = 0, int FollowUpsSent = 0);
+    int OptOuts = 0, int SimilarityAlerts = 0, int FollowUpsSent = 0,
+    string ImportBatchIds = "", DateTimeOffset? ImportedFrom = null, DateTimeOffset? ImportedTo = null);
 public sealed record CampaignUpsert(string Name, string StartTime, string EndTime, string AllowedDays, int MaxContacts, int MinIntervalSeconds,
     int DailyLimit, string? Objective, Guid? TemplateId, string TagFilter,
     Guid? DispatchAgentId = null, string? Segment = null, string? Prompt = null, DateTimeOffset? StartDate = null, bool AiPersonalization = false,
-    Guid? FollowUpTemplateId = null, string? FollowUpDays = null, int MaxFailurePercent = 20, int MaxOptOutPercent = 10);
+    Guid? FollowUpTemplateId = null, string? FollowUpDays = null, int MaxFailurePercent = 20, int MaxOptOutPercent = 10,
+    string? ImportBatchIds = null, DateTimeOffset? ImportedFrom = null, DateTimeOffset? ImportedTo = null);
 
 /// <summary>Resultado da validação da campanha antes de iniciar: problemas impedem o início; avisos não.</summary>
 public sealed record CampaignValidation(bool Ok, int Eligible, IReadOnlyList<string> Problems, IReadOnlyList<string> Warnings);

@@ -28,13 +28,25 @@ public class CampaignService(CrmDbContext db, SettingsStore settings, EvolutionG
         var tags = c.TagFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(t => t.ToLowerInvariant()).ToList();
 
+        var batches = ParseIds(c.ImportBatchIds);
+        var to = c.ImportedTo?.AddDays(1); // até o fim do dia escolhido
+
         var leads = await db.Leads.Where(l => l.ConsentStatus == RequiredConsent && l.Stage == KanbanStage.PrimeiroContato
             && l.Mode == ConversationMode.AguardandoContato).ToListAsync(ct);
         return leads.Where(l => !optOuts.Contains(l.Phone) && !contacted.Contains(l.Id) && !inbound.Contains(l.Id) && !queued.Contains(l.Id))
             .Where(l => tags.Count == 0 || l.Tags.Split(',', StringSplitOptions.TrimEntries).Any(t => tags.Contains(t.ToLowerInvariant())))
             .Where(l => string.IsNullOrWhiteSpace(c.Segment) || string.Equals(l.Segment?.Trim(), c.Segment.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(l => batches.Count == 0 || (l.ImportBatchId is { } b && batches.Contains(b)))
+            .Where(l => c.ImportedFrom is null || (l.ImportedAt ?? l.CreatedAt) >= c.ImportedFrom)
+            .Where(l => to is null || (l.ImportedAt ?? l.CreatedAt) < to)
+            .DistinctBy(l => l.Phone) // nunca duas abordagens para o mesmo número
             .OrderByDescending(l => l.Priority).ThenBy(l => l.ConsentAt ?? l.CreatedAt).ToList();
     }
+
+    /// <summary>Lista de Ids separados por vírgula ("a,b") → Ids válidos, sem repetição.</summary>
+    public static List<Guid> ParseIds(string? ids) =>
+        (ids ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
 
     public async Task<List<MessageTemplateVersion>> ApprovedVersionsAsync(Campaign c, CancellationToken ct = default) =>
         c.TemplateId is { } tid
@@ -75,7 +87,8 @@ public class CampaignService(CrmDbContext db, SettingsStore settings, EvolutionG
             else if (fu < days.Count) warnings.Add($"O modelo de acompanhamento tem {fu} versão(ões) aprovada(s) para {days.Count} etapa(s): só {fu} etapa(s) serão enviadas");
         }
         var eligible = (await EligibleLeadsAsync(c, ct)).Count;
-        if (eligible == 0) problems.Add("Nenhum lead elegível: é preciso consentimento válido, etapa 'Primeiro contato', nunca contatado, fora da lista de bloqueio" + (string.IsNullOrWhiteSpace(c.Segment) ? "" : $" e segmento \"{c.Segment}\""));
+        if (eligible == 0) problems.Add("Nenhum lead elegível: é preciso consentimento válido, etapa 'Primeiro contato', nunca contatado, fora da lista de bloqueio" + (string.IsNullOrWhiteSpace(c.Segment) ? "" : $" e segmento \"{c.Segment}\"")
+            + (ParseIds(c.ImportBatchIds).Count > 0 || c.ImportedFrom is not null || c.ImportedTo is not null ? " (confira também as listas e o período de importação escolhidos)" : ""));
         if (official) warnings.Add("Modo Cloud API oficial: verifique se o modelo aprovado tem o nome do template aprovado pela Meta");
         else warnings.Add("Modo WhatsApp Web (Baileys): não é a API oficial; volumes altos de prospecção aumentam o risco de bloqueio do número");
         if (c.StartDate is { } sd && sd > clock.GetUtcNow()) warnings.Add($"A campanha só começa a enviar em {sd.ToOffset(TimeSpan.FromHours(-3)):dd/MM/yyyy HH:mm}");
@@ -226,7 +239,8 @@ public class CampaignService(CrmDbContext db, SettingsStore settings, EvolutionG
     public static CampaignDto ToDto(Campaign c, int queued = 0, int sent = 0, int delivered = 0, int replied = 0, int failed = 0, int cancelled = 0, int eligible = 0) =>
         new(c.Id, c.Name, c.Status, c.InstanceName, c.StartTime.ToString("HH:mm"), c.EndTime.ToString("HH:mm"), c.AllowedDays, c.MaxContacts,
             c.MinIntervalSeconds, c.DailyLimit, c.Objective, c.TemplateId, c.TagFilter, c.StartedAt, queued, sent, delivered, replied, failed, cancelled, eligible,
-            c.DispatchAgentId, c.Segment, c.Prompt, c.StartDate, c.AiPersonalization, c.FollowUpTemplateId, c.FollowUpDays, c.MaxFailurePercent, c.MaxOptOutPercent, c.PauseReason);
+            c.DispatchAgentId, c.Segment, c.Prompt, c.StartDate, c.AiPersonalization, c.FollowUpTemplateId, c.FollowUpDays, c.MaxFailurePercent, c.MaxOptOutPercent, c.PauseReason,
+            ImportBatchIds: c.ImportBatchIds, ImportedFrom: c.ImportedFrom, ImportedTo: c.ImportedTo);
 
     /// <summary>Valida e aplica os campos editáveis. Retorna mensagem de erro ou null.</summary>
     public static string? Apply(Campaign c, CampaignUpsert r)
@@ -246,6 +260,8 @@ public class CampaignService(CrmDbContext db, SettingsStore settings, EvolutionG
         c.DispatchAgentId = r.DispatchAgentId; c.Segment = r.Segment?.Trim() ?? ""; c.Prompt = r.Prompt?.Trim() ?? ""; c.StartDate = r.StartDate;
         c.AiPersonalization = r.AiPersonalization; c.FollowUpTemplateId = r.FollowUpTemplateId;
         c.FollowUpDays = string.Join(",", FollowUpDayList(r.FollowUpDays)); c.MaxFailurePercent = r.MaxFailurePercent; c.MaxOptOutPercent = r.MaxOptOutPercent;
+        if (r.ImportedFrom is { } f && r.ImportedTo is { } t && t < f) return "Período de importação inválido: a data final é anterior à inicial";
+        c.ImportBatchIds = string.Join(",", ParseIds(r.ImportBatchIds)); c.ImportedFrom = r.ImportedFrom; c.ImportedTo = r.ImportedTo;
         return null;
     }
 }

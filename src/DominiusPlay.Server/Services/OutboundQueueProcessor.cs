@@ -209,6 +209,11 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
         if (item.TemplateVersionId is { } tv)
             templateApproved = await db.MessageTemplateVersions.AnyAsync(v => v.Id == tv && v.Approval == ApprovalStatus.Aprovado, ct);
         var alreadyInCampaign = item.CampaignId is not null && leadMsgs.Any(m => m.CampaignId == item.CampaignId && m.Status != MessageStatus.Falhou);
+        // nunca duas abordagens para o mesmo número: qualquer mensagem já enviada (campanha, agente ou atendente) ou outra abordagem já despachada
+        var alreadyApproached = item.Kind == OutboundKind.AbordagemInicial
+            && (leadMsgs.Any(m => m.Direction == MessageDirection.Saida && m.Author != MessageAuthor.Sistema && m.Status != MessageStatus.Falhou)
+                || await db.OutboundQueue.AnyAsync(q => q.LeadId == lead.Id && q.Id != item.Id && q.Kind == OutboundKind.AbordagemInicial
+                    && (q.Status == MessageStatus.EnviadaServidor || q.Status == MessageStatus.Enviando), ct));
 
         var minInterval = Math.Max(SendLimits.MinInitialIntervalSeconds, int.TryParse(await settings.GetAsync(SettingKeys.MinInitialIntervalSeconds, ct), out var s) ? s : 0); // nunca abaixo de 15 min
         if (campaign is not null) minInterval = Math.Max(minInterval, campaign.MinIntervalSeconds);
@@ -241,7 +246,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             DailyLimit: dailyLimit,
             MinInitialInterval: TimeSpan.FromSeconds(minInterval),
             Campaign: campaign, TemplateApproved: templateApproved, ConsecutiveFailures: failures, TimeZone: tz,
-            InitialSentInCampaignAt: initialAt, InitialPendingInCampaign: initialPending);
+            InitialSentInCampaignAt: initialAt, InitialPendingInCampaign: initialPending, AlreadyApproached: alreadyApproached);
     }
 
     public static TimeZoneInfo ResolveTz(string? id)
