@@ -3,6 +3,14 @@ using DominiusPlay.Domain.Enums;
 
 namespace DominiusPlay.Domain.Services;
 
+/// <summary>Limites fixos de envio.</summary>
+public static class SendLimits
+{
+    /// <summary>Intervalo padrão e mínimo entre abordagens iniciais (campanhas e agentes de disparo): 15 minutos.</summary>
+    public const int MinInitialIntervalSeconds = 15 * 60;
+    public const int MinInitialIntervalMinutes = MinInitialIntervalSeconds / 60;
+}
+
 /// <summary>Contexto avaliado imediatamente antes de cada envio.</summary>
 public sealed record SendContext(
     Lead Lead,

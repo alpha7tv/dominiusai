@@ -201,14 +201,14 @@ public class PhasesTests
 
         var tid = await ApprovedTemplate(c, "Abordagem", "Olá{, nome}! Sou {assistente}, assistente virtual da Dominius Play. Podemos conversar sobre revenda?");
         var camp = (await (await c.PostAsJsonAsync("/api/campaigns", AllDay("Revenda novembro", tid, "revenda") with { MinIntervalSeconds = 10 })).Content.ReadFromJsonAsync<CampaignDto>())!;
-        Assert.Equal(300, camp.MinIntervalSeconds); // nunca abaixo de 5 minutos
+        Assert.Equal(900, camp.MinIntervalSeconds); // nunca abaixo de 15 minutos
         Assert.Equal(2, (await c.GetFromJsonAsync<List<CampaignDto>>("/api/campaigns"))!.Single(x => x.Id == camp.Id).Eligible);
 
         var st = (await (await c.PostAsync($"/api/campaigns/{camp.Id}/start", null)).Content.ReadFromJsonAsync<OperationResult>())!;
         Assert.True(st.Ok, st.Message);
         Assert.False((await (await c.PostAsync($"/api/campaigns/{camp.Id}/start", null)).Content.ReadFromJsonAsync<OperationResult>())!.Ok); // não duplica
 
-        Assert.Equal(1, await f.RunQueueAsync()); // só a primeira; a segunda aguarda 5 minutos
+        Assert.Equal(1, await f.RunQueueAsync()); // só a primeira; a segunda aguarda 15 minutos
         Assert.Single(f.Evolution.Sent);
         Assert.StartsWith("Olá, João! Sou Assistente Dominius Play", f.Evolution.Sent[0].Text);
         f.Clock.Advance(TimeSpan.FromMinutes(2));
@@ -257,7 +257,7 @@ public class PhasesTests
         f.Evolution.Behavior = _ => ++calls == 2
             ? new EvolutionSendResult(false, null, null, "Número não existe no WhatsApp", 400)
             : new EvolutionSendResult(true, "WA" + Guid.NewGuid().ToString("N")[..10], "SERVER_ACK", null, 201);
-        for (var i = 0; i < 3; i++) { await f.RunQueueAsync(); f.Clock.Advance(TimeSpan.FromMinutes(6)); }
+        for (var i = 0; i < 3; i++) { await f.RunQueueAsync(); f.Clock.Advance(TimeSpan.FromMinutes(16)); }
         Assert.Equal(3, calls);
 
         var adminId = await f.WithDb(db => db.Users.Select(u => u.Id).FirstAsync());
@@ -281,7 +281,7 @@ public class PhasesTests
         });
 
         var from = DateTimeOffset.Now.AddDays(-7);
-        var url = $"/api/reports/sent-messages?from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(30).ToString("o"))}";
+        var url = $"/api/reports/sent-messages?from={Uri.EscapeDataString(from.ToString("o"))}&to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(90).ToString("o"))}";
         var r = (await c.GetFromJsonAsync<SentMessagesReportDto>(url))!;
         Assert.Equal("dia", r.Grouping);
         Assert.Equal(new SentMessagesRow("total", "Total", 5, 1, 1, 2, 1), r.Totals); // nota interna, recebida e a de 40 dias atrás ficam de fora
@@ -309,12 +309,12 @@ public class PhasesTests
 
         // Hoje: agrupa por hora; 12 meses: por mês
         Assert.Equal("hora", (await c.GetFromJsonAsync<SentMessagesReportDto>($"/api/reports/sent-messages?from={Uri.EscapeDataString(DateTimeOffset.Now.Date.ToString("o"))}"))!.Grouping);
-        var year = (await c.GetFromJsonAsync<SentMessagesReportDto>($"/api/reports/sent-messages?from={Uri.EscapeDataString(DateTimeOffset.Now.AddDays(-365).ToString("o"))}&to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(30).ToString("o"))}"))!;
+        var year = (await c.GetFromJsonAsync<SentMessagesReportDto>($"/api/reports/sent-messages?from={Uri.EscapeDataString(DateTimeOffset.Now.AddDays(-365).ToString("o"))}&to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(90).ToString("o"))}"))!;
         Assert.Equal("mes", year.Grouping);
         Assert.Equal(6, year.Totals.Total);
 
         // CSV de mensagens traz campanha e status de entrega
-        var csv = System.Text.Encoding.UTF8.GetString(await c.GetByteArrayAsync($"/api/export/messages.csv?to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(30).ToString("o"))}"));
+        var csv = System.Text.Encoding.UTF8.GetString(await c.GetByteArrayAsync($"/api/export/messages.csv?to={Uri.EscapeDataString(DateTimeOffset.Now.AddMinutes(90).ToString("o"))}"));
         Assert.Contains("Status de entrega", csv);
         Assert.Contains(";Revenda dezembro;", csv);
     }

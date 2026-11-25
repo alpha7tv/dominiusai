@@ -66,7 +66,7 @@ public static partial class AgentsApi
         a.Model = r.Model?.Trim() ?? ""; a.AdvancedModel = r.AdvancedModel?.Trim() ?? ""; a.Status = r.Status; a.IsDefault = r.IsDefault;
         a.StartTime = st; a.EndTime = et; a.AllowedDays = string.Join(',', BusinessHours.ParseDays(r.AllowedDays!).Select(d => (int)d).Order()); a.TimeZoneId = tz;
         a.IntentActions = IntentDetector.FormatActions(IntentDetector.ParseActions(r.IntentActions));
-        a.InstanceName = r.InstanceName?.Trim() ?? ""; a.DailyLimit = r.DailyLimit; a.MinIntervalSeconds = Math.Max(300, r.MinIntervalSeconds);
+        a.InstanceName = r.InstanceName?.Trim() ?? ""; a.DailyLimit = r.DailyLimit; a.MinIntervalSeconds = Math.Max(SendLimits.MinInitialIntervalSeconds, r.MinIntervalSeconds);
         a.AttendanceAgentId = r.AttendanceAgentId;
         a.UpdatedAt = DateTimeOffset.UtcNow;
         return null;

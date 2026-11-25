@@ -210,7 +210,7 @@ public class OutboundQueueProcessor(CrmDbContext db, IEvolutionApi evolution, Ev
             templateApproved = await db.MessageTemplateVersions.AnyAsync(v => v.Id == tv && v.Approval == ApprovalStatus.Aprovado, ct);
         var alreadyInCampaign = item.CampaignId is not null && leadMsgs.Any(m => m.CampaignId == item.CampaignId && m.Status != MessageStatus.Falhou);
 
-        var minInterval = int.TryParse(await settings.GetAsync(SettingKeys.MinInitialIntervalSeconds, ct), out var s) ? s : 300;
+        var minInterval = Math.Max(SendLimits.MinInitialIntervalSeconds, int.TryParse(await settings.GetAsync(SettingKeys.MinInitialIntervalSeconds, ct), out var s) ? s : 0); // nunca abaixo de 15 min
         if (campaign is not null) minInterval = Math.Max(minInterval, campaign.MinIntervalSeconds);
         var dailyLimit = int.TryParse(await settings.GetAsync(SettingKeys.DailyLimit, ct), out var dl) ? dl : 50;
         if (campaign is not null) dailyLimit = Math.Min(dailyLimit, campaign.DailyLimit);

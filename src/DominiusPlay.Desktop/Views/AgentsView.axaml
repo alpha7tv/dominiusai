@@ -80,7 +80,7 @@
                   <TextBlock Text="Instância do WhatsApp (vazio = a de Integrações)" Classes="muted" /><TextBox Text="{Binding InstanceName}" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Text="Limite diário" VerticalAlignment="Center" /><NumericUpDown Value="{Binding DailyLimit}" Minimum="1" Maximum="1000" Width="130" FormatString="0" />
-                    <TextBlock Text="Intervalo mínimo (min)" VerticalAlignment="Center" /><NumericUpDown Value="{Binding MinIntervalMinutes}" Minimum="5" Maximum="240" Width="120" FormatString="0" />
+                    <TextBlock Text="Intervalo mínimo (min)" VerticalAlignment="Center" /><NumericUpDown Value="{Binding MinIntervalMinutes}" Minimum="15" Maximum="240" Width="120" FormatString="0" />
                   </StackPanel>
                 </StackPanel>
               </StackPanel>

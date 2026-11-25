@@ -138,7 +138,7 @@ public class UiTests
             new AiSettingsUpdate(true, "claude-haiku-5-5", "claude-sonnet-5-5", "sk-ant-teste-123", 4000, "Lia", "", 100000, false, 0))).EnsureSuccessStatusCode();
         (await System.Net.Http.Json.HttpClientJsonExtensions.PostAsJsonAsync(http, "/api/agents", new AgentUpsert(AgentKind.Disparo, "Prospecção revenda", "Lia",
             "Abordagem de revendedores", "Abrir conversa", "Dominius Play", "Consultiva", "Curto e cordial", "", "", "", "", "", "", "", AgentStatus.Ativo, true,
-            "09:00", "20:00", "1,2,3,4,5", "America/Sao_Paulo", "", "", 40, 600))).EnsureSuccessStatusCode();
+            "09:00", "20:00", "1,2,3,4,5", "America/Sao_Paulo", "", "", 40, 1200))).EnsureSuccessStatusCode();
         var api = new ApiClient("http://localhost", f.Server.CreateHandler());
         await api.LoginAsync("carlos", "SenhaForte123");
         var main = new MainWindowViewModel();
@@ -153,7 +153,7 @@ public class UiTests
         Assert.Equal("Prospecção revenda", Assert.Single(vm.Agents).Name);
         Assert.Single(vm.AttendanceAgents);
         Assert.Equal(40, vm.DailyLimit);
-        Assert.Equal(10, vm.MinIntervalMinutes);
+        Assert.Equal(20, vm.MinIntervalMinutes);
 
         vm.TestInput = "não tenho interesse, me tira da lista";
         await vm.SendTestCommand.ExecuteAsync(null);
@@ -425,7 +425,7 @@ public class UiTests
         f.Evolution.Behavior = _ => ++calls == 3
             ? new DominiusPlay.Infrastructure.Evolution.EvolutionSendResult(false, null, null, "Número não existe no WhatsApp", 400)
             : new DominiusPlay.Infrastructure.Evolution.EvolutionSendResult(true, "WA" + Guid.NewGuid().ToString("N")[..10], "SERVER_ACK", null, 201);
-        for (var i = 0; i < 5; i++) { await f.RunQueueAsync(); f.Clock.Advance(TimeSpan.FromMinutes(6)); }
+        for (var i = 0; i < 5; i++) { await f.RunQueueAsync(); f.Clock.Advance(TimeSpan.FromMinutes(16)); }
         await f.WithDb(async db =>
         {
             var sent = await db.Messages.Where(m => m.CampaignId != null && m.Status == MessageStatus.EnviadaServidor).ToListAsync();

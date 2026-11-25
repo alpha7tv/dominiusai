@@ -24,7 +24,7 @@ Legenda de prioridade: P1 (Atendimento), P2 (Disparo), P3 (integração entre ag
 | Funcionalidade | Onde está | Requisito do escopo atendido |
 |---|---|---|
 | Fila persistente de envio com idempotência, prioridade, retentativas (até 4, espera exponencial 60/120/240 s), 4xx sem repetir, recuperação de itens "Enviando" após reinício | `OutboundQueueProcessor`, `OutboundQueueItem.IdempotencyKey` (índice único) | 2.5 quase completo |
-| `SendGuard`: consentimento, descadastro, janela de 24 h, modelo aprovado fora da janela, campanha ativa, horário e dias, limite diário, intervalo mínimo de 5 min entre abordagens, falhas consecutivas, instância conectada, humano atendendo | `Domain/Services/SendGuard.cs` | 2.2, 2.5, 10, 11 |
+| `SendGuard`: consentimento, descadastro, janela de 24 h, modelo aprovado fora da janela, campanha ativa, horário e dias, limite diário, intervalo mínimo de 15 min entre abordagens, falhas consecutivas, instância conectada, humano atendendo | `Domain/Services/SendGuard.cs` | 2.2, 2.5, 10, 11 |
 | Webhook idempotente (chave única do evento + ID real da mensagem), token em tempo constante, rate limit 600/min | `InboundProcessor`, `/webhooks/evolution` | 10, 12 |
 | Importação CSV/XLSX/colar com normalização de DDI/DDD, validação, duplicados, lista de bloqueio, contato importado entra como **Pendente** (não autorizado) | `LeadImportService`, `PhoneNormalizer` | 2.2 (parcial, ver 2.2 abaixo) |
 | Consentimento com histórico imutável (origem, evidência, data, quem registrou) e lista global de descadastro | `ConsentRecord`, `OptOut` | 2.2, 11 |

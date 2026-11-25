@@ -10,7 +10,7 @@ namespace DominiusPlay.Server.Services;
 
 /// <summary>
 /// Campanhas de abordagem inicial (seção 9). A campanha apenas coloca itens na fila persistente;
-/// cada envio continua passando pelo SendGuard (consentimento, horário, limite diário, intervalo de 5 min etc.).
+/// cada envio continua passando pelo SendGuard (consentimento, horário, limite diário, intervalo de 15 min etc.).
 /// </summary>
 public class CampaignService(CrmDbContext db, SettingsStore settings, EvolutionGateway gateway, ApproachGenerator approaches, TimeProvider clock)
 {
@@ -99,8 +99,8 @@ public class CampaignService(CrmDbContext db, SettingsStore settings, EvolutionG
 
         var assistant = await settings.GetAsync(SettingKeys.AssistantName, ct) is { Length: > 0 } n ? n : "Assistente Dominius Play";
         if (!string.IsNullOrWhiteSpace(agent?.AssistantName)) assistant = agent!.AssistantName;
-        var globalInterval = int.TryParse(await settings.GetAsync(SettingKeys.MinInitialIntervalSeconds, ct), out var gi) ? gi : 300;
-        var interval = Math.Max(Math.Max(300, globalInterval), Math.Max(c.MinIntervalSeconds, agent?.MinIntervalSeconds ?? 0)); // nunca abaixo de 5 minutos
+        var globalInterval = int.TryParse(await settings.GetAsync(SettingKeys.MinInitialIntervalSeconds, ct), out var gi) ? gi : SendLimits.MinInitialIntervalSeconds;
+        var interval = Math.Max(Math.Max(SendLimits.MinInitialIntervalSeconds, globalInterval), Math.Max(c.MinIntervalSeconds, agent?.MinIntervalSeconds ?? 0)); // nunca abaixo de 15 minutos
         c.MinIntervalSeconds = interval;
         var days = FollowUpDayList(c.FollowUpDays);
         var fuVersions = days.Count > 0 && c.FollowUpTemplateId is { } ft
@@ -240,7 +240,7 @@ public class CampaignService(CrmDbContext db, SettingsStore settings, EvolutionG
         if (r.MaxContacts < 1 || r.MaxContacts > 10000) return "Máximo de contatos deve estar entre 1 e 10.000";
         if (r.DailyLimit < 1 || r.DailyLimit > 1000) return "Limite diário deve estar entre 1 e 1.000";
         c.Name = r.Name.Trim(); c.StartTime = st; c.EndTime = et; c.AllowedDays = string.Join(',', days.Distinct());
-        c.MaxContacts = r.MaxContacts; c.MinIntervalSeconds = Math.Max(300, r.MinIntervalSeconds); c.DailyLimit = r.DailyLimit;
+        c.MaxContacts = r.MaxContacts; c.MinIntervalSeconds = Math.Max(SendLimits.MinInitialIntervalSeconds, r.MinIntervalSeconds); c.DailyLimit = r.DailyLimit;
         c.Objective = r.Objective; c.TemplateId = r.TemplateId; c.TagFilter = r.TagFilter?.Trim() ?? "";
         if (r.MaxFailurePercent is < 1 or > 100 || r.MaxOptOutPercent is < 1 or > 100) return "Limites de pausa automática devem ficar entre 1% e 100%";
         c.DispatchAgentId = r.DispatchAgentId; c.Segment = r.Segment?.Trim() ?? ""; c.Prompt = r.Prompt?.Trim() ?? ""; c.StartDate = r.StartDate;

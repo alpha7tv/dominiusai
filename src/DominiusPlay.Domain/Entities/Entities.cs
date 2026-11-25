@@ -235,7 +235,7 @@ public class Campaign : Entity
     public TimeOnly EndTime { get; set; } = new(18, 0);
     public string AllowedDays { get; set; } = "1,2,3,4,5"; // DayOfWeek numérico
     public int MaxContacts { get; set; } = 100;
-    public int MinIntervalSeconds { get; set; } = 300;     // padrão: 5 minutos
+    public int MinIntervalSeconds { get; set; } = 900;     // padrão e mínimo: 15 minutos
     public int DailyLimit { get; set; } = 50;
     public string? Objective { get; set; }
     public Guid? TemplateId { get; set; }
@@ -345,7 +345,7 @@ public class AgentProfile : Entity
     /// <summary>Instância da Evolution usada por este agente (vazio = instância global).</summary>
     public string InstanceName { get; set; } = "";
     public int DailyLimit { get; set; } = 50;
-    public int MinIntervalSeconds { get; set; } = 300;
+    public int MinIntervalSeconds { get; set; } = 900;     // padrão e mínimo: 15 minutos
     /// <summary>Agente de atendimento que assume quando o contato responde a uma abordagem deste agente de disparo.</summary>
     public Guid? AttendanceAgentId { get; set; }
 }
