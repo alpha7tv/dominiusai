@@ -68,8 +68,20 @@
                   <Border DockPanel.Dock="Right" Classes="badge"><TextBlock Text="{Binding Count}" FontSize="12" /></Border>
                   <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                 </DockPanel>
-                <ScrollViewer>
-                  <ItemsControl ItemsSource="{Binding Cards}">
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding More}" Classes="muted" FontSize="11" TextWrapping="Wrap" Margin="2,6,2,0"
+                           IsVisible="{Binding More, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <!-- Lista virtualizada: só os cards visíveis são desenhados (rolagem leve mesmo com centenas de leads na etapa) -->
+                <ItemsControl ItemsSource="{Binding Cards}">
+                  <ItemsControl.Template>
+                    <ControlTemplate TargetType="ItemsControl">
+                      <ScrollViewer Name="PART_ScrollViewer" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                        <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                      </ScrollViewer>
+                    </ControlTemplate>
+                  </ItemsControl.Template>
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:LeadCardVm">
                         <Border Classes="card" Margin="0,0,0,8" Cursor="Hand" Tag="{Binding Id}" Name="Card">
@@ -106,7 +118,6 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
-                </ScrollViewer>
               </DockPanel>
             </Border>
           </DataTemplate>
