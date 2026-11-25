@@ -403,6 +403,13 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     /// <summary>Origem da autorização da lista inteira. Vazio = os números ficam em Pendências.</summary>
     [ObservableProperty] private string _importConsentSource = "";
     [ObservableProperty] private string? _importSummary;
+    /// <summary>Nome da lista desta importação (ex.: "Leads Nov 25"). Mesmo nome de uma lista existente = acrescenta a ela.</summary>
+    [ObservableProperty] private string _importBatchName = "";
+    /// <summary>Filtro por lista importada (primeiro item = todas).</summary>
+    public ObservableCollection<ImportBatchOptionVm> BatchFilters { get; } = new();
+    [ObservableProperty] private ImportBatchOptionVm? _batchFilter;
+    [ObservableProperty] private string _renameBatchName = "";
+    public bool HasBatchFilter => BatchFilter?.Model is not null;
     [ObservableProperty] private string _newName = "";
     [ObservableProperty] private string _newPhone = "";
     [ObservableProperty] private string _newSource = "Cadastro manual";
@@ -510,7 +517,39 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
         UpdateChecked();
     }
 
-    public override Task OnActivatedAsync() => Refresh();
+    public override Task OnActivatedAsync() => Run(async () => { await LoadBatches(); await RefreshCore(); });
+
+    private bool _loadingBatches;
+    private async Task LoadBatches()
+    {
+        var sel = BatchFilter?.Model?.Id;
+        _loadingBatches = true;
+        try
+        {
+            BatchFilters.Clear();
+            BatchFilters.Add(new ImportBatchOptionVm(null));
+            foreach (var b in await s.Api.ImportBatchesAsync()) BatchFilters.Add(new ImportBatchOptionVm(b));
+            BatchFilter = BatchFilters.FirstOrDefault(b => b.Model?.Id == sel) ?? BatchFilters[0];
+        }
+        finally { _loadingBatches = false; }
+    }
+
+    partial void OnBatchFilterChanged(ImportBatchOptionVm? value)
+    {
+        OnPropertyChanged(nameof(HasBatchFilter));
+        RenameBatchName = value?.Model?.Name ?? "";
+        if (!_loadingBatches) _ = Refresh();
+    }
+
+    [RelayCommand]
+    private Task RenameBatch() => Run(async () =>
+    {
+        if (BatchFilter?.Model is not { } b) { Error = "Escolha uma lista no filtro acima."; return; }
+        if (string.IsNullOrWhiteSpace(RenameBatchName)) { Error = "Informe o novo nome da lista."; return; }
+        Info = (await s.Api.RenameImportBatchAsync(b.Id, RenameBatchName.Trim())).Message;
+        await LoadBatches();
+        await RefreshCore();
+    });
 
     partial void OnSearchChanged(string value) => _ = Refresh();
     partial void OnFilterIndexChanged(int value) => _ = Refresh();
@@ -519,27 +558,30 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     public Task Refresh() => Run(async () =>
     {
         ConsentStatus? c = FilterIndex switch { 1 => ConsentStatus.Valido, 2 => ConsentStatus.Pendente, 3 => ConsentStatus.Revogado, _ => null };
-        Fill(await s.Api.LeadsAsync(Search, c));
+        Fill(await s.Api.LeadsAsync(Search, c, BatchFilter?.Model?.Id));
     });
 
     [RelayCommand]
     private Task ImportPaste() => Run(async () =>
     {
         if (string.IsNullOrWhiteSpace(PasteText)) { Error = "Cole os números (um por linha)."; return; }
-        Show(await s.Api.ImportPasteAsync(PasteText, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource)));
+        Show(await s.Api.ImportPasteAsync(PasteText, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource), NullIfEmpty(ImportBatchName)));
+        await LoadBatches();
         PasteText = "";
         await RefreshCore();
     });
 
     public Task ImportFile(string path) => Run(async () =>
     {
-        Show(await s.Api.ImportFileAsync(path, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource)));
+        Show(await s.Api.ImportFileAsync(path, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource), NullIfEmpty(ImportBatchName)));
+        await LoadBatches();
         await RefreshCore();
     });
 
     public Task ImportFile(Stream stream, string fileName) => Run(async () =>
     {
-        Show(await s.Api.ImportFileAsync(stream, fileName, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource)));
+        Show(await s.Api.ImportFileAsync(stream, fileName, NullIfEmpty(ImportSource), NullIfEmpty(ImportTags), NullIfEmpty(ImportConsentSource), NullIfEmpty(ImportBatchName)));
+        await LoadBatches();
         await RefreshCore();
     });
 
@@ -602,7 +644,8 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
 
     private void Show(ImportResponse r)
     {
-        ImportSummary = $"{r.Total} números · {r.Created} novos · {r.Updated} já existiam · {r.Duplicates} duplicados · {r.Invalid} inválidos · {r.Blocked} bloqueados · {r.WithConsent} com consentimento registrado";
+        ImportSummary = (string.IsNullOrWhiteSpace(r.BatchName) ? "" : $"Lista \"{r.BatchName}\": ")
+            + $"{r.Total} números · {r.Created} novos · {r.Updated} já existiam no sistema (ignorados, não entram nesta lista) · {r.Duplicates} repetidos no arquivo · {r.Invalid} inválidos · {r.Blocked} bloqueados · {r.WithConsent} com consentimento registrado";
         Problems.Clear();
         foreach (var p in r.Problems) Problems.Add(p);
     }
@@ -610,7 +653,7 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
     private async Task RefreshCore()
     {
         ConsentStatus? c = FilterIndex switch { 1 => ConsentStatus.Valido, 2 => ConsentStatus.Pendente, 3 => ConsentStatus.Revogado, _ => null };
-        Fill(await s.Api.LeadsAsync(Search, c));
+        Fill(await s.Api.LeadsAsync(Search, c, BatchFilter?.Model?.Id));
     }
 
     private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

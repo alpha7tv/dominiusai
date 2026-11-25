@@ -260,6 +260,12 @@ public class Campaign : Entity
     public int MaxFailurePercent { get; set; } = 20;
     public int MaxOptOutPercent { get; set; } = 10;
     public string? PauseReason { get; set; }
+    /// <summary>Somente leads destas listas importadas (Ids de ImportBatch separados por vírgula). Vazio = todas.</summary>
+    public string ImportBatchIds { get; set; } = "";
+    /// <summary>Somente leads importados a partir deste dia (inclusive). Nulo = sem limite.</summary>
+    public DateTimeOffset? ImportedFrom { get; set; }
+    /// <summary>Somente leads importados até este dia (inclusive o dia inteiro). Nulo = sem limite.</summary>
+    public DateTimeOffset? ImportedTo { get; set; }
 }
 
 public class User : Entity
@@ -291,6 +297,8 @@ public class AppSetting
 
 public class ImportBatch : Entity
 {
+    /// <summary>Nome da lista/pasta dada na importação (ex.: "Leads Nov 25"). Importar de novo com o mesmo nome acrescenta à mesma lista.</summary>
+    public string Name { get; set; } = "";
     public string FileName { get; set; } = "";
     public string Format { get; set; } = "";
     public int TotalRows { get; set; }

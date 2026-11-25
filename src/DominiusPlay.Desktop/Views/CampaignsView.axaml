@@ -49,6 +49,24 @@
             <ComboBox ItemsSource="{Binding DispatchAgents}" SelectedItem="{Binding DispatchAgent}" PlaceholderText="Configuração global (sem agente)" HorizontalAlignment="Stretch">
               <ComboBox.ItemTemplate><DataTemplate x:DataType="c:AgentDto"><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate>
             </ComboBox>
+            <TextBlock Text="Listas de leads (marque uma ou mais; nenhuma marcada = todas)" Classes="muted" TextWrapping="Wrap" />
+            <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="8,4" MaxHeight="170">
+              <ScrollViewer>
+                <StackPanel>
+                  <ItemsControl ItemsSource="{Binding Batches}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:ImportBatchOptionVm"><CheckBox IsChecked="{Binding IsSelected}"><TextBlock Text="{Binding Label}" TextWrapping="Wrap" /></CheckBox></DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <TextBlock Text="Nenhuma lista importada ainda. Dê um nome à lista ao importar em Leads." Classes="muted" TextWrapping="Wrap" IsVisible="{Binding !HasBatches}" />
+                </StackPanel>
+              </ScrollViewer>
+            </Border>
+            <Grid ColumnDefinitions="*,8,*">
+              <StackPanel><TextBlock Text="Importados de (dd/mm/aaaa)" Classes="muted" /><TextBox Text="{Binding ImportedFrom}" Watermark="opcional" /></StackPanel>
+              <StackPanel Grid.Column="2"><TextBlock Text="até (dd/mm/aaaa)" Classes="muted" /><TextBox Text="{Binding ImportedTo}" Watermark="opcional" /></StackPanel>
+            </Grid>
+            <TextBlock Text="Nunca envia duas vezes para o mesmo número: quem já recebeu mensagem (de qualquer campanha) fica de fora automaticamente." Classes="muted" TextWrapping="Wrap" />
             <TextBlock Text="Somente leads com estas tags (vírgula; vazio = todos autorizados)" Classes="muted" TextWrapping="Wrap" /><TextBox Text="{Binding TagFilter}" />
             <TextBlock Text="Segmento (vazio = todos)" Classes="muted" /><TextBox Text="{Binding Segment}" Watermark="ex.: Revendedor" />
             <TextBlock Text="Data de início (opcional, dd/mm/aaaa hh:mm)" Classes="muted" /><TextBox Text="{Binding StartDate}" />

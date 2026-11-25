@@ -31,7 +31,9 @@ public sealed record SendContext(
     /// <summary>Quando a abordagem inicial desta campanha foi enviada ao contato (acompanhamentos dependem dela).</summary>
     DateTimeOffset? InitialSentInCampaignAt = null,
     /// <summary>A abordagem inicial desta campanha ainda está na fila para o contato.</summary>
-    bool InitialPendingInCampaign = false);
+    bool InitialPendingInCampaign = false,
+    /// <summary>Este número já recebeu uma abordagem (de qualquer campanha ou agente): nunca enviar outra.</summary>
+    bool AlreadyApproached = false);
 
 public sealed record GuardResult(bool Allowed, string? Reason, DateTimeOffset? RetryAt = null)
 {
@@ -84,6 +86,8 @@ public static class SendGuard
                     return GuardResult.Block("Sem consentimento válido e verificável para mensagens comerciais");
                 if (c.Kind == OutboundKind.AbordagemInicial && c.AlreadyContactedInCampaign)
                     return GuardResult.Block("Contato inicial já realizado nesta campanha");
+                if (c.Kind == OutboundKind.AbordagemInicial && c.AlreadyApproached)
+                    return GuardResult.Block("Este número já recebeu mensagem antes: não enviamos duas vezes para o mesmo número");
                 if (c.Kind == OutboundKind.Acompanhamento && c.Campaign is not null)
                 {
                     if (c.InitialSentInCampaignAt is not { } initial)

@@ -59,8 +59,10 @@ public class ApiClient
     public Task<List<KanbanStageDto>> KanbanStagesAsync() => Get<List<KanbanStageDto>>("api/kanban/stages");
     public Task<OperationResult> SaveKanbanStagesAsync(List<KanbanStageDto> s) => Send<OperationResult>(HttpMethod.Put, "api/kanban/stages", s);
     public Task<MoveCardResponse> MoveAsync(Guid id, KanbanStage to, string? reason, bool confirm) => Post<MoveCardResponse>($"api/kanban/{id}/move", new MoveCardRequest(to, reason, confirm));
-    public Task<List<LeadCard>> LeadsAsync(string? q = null, ConsentStatus? consent = null) =>
-        Get<List<LeadCard>>($"api/leads?take=2000{(string.IsNullOrWhiteSpace(q) ? "" : "&q=" + Uri.EscapeDataString(q))}{(consent is null ? "" : "&consent=" + consent)}");
+    public Task<List<LeadCard>> LeadsAsync(string? q = null, ConsentStatus? consent = null, Guid? batch = null) =>
+        Get<List<LeadCard>>($"api/leads?take=2000{(string.IsNullOrWhiteSpace(q) ? "" : "&q=" + Uri.EscapeDataString(q))}{(consent is null ? "" : "&consent=" + consent)}{(batch is null ? "" : "&batch=" + batch)}");
+    public Task<List<ImportBatchDto>> ImportBatchesAsync() => Get<List<ImportBatchDto>>("api/import/batches");
+    public Task<OperationResult> RenameImportBatchAsync(Guid id, string name) => Send<OperationResult>(HttpMethod.Put, $"api/import/batches/{id}", new ImportBatchRename(name));
     public Task<LeadDetail> LeadAsync(Guid id) => Get<LeadDetail>($"api/leads/{id}");
     public Task<LeadCard> CreateLeadAsync(LeadUpsert l) => Post<LeadCard>("api/leads", l);
     public Task<OperationResult> UpdateLeadAsync(Guid id, LeadUpsert l) => Send<OperationResult>(HttpMethod.Put, $"api/leads/{id}", l);
@@ -75,22 +77,23 @@ public class ApiClient
     public Task<OperationResult> ReturnToAiAsync(Guid id) => Post<OperationResult>($"api/conversations/{id}/return-to-ai", null);
     public Task<OperationResult> PauseAsync(Guid id, bool pause) => Post<OperationResult>($"api/conversations/{id}/pause?pause={pause}", null);
     public Task<SendMessageResponse> SendAsync(Guid id, string text) => Post<SendMessageResponse>($"api/conversations/{id}/send", new SendMessageRequest(text));
-    public Task<ImportResponse> ImportPasteAsync(string text, string? source, string? tags, string? consentSource = null) => Post<ImportResponse>("api/import/paste", new PasteImportRequest(text, source, tags, consentSource));
+    public Task<ImportResponse> ImportPasteAsync(string text, string? source, string? tags, string? consentSource = null, string? batchName = null) => Post<ImportResponse>("api/import/paste", new PasteImportRequest(text, source, tags, consentSource, batchName));
     public Task<OperationResult> ImportOptOutsAsync(string text, string reason) => Post<OperationResult>("api/import/optouts", new OptOutImportRequest(text, reason));
 
-    public async Task<ImportResponse> ImportFileAsync(string path, string? source, string? tags, string? consentSource = null)
+    public async Task<ImportResponse> ImportFileAsync(string path, string? source, string? tags, string? consentSource = null, string? batchName = null)
     {
         await using var fs = File.OpenRead(path);
-        return await ImportFileAsync(fs, Path.GetFileName(path), source, tags, consentSource);
+        return await ImportFileAsync(fs, Path.GetFileName(path), source, tags, consentSource, batchName);
     }
 
     /// <summary>Importação a partir de um fluxo (navegador: o arquivo escolhido não tem caminho local).</summary>
-    public async Task<ImportResponse> ImportFileAsync(Stream fs, string fileName, string? source, string? tags, string? consentSource = null)
+    public async Task<ImportResponse> ImportFileAsync(Stream fs, string fileName, string? source, string? tags, string? consentSource = null, string? batchName = null)
     {
         using var form = new MultipartFormDataContent { { new StreamContent(fs), "file", fileName } };
         if (source is not null) form.Add(new StringContent(source), "source");
         if (tags is not null) form.Add(new StringContent(tags), "tags");
         if (consentSource is not null) form.Add(new StringContent(consentSource), "consentSource");
+        if (batchName is not null) form.Add(new StringContent(batchName), "batchName");
         return await Read<ImportResponse>(await _http.PostAsync("api/import/file", form));
     }
 

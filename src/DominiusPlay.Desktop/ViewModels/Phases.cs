@@ -198,6 +198,11 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
     [ObservableProperty] private string _objective = "";
     [ObservableProperty] private string _tagFilter = "";
     [ObservableProperty] private TemplateDto? _template;
+    /// <summary>Listas importadas que a campanha pode usar (marcadas = público da campanha; nenhuma = todas).</summary>
+    public ObservableCollection<ImportBatchOptionVm> Batches { get; } = new();
+    public bool HasBatches => Batches.Count > 0;
+    [ObservableProperty] private string _importedFrom = "";
+    [ObservableProperty] private string _importedTo = "";
 
     public bool CanEdit => Selected is null || Selected.Model.Status is CampaignStatus.Rascunho or CampaignStatus.Pausada;
     public bool CanStart => Selected?.Model.Status == CampaignStatus.Rascunho;
@@ -216,6 +221,10 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
             (t.Purpose == "Acompanhamento" ? FollowUpTemplates : ApprovedTemplates).Add(t);
         DispatchAgents.Clear();
         foreach (var a in await s.Api.AgentsAsync(AgentKind.Disparo)) DispatchAgents.Add(a);
+        var marked = Batches.Where(b => b.IsSelected).Select(b => b.Model!.Id).ToHashSet();
+        Batches.Clear();
+        foreach (var b in await s.Api.ImportBatchesAsync()) Batches.Add(new ImportBatchOptionVm(b) { IsSelected = marked.Contains(b.Id) });
+        OnPropertyChanged(nameof(HasBatches));
         Campaigns.Clear();
         foreach (var c in await s.Api.CampaignsAsync()) Campaigns.Add(new CampaignRowVm(c, ApprovedTemplates.FirstOrDefault(t => t.Id == c.TemplateId)?.Name));
         Selected = Campaigns.FirstOrDefault(c => c.Model.Id == sel);
@@ -240,6 +249,10 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
         StartDate = c.StartDate is { } sd ? sd.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : ""; AiPersonalization = c.AiPersonalization;
         FollowUpTemplate = FollowUpTemplates.FirstOrDefault(t => t.Id == c.FollowUpTemplateId); FollowUpDays = c.FollowUpDays;
         MaxFailurePercent = c.MaxFailurePercent; MaxOptOutPercent = c.MaxOptOutPercent; Validation = c.PauseReason; Previews.Clear();
+        var ids = c.ImportBatchIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var b in Batches) b.IsSelected = ids.Contains(b.Model!.Id.ToString());
+        ImportedFrom = c.ImportedFrom is { } f ? f.ToLocalTime().ToString("dd/MM/yyyy") : "";
+        ImportedTo = c.ImportedTo is { } t ? t.ToLocalTime().ToString("dd/MM/yyyy") : "";
         var d = c.AllowedDays.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToHashSet();
         Sun = d.Contains(0); Mon = d.Contains(1); Tue = d.Contains(2); Wed = d.Contains(3); Thu = d.Contains(4); Fri = d.Contains(5); Sat = d.Contains(6);
     }
@@ -251,6 +264,8 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
         DispatchAgent = DispatchAgents.FirstOrDefault(a => a.IsDefault); Segment = ""; Prompt = ""; StartDate = ""; AiPersonalization = false;
         FollowUpTemplate = FollowUpTemplates.FirstOrDefault(); FollowUpDays = FollowUpTemplate is null ? "" : "1,3,7"; MaxFailurePercent = 20; MaxOptOutPercent = 10;
         Validation = null; Previews.Clear();
+        foreach (var b in Batches) b.IsSelected = false;
+        ImportedFrom = ""; ImportedTo = "";
         Info = "Preencha os dados e salve. A campanha só envia depois de clicar em Iniciar.";
     }
 
@@ -260,9 +275,19 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
         DateTimeOffset? start = DateTime.TryParseExact(StartDate.Trim(), ["dd/MM/yyyy HH:mm", "dd/MM/yyyy"], System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.AssumeLocal, out var dt) ? new DateTimeOffset(dt) : null;
         if (!string.IsNullOrWhiteSpace(StartDate) && start is null) throw new DominiusPlay.Desktop.Services.ApiException("Data de início inválida (use dd/mm/aaaa hh:mm)");
+        var from = ParseDay(ImportedFrom, "Data inicial da importação inválida (use dd/mm/aaaa)");
+        var to = ParseDay(ImportedTo, "Data final da importação inválida (use dd/mm/aaaa)");
+        var batchIds = string.Join(",", Batches.Where(b => b.IsSelected).Select(b => b.Model!.Id));
         return new CampaignUpsert(Name, StartTime, EndTime, string.Join(',', days), (int)(MaxContacts ?? 0), (int)(Math.Max(SendLimits.MinInitialIntervalMinutes, IntervalMinutes ?? SendLimits.MinInitialIntervalMinutes) * 60),
             (int)(DailyLimit ?? 0), Objective, Template?.Id, TagFilter, DispatchAgent?.Id, Segment, Prompt, start, AiPersonalization,
-            FollowUpTemplate?.Id, FollowUpDays, (int)(MaxFailurePercent ?? 20), (int)(MaxOptOutPercent ?? 10));
+            FollowUpTemplate?.Id, FollowUpDays, (int)(MaxFailurePercent ?? 20), (int)(MaxOptOutPercent ?? 10), batchIds, from, to);
+    }
+
+    private static DateTimeOffset? ParseDay(string text, string error)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        return DateTime.TryParseExact(text.Trim(), ["dd/MM/yyyy", "d/M/yyyy", "dd/MM/yy"], System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeLocal, out var d) ? new DateTimeOffset(d.Date) : throw new DominiusPlay.Desktop.Services.ApiException(error);
     }
 
     [RelayCommand]
@@ -325,7 +350,19 @@ public class CampaignRowVm(CampaignDto c, string? templateName)
             return $"{days} · {Model.StartTime}–{Model.EndTime} · 1 a cada {Model.MinIntervalSeconds / 60} min · até {Model.DailyLimit}/dia";
         }
     }
-    public string Template => "Modelo: " + (templateName ?? "—") + (Model.TagFilter.Length > 0 ? $" · tags: {Model.TagFilter}" : " · todos os leads autorizados");
+    public string Template
+    {
+        get
+        {
+            var lists = Model.ImportBatchIds.Split(',', StringSplitOptions.RemoveEmptyEntries).Length;
+            var audience = new List<string>();
+            if (lists > 0) audience.Add(lists == 1 ? "1 lista" : $"{lists} listas");
+            if (Model.ImportedFrom is not null || Model.ImportedTo is not null)
+                audience.Add($"importados {(Model.ImportedFrom is { } f ? "de " + f.ToLocalTime().ToString("dd/MM/yyyy") : "")}{(Model.ImportedTo is { } t ? " até " + t.ToLocalTime().ToString("dd/MM/yyyy") : "")}".Replace("  ", " "));
+            if (Model.TagFilter.Length > 0) audience.Add($"tags: {Model.TagFilter}");
+            return "Modelo: " + (templateName ?? "—") + " · " + (audience.Count > 0 ? string.Join(" · ", audience) : "todos os leads autorizados");
+        }
+    }
     public string Numbers => Model.Status == CampaignStatus.Rascunho
         ? $"{Model.Eligible} lead(s) elegível(is) agora (máx. {Model.MaxContacts})"
         : $"Na fila {Model.Queued} · Enviadas {Model.Sent} · Entregues {Model.Delivered} · Responderam {Model.Replied} · Falhas {Model.Failed} · Canceladas {Model.Cancelled}"
@@ -543,4 +580,15 @@ public class ReportRowVm(ReportRow r, int max)
     public string? Detail => r.Detail;
     public bool HasDetail => !string.IsNullOrEmpty(r.Detail);
     public double Bar => 220.0 * r.Value / max;
+}
+
+/// <summary>Lista (pasta) de leads importados, para filtro na tela de Leads e escolha do público na campanha.</summary>
+public partial class ImportBatchOptionVm(ImportBatchDto? b) : ObservableObject
+{
+    public ImportBatchDto? Model { get; } = b;
+    [ObservableProperty] private bool _isSelected;
+    public static string Title(ImportBatchDto b) =>
+        string.IsNullOrWhiteSpace(b.Name) ? $"{b.FileName} ({b.CreatedAt.ToLocalTime():dd/MM/yyyy HH:mm})" : b.Name;
+    public string Label => Model is null ? "Todas as listas"
+        : $"{Title(Model)} · {Model.Leads} lead(s) · importada em {Model.CreatedAt.ToLocalTime():dd/MM/yyyy}";
 }

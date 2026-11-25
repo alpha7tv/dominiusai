@@ -15,6 +15,16 @@
           </ComboBox>
           <TextBox Text="{Binding Search}" Watermark="Pesquisar número, nome ou tag" />
         </DockPanel>
+        <DockPanel>
+          <TextBlock DockPanel.Dock="Left" Text="Lista:" Classes="muted" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <ComboBox ItemsSource="{Binding BatchFilters}" SelectedItem="{Binding BatchFilter}" HorizontalAlignment="Stretch" ToolTip.Tip="Mostrar só os leads de uma lista importada">
+            <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:ImportBatchOptionVm"><TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+        </DockPanel>
+        <DockPanel IsVisible="{Binding HasBatchFilter}">
+          <Button DockPanel.Dock="Right" Content="Renomear lista" Command="{Binding RenameBatchCommand}" Margin="8,0,0,0" />
+          <TextBox Text="{Binding RenameBatchName}" Watermark="Nome da lista (ex.: Leads Nov 25)" />
+        </DockPanel>
         <StackPanel Orientation="Horizontal" Spacing="4"><TextBlock Text="{Binding Total}" Classes="muted" /><TextBlock Text="leads" Classes="muted" /></StackPanel>
         <TextBlock Text="{Binding Info}" Classes="ok" />
         <TextBlock Text="{Binding Error}" Classes="error" />
@@ -75,6 +85,9 @@
           <StackPanel Spacing="8">
             <TextBlock Text="Importar números" Classes="h2" />
             <TextBlock Text="Basta a lista de números de WhatsApp com DDD, um por linha. Não precisa de nome: o contato aparece pelo número e a IA puxa a conversa sem usar nome. Arquivo CSV, TXT ou XLSX com uma coluna de números (com ou sem cabeçalho)." Classes="muted" TextWrapping="Wrap" />
+            <TextBlock Text="Nome da lista (para separar e escolher na campanha)" Classes="muted" FontSize="12" />
+            <TextBox Text="{Binding ImportBatchName}" Watermark="ex.: Leads Nov 25 ou Grupos IPTV" />
+            <TextBlock Text="Números que já existem no sistema são ignorados automaticamente (não entram de novo). Usar o nome de uma lista que já existe acrescenta os números novos a ela." Classes="muted" TextWrapping="Wrap" FontSize="12" />
             <TextBox Text="{Binding ImportSource}" Watermark="Origem (ex.: Feira 2026, Instagram)" />
             <TextBox Text="{Binding ImportTags}" Watermark="Tags separadas por vírgula" />
             <TextBlock Text="Autorização da lista (deixe em branco se não tiver)" Classes="muted" FontSize="12" />
