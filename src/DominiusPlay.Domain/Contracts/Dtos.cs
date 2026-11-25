@@ -176,7 +176,7 @@ public sealed record AgentDto(Guid Id, AgentKind Kind, string Name, string Assis
 public sealed record AgentUpsert(AgentKind Kind, string Name, string? AssistantName, string? Description, string? Objective, string? Company, string? Personality, string? Tone,
     string? Prompt, string? ProductsAndServices, string? AllowedAnswers, string? NegotiationRestrictions, string? HandoffCriteria, string? Model, string? AdvancedModel,
     AgentStatus Status, bool IsDefault, string StartTime, string EndTime, string AllowedDays, string? TimeZoneId, string? IntentActions,
-    string? InstanceName = null, int DailyLimit = 50, int MinIntervalSeconds = 300, Guid? AttendanceAgentId = null);
+    string? InstanceName = null, int DailyLimit = 50, int MinIntervalSeconds = 900, Guid? AttendanceAgentId = null);
 
 public sealed record QualificationQuestionDto(Guid Id, Guid? AgentId, int Order, string Key, string Question, int Weight, string ScoringHint, bool Active);
 public sealed record QualificationQuestionUpsert(Guid? AgentId, int Order, string Key, string Question, int Weight, string? ScoringHint, bool Active);

@@ -115,7 +115,7 @@ public class DispatchTests
         Assert.Equal(6, await f.WithDb(db => db.OutboundQueue.CountAsync(q => q.Kind == OutboundKind.Acompanhamento)));
 
         Assert.Equal(1, await f.RunQueueAsync()); // Ana
-        f.Clock.Advance(TimeSpan.FromMinutes(6));
+        f.Clock.Advance(TimeSpan.FromMinutes(16));
         Assert.Equal(1, await f.RunQueueAsync()); // Bia
         // máquina de estados: depois da abordagem quem tem a palavra é o Agente de Disparo
         Assert.All(await f.WithDb(db => db.Leads.ToListAsync()), l => Assert.Equal(ConversationMode.Prospeccao, l.Mode));
@@ -248,7 +248,7 @@ public class DispatchTests
         // duas recusas: vai o modelo aprovado
         f.Ai.Script.Enqueue(_ => FakeAi.Text("Visite www.x.com"));
         f.Ai.Script.Enqueue(_ => FakeAi.Text("Visite www.x.com"));
-        f.Clock.Advance(TimeSpan.FromMinutes(6));
+        f.Clock.Advance(TimeSpan.FromMinutes(16));
         Assert.Equal(1, await f.RunQueueAsync());
         Assert.StartsWith("Olá! Sou Lia, assistente virtual da Dominius Play.", f.Evolution.Sent[1].Text);
 
@@ -285,7 +285,7 @@ public class DispatchTests
         var camp = (await (await c.PostAsJsonAsync("/api/campaigns", Camp(tid) with { MaxFailurePercent = 30 })).Content.ReadFromJsonAsync<CampaignDto>())!;
         Assert.True((await Act(c, camp.Id, "start")).Ok);
         f.Evolution.Behavior = n => new EvolutionSendResult(false, null, null, "número inexistente", 400);
-        for (var i = 0; i < 12; i++) { await f.RunQueueAsync(); f.Clock.Advance(TimeSpan.FromMinutes(6)); }
+        for (var i = 0; i < 12; i++) { await f.RunQueueAsync(); f.Clock.Advance(TimeSpan.FromMinutes(16)); }
         var dto = (await c.GetFromJsonAsync<List<CampaignDto>>("/api/campaigns"))!.Single(x => x.Id == camp.Id);
         Assert.Equal(CampaignStatus.Pausada, dto.Status);
         Assert.Contains("Pausa automática", dto.PauseReason);

@@ -337,7 +337,7 @@ public class ServerTests
             return (a.Id, b.Id, semConsent.Id);
         });
 
-        Assert.Equal(1, await f.RunQueueAsync()); // só 1 abordagem; a outra aguarda 5 min; sem consentimento é cancelada
+        Assert.Equal(1, await f.RunQueueAsync()); // só 1 abordagem; a outra aguarda 15 min; sem consentimento é cancelada
         var queue = await f.WithDb(db => db.OutboundQueue.AsNoTracking().ToListAsync());
         Assert.Equal(MessageStatus.Cancelada, queue.Single(q => q.LeadId == ids.Item3).Status);
         var waiting = queue.Single(q => q.Status == MessageStatus.NaFila);
@@ -345,7 +345,7 @@ public class ServerTests
 
         f.Clock.Advance(TimeSpan.FromMinutes(2));
         Assert.Equal(0, await f.RunQueueAsync());
-        f.Clock.Advance(TimeSpan.FromMinutes(3).Add(TimeSpan.FromSeconds(1)));
+        f.Clock.Advance(TimeSpan.FromMinutes(13).Add(TimeSpan.FromSeconds(1)));
         // próxima tentativa falha com erro temporário → reagenda com backoff
         f.Evolution.Behavior = _ => new EvolutionSendResult(false, null, null, "HTTP 503", 503);
         Assert.Equal(0, await f.RunQueueAsync());

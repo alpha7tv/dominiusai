@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DominiusPlay.Domain.Contracts;
 using DominiusPlay.Domain.Enums;
+using DominiusPlay.Domain.Services;
 
 namespace DominiusPlay.Desktop.ViewModels;
 
@@ -193,7 +194,7 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
     [ObservableProperty] private bool _sat;
     [ObservableProperty] private decimal? _maxContacts = 100;
     [ObservableProperty] private decimal? _dailyLimit = 50;
-    [ObservableProperty] private decimal? _intervalMinutes = 5;
+    [ObservableProperty] private decimal? _intervalMinutes = SendLimits.MinInitialIntervalMinutes;
     [ObservableProperty] private string _objective = "";
     [ObservableProperty] private string _tagFilter = "";
     [ObservableProperty] private TemplateDto? _template;
@@ -233,7 +234,7 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
         if (value is null) return;
         var c = value.Model;
         Name = c.Name; StartTime = c.StartTime; EndTime = c.EndTime; MaxContacts = c.MaxContacts; DailyLimit = c.DailyLimit;
-        IntervalMinutes = c.MinIntervalSeconds / 60m; Objective = c.Objective ?? ""; TagFilter = c.TagFilter;
+        IntervalMinutes = Math.Max(SendLimits.MinInitialIntervalMinutes, c.MinIntervalSeconds / 60m); Objective = c.Objective ?? ""; TagFilter = c.TagFilter;
         Template = ApprovedTemplates.FirstOrDefault(t => t.Id == c.TemplateId);
         DispatchAgent = DispatchAgents.FirstOrDefault(a => a.Id == c.DispatchAgentId); Segment = c.Segment; Prompt = c.Prompt;
         StartDate = c.StartDate is { } sd ? sd.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : ""; AiPersonalization = c.AiPersonalization;
@@ -259,7 +260,7 @@ public partial class CampaignsViewModel(AppSession s) : ViewModelBase
         DateTimeOffset? start = DateTime.TryParseExact(StartDate.Trim(), ["dd/MM/yyyy HH:mm", "dd/MM/yyyy"], System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.AssumeLocal, out var dt) ? new DateTimeOffset(dt) : null;
         if (!string.IsNullOrWhiteSpace(StartDate) && start is null) throw new DominiusPlay.Desktop.Services.ApiException("Data de início inválida (use dd/mm/aaaa hh:mm)");
-        return new CampaignUpsert(Name, StartTime, EndTime, string.Join(',', days), (int)(MaxContacts ?? 0), (int)((IntervalMinutes ?? 5) * 60),
+        return new CampaignUpsert(Name, StartTime, EndTime, string.Join(',', days), (int)(MaxContacts ?? 0), (int)(Math.Max(SendLimits.MinInitialIntervalMinutes, IntervalMinutes ?? SendLimits.MinInitialIntervalMinutes) * 60),
             (int)(DailyLimit ?? 0), Objective, Template?.Id, TagFilter, DispatchAgent?.Id, Segment, Prompt, start, AiPersonalization,
             FollowUpTemplate?.Id, FollowUpDays, (int)(MaxFailurePercent ?? 20), (int)(MaxOptOutPercent ?? 10));
     }

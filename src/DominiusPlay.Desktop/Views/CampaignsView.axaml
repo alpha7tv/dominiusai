@@ -12,7 +12,7 @@
           </StackPanel>
           <TextBlock Text="Campanhas" Classes="h1" />
         </DockPanel>
-        <TextBlock Text="Só recebem a abordagem leads com autorização válida, na etapa 'Primeiro contato', nunca contatados e fora da lista de bloqueio. Intervalo mínimo de 5 minutos entre abordagens, só no horário e dias escolhidos." Classes="muted" TextWrapping="Wrap" />
+        <TextBlock Text="Só recebem a abordagem leads com autorização válida, na etapa 'Primeiro contato', nunca contatados e fora da lista de bloqueio. Intervalo padrão e mínimo de 15 minutos entre abordagens, só no horário e dias escolhidos." Classes="muted" TextWrapping="Wrap" />
         <TextBlock Text="{Binding Info}" Classes="ok" TextWrapping="Wrap" /><TextBlock Text="{Binding Error}" Classes="error" TextWrapping="Wrap" />
       </StackPanel>
       <ListBox ItemsSource="{Binding Campaigns}" SelectedItem="{Binding Selected}" Background="Transparent">
@@ -79,7 +79,7 @@
             <Grid ColumnDefinitions="*,8,*,8,*">
               <StackPanel><TextBlock Text="Máx. contatos" Classes="muted" /><NumericUpDown Value="{Binding MaxContacts}" Minimum="1" Maximum="10000" FormatString="0" /></StackPanel>
               <StackPanel Grid.Column="2"><TextBlock Text="Limite/dia" Classes="muted" /><NumericUpDown Value="{Binding DailyLimit}" Minimum="1" Maximum="1000" FormatString="0" /></StackPanel>
-              <StackPanel Grid.Column="4"><TextBlock Text="Intervalo (min)" Classes="muted" /><NumericUpDown Value="{Binding IntervalMinutes}" Minimum="5" Maximum="240" FormatString="0" /></StackPanel>
+              <StackPanel Grid.Column="4"><TextBlock Text="Intervalo (min)" Classes="muted" /><NumericUpDown Value="{Binding IntervalMinutes}" Minimum="15" Maximum="240" FormatString="0" /></StackPanel>
             </Grid>
             <TextBlock Text="Objetivo (interno)" Classes="muted" /><TextBox Text="{Binding Objective}" />
             <Button Content="Salvar campanha" Command="{Binding SaveCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />

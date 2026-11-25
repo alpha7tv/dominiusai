@@ -82,7 +82,7 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
     [ObservableProperty] private string _timeZoneId = "America/Sao_Paulo";
     [ObservableProperty] private string _instanceName = "";
     [ObservableProperty] private int _dailyLimit = 50;
-    [ObservableProperty] private int _minIntervalMinutes = 5;
+    [ObservableProperty] private int _minIntervalMinutes = SendLimits.MinInitialIntervalMinutes;
 
     // Testar Agente
     [ObservableProperty] private string _testInput = "";
@@ -120,7 +120,7 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
         Restrictions = value.NegotiationRestrictions; HandoffCriteria = value.HandoffCriteria; Model = value.Model; AdvancedModel = value.AdvancedModel;
         StatusIndex = (int)value.Status; IsDefault = value.IsDefault; StartTime = value.StartTime; EndTime = value.EndTime; TimeZoneId = value.TimeZoneId;
         AttendanceAgent = AttendanceAgents.FirstOrDefault(a => a.Id == value.AttendanceAgentId);
-        InstanceName = value.InstanceName; DailyLimit = value.DailyLimit; MinIntervalMinutes = Math.Max(5, value.MinIntervalSeconds / 60);
+        InstanceName = value.InstanceName; DailyLimit = value.DailyLimit; MinIntervalMinutes = Math.Max(SendLimits.MinInitialIntervalMinutes, value.MinIntervalSeconds / 60);
         var days = BusinessHours.ParseDays(value.AllowedDays);
         Sun = days.Contains(DayOfWeek.Sunday); Mon = days.Contains(DayOfWeek.Monday); Tue = days.Contains(DayOfWeek.Tuesday); Wed = days.Contains(DayOfWeek.Wednesday);
         Thu = days.Contains(DayOfWeek.Thursday); Fri = days.Contains(DayOfWeek.Friday); Sat = days.Contains(DayOfWeek.Saturday);
@@ -154,7 +154,7 @@ public partial class AgentsViewModel(AppSession s, AgentKind kind) : ViewModelBa
         Name = Kind == AgentKind.Atendimento ? "Novo agente de atendimento" : "Novo agente de disparo";
         AssistantName = Description = Objective = Personality = Tone = Prompt = Products = AllowedAnswers = Restrictions = HandoffCriteria = Model = AdvancedModel = InstanceName = "";
         Company = "Dominius Play"; StatusIndex = (int)AgentStatus.Pausado; IsDefault = false; StartTime = "09:00"; EndTime = "21:00";
-        Sun = false; Mon = Tue = Wed = Thu = Fri = Sat = true; DailyLimit = 50; MinIntervalMinutes = 5; AttendanceAgent = null;
+        Sun = false; Mon = Tue = Wed = Thu = Fri = Sat = true; DailyLimit = 50; MinIntervalMinutes = SendLimits.MinInitialIntervalMinutes; AttendanceAgent = null;
         foreach (var r in Intents) r.ActionIndex = (int)(r.Locked ? IntentAction.Encerrar : IntentDetector.DefaultAction(r.Intent));
         ResetTestState();
         Info = "Preencha e clique em Salvar. O agente começa pausado: teste antes de ativar.";
