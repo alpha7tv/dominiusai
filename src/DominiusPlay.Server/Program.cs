@@ -117,6 +117,20 @@ using (var scope = app.Services.CreateScope())
     await AgentSeed.EnsureAsync(db, scope.ServiceProvider.GetRequiredService<SettingsStore>());
 }
 
+// Erro inesperado: grava a causa em <dados>\logs\erros-AAAAMMDD.log e devolve a mensagem ao aplicativo
+// (antes o aplicativo só mostrava "Erro 500 do servidor", sem como saber o motivo).
+app.UseExceptionHandler(err => err.Run(async ctx =>
+{
+    var ex = ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+    var path = ctx.Request.Path.Value ?? "";
+    app.Logger.LogError(ex, "Erro inesperado em {Method} {Path}", ctx.Request.Method, path);
+    ErrorLog.Write(dataDir, ctx.Request.Method + " " + path, ex);
+    ctx.Response.StatusCode = StatusCodes.Status500InternalServerError;
+    await ctx.Response.WriteAsJsonAsync(new DominiusPlay.Domain.Contracts.OperationResult(false,
+        "Erro interno no servidor do CRM. O detalhe foi gravado em " + Path.Combine(dataDir, "logs"),
+        ex is null ? null : ex.GetType().Name + ": " + ex.Message));
+}));
+app.UseCrmWebApp(); // telas no navegador (se publicadas em wwwroot)
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -200,35 +200,58 @@ public static class KnowledgeBaseApi
 
         // ---------- Laboratório de Atendimento IA (nada é salvo nem enviado; nenhum pagamento) ----------
         app.MapGet("/api/lab/scenarios", () => AttendanceLab.Scenarios.Select(s => new LabScenarioDto(s.Key, s.Title, s.Messages)).ToList()).RequireAuthorization();
-        app.MapPost("/api/lab/run", async (LabRequest r, KnowledgeBaseService svc, AiAgent agent, CrmDbContext db) =>
+        app.MapPost("/api/lab/run", async (LabRequest r, KnowledgeBaseService svc, AiAgent agent, CrmDbContext db, DataPaths paths, ILoggerFactory lf) =>
         {
+            var log = lf.CreateLogger("Laboratorio");
             var scenario = r.Scenario is null ? null : AttendanceLab.Scenarios.FirstOrDefault(s => s.Key == r.Scenario);
             var messages = (r.Messages is { Count: > 0 } ? r.Messages : scenario?.Messages ?? []).Where(m => !string.IsNullOrWhiteSpace(m)).Take(20).Select(m => m.Length > 1000 ? m[..1000] : m).ToList();
             if (messages.Count == 0) return Results.BadRequest(new OperationResult(false, "Escolha um perfil de cliente ou escreva as mensagens"));
             var kb = await svc.LoadAsync();
-            var steps = AttendanceLab.Run(messages, kb.Entries, kb.Config, kb.Plans);
+            var steps = RunLabSafely(messages, kb, log, paths.Root);
 
             var aiReplies = new Dictionary<int, AgentResult>();
             string? aiError = null;
-            var cfg = await agent.LoadConfigAsync();
-            var useAi = r.UseAi && !string.IsNullOrWhiteSpace(cfg.ApiKey);
-            if (r.UseAi && !useAi) aiError = "Chave da Anthropic não configurada: mostrando só a análise da base.";
+            AiConfig? cfg = null;
+            if (r.UseAi)
+            {
+                // a chave da Anthropic fica criptografada; se não puder ser lida (ex.: chaves de criptografia trocadas),
+                // o Laboratório continua com a análise da base em vez de responder erro 500
+                try { cfg = await agent.LoadConfigAsync(); }
+                catch (Exception ex)
+                {
+                    log.LogError(ex, "Laboratório: falha ao ler a configuração da IA");
+                    ErrorLog.Write(paths.Root, "Laboratório: configuração da IA", ex);
+                    aiError = "Não foi possível ler a chave da Anthropic salva no servidor. Salve a chave de novo em Configurações de IA. Mostrando só a análise da base.";
+                }
+            }
+            var useAi = cfg is not null && !string.IsNullOrWhiteSpace(cfg.ApiKey);
+            if (r.UseAi && cfg is not null && !useAi) aiError = "Chave da Anthropic não configurada: mostrando só a análise da base.";
             if (useAi)
             {
-                var questions = await db.QualificationQuestions.AsNoTracking().Where(q => q.Active && q.AgentId == null).OrderBy(q => q.Order).ToListAsync();
-                var lead = new Lead { Name = "", Phone = "5500000000000", Mode = ConversationMode.Ia };
-                var history = new List<Message>();
-                var t0 = DateTimeOffset.UtcNow.AddMinutes(-messages.Count * 2);
-                for (var i = 0; i < messages.Count; i++)
+                try
                 {
-                    if (lead.Mode != ConversationMode.Ia) break; // transferida/encerrada: a IA para de responder
-                    history.Add(new Message { LeadId = lead.Id, Text = messages[i], Direction = MessageDirection.Entrada, Author = MessageAuthor.Contato, Timestamp = t0.AddMinutes(i * 2) });
-                    var intent = IntentDetector.Detect(messages[i], i == 0);
-                    if (intent == IntentCategory.Descadastro) { ConversationStateMachine.Apply(lead, ConversationTrigger.Encerrar); break; } // regra fixa: sem IA
-                    var res = await agent.RunAsync(lead, history, cfg, trackUsage: true, default, new AgentContext(null, questions, intent));
-                    aiReplies[i] = res;
-                    if (res.Error is not null && res.Reply is null) { aiError = res.Error; break; }
-                    if (res.Reply is not null) history.Add(new Message { LeadId = lead.Id, Text = res.Reply, Direction = MessageDirection.Saida, Author = MessageAuthor.Ia, Timestamp = t0.AddMinutes(i * 2 + 1) });
+                    var questions = await db.QualificationQuestions.AsNoTracking().Where(q => q.Active && q.AgentId == null).OrderBy(q => q.Order).ToListAsync();
+                    var lead = new Lead { Name = "", Phone = "5500000000000", Mode = ConversationMode.Ia };
+                    var history = new List<Message>();
+                    var t0 = DateTimeOffset.UtcNow.AddMinutes(-messages.Count * 2);
+                    for (var i = 0; i < messages.Count; i++)
+                    {
+                        if (lead.Mode != ConversationMode.Ia) break; // transferida/encerrada: a IA para de responder
+                        history.Add(new Message { LeadId = lead.Id, Text = messages[i], Direction = MessageDirection.Entrada, Author = MessageAuthor.Contato, Timestamp = t0.AddMinutes(i * 2) });
+                        var intent = IntentDetector.Detect(messages[i], i == 0);
+                        if (intent == IntentCategory.Descadastro) { ConversationStateMachine.Apply(lead, ConversationTrigger.Encerrar); break; } // regra fixa: sem IA
+                        var res = await agent.RunAsync(lead, history, cfg!, trackUsage: true, default, new AgentContext(null, questions, intent));
+                        aiReplies[i] = res;
+                        if (res.Error is not null && res.Reply is null) { aiError = res.Error; break; }
+                        if (res.Reply is not null) history.Add(new Message { LeadId = lead.Id, Text = res.Reply, Direction = MessageDirection.Saida, Author = MessageAuthor.Ia, Timestamp = t0.AddMinutes(i * 2 + 1) });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // falha do Claude no meio da simulação: devolve o que já foi respondido e a análise da base
+                    log.LogError(ex, "Laboratório: falha ao simular com o Claude");
+                    ErrorLog.Write(paths.Root, "Laboratório: simulação com o Claude", ex);
+                    aiError = "Falha ao simular com o Claude (" + ex.GetType().Name + ": " + ex.Message + "). Mostrando a análise da base.";
                 }
             }
             return Results.Ok(new LabResponse(scenario?.Title ?? "Conversa personalizada", steps.Select((s, i) =>
@@ -239,5 +262,33 @@ public static class KnowledgeBaseApi
                     ai?.Reply, ai is null ? [] : ai.Alerts.ToList(), ai is null ? [] : ai.Actions.ToList());
             }).ToList(), useAi && aiReplies.Count > 0, aiError));
         }).RequireAuthorization();
+    }
+
+    /// <summary>
+    /// Análise da base mensagem a mensagem. Se uma mensagem quebrar a análise (ex.: uma resposta da base editada que ficou
+    /// incompleta), essa linha mostra o problema e as outras continuam, em vez de a tela inteira dar erro 500.
+    /// </summary>
+    private static List<LabStep> RunLabSafely(IReadOnlyList<string> messages, KbSnapshot kb, ILogger log, string dataDir)
+    {
+        try { return AttendanceLab.Run(messages, kb.Entries, kb.Config, kb.Plans).ToList(); }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Laboratório: falha na análise da base");
+            ErrorLog.Write(dataDir, "Laboratório: análise da base", ex);
+        }
+        var published = kb.Entries.Where(e => e.Status == KbStatus.Publicado).ToList();
+        var mem = new CommercialMemory();
+        var steps = new List<LabStep>();
+        for (var i = 0; i < messages.Count; i++)
+        {
+            try { steps.Add(AttendanceLab.Step(messages[i], i == 0, published, kb.Config, kb.Plans, mem)); }
+            catch (Exception ex)
+            {
+                var intent = IntentDetector.Detect(messages[i], i == 0);
+                steps.Add(new LabStep(messages[i], intent, IntentDetector.Title(intent), mem.Profile, CommercialTrigger.Nenhum, null, null, null, 0, null, null, mem.Describe(),
+                    "Revisar a base: esta mensagem não pôde ser analisada", ["Falha na análise desta mensagem: " + ex.GetType().Name + ": " + ex.Message], false, false));
+            }
+        }
+        return steps;
     }
 }

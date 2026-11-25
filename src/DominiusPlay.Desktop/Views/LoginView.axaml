@@ -7,8 +7,8 @@
         <Image Source="/Assets/dominius.png" Width="64" Height="64" HorizontalAlignment="Center" />
         <TextBlock Text="DOMINIUS PLAY AI CRM" Classes="h1" HorizontalAlignment="Center" Foreground="{StaticResource AccentBrush}" />
         <TextBlock Text="Central de prospecção, atendimento e vendas" Classes="muted" HorizontalAlignment="Center" />
-        <TextBlock Text="Servidor do CRM" Classes="muted" Margin="0,12,0,0" />
-        <DockPanel>
+        <TextBlock Text="Servidor do CRM" Classes="muted" Margin="0,12,0,0" IsVisible="{Binding ShowServerField}" />
+        <DockPanel IsVisible="{Binding ShowServerField}">
           <Button DockPanel.Dock="Right" Content="Verificar" Command="{Binding CheckServerCommand}" Margin="8,0,0,0" />
           <TextBox Text="{Binding ServerUrl}" Watermark="http://servidor:5080" />
         </DockPanel>
