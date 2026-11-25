@@ -37,6 +37,47 @@ public partial class LeadCardVm(LeadCard c) : ObservableObject
     public string SuggestionText => Model.SuggestedStage is { } st ? $"IA sugere: {Ui.Stage(st)}" + (Model.SuggestedStageReason is { Length: > 0 } r ? $" ({r})" : "") : "";
 }
 
+/// <summary>
+/// Atualiza uma lista de cards na tela sem recriá-la: só troca, move, insere ou remove o que mudou.
+/// Assim a rolagem e a seleção ficam onde estavam e o navegador não redesenha a lista inteira a cada atualização.
+/// </summary>
+public static class CardSync
+{
+    public static void Sync(ObservableCollection<LeadCardVm> target, IReadOnlyList<LeadCard> source,
+        Action<LeadCardVm>? attach = null, Action<LeadCardVm>? detach = null)
+    {
+        var ids = new HashSet<Guid>(source.Select(c => c.Id));
+        if (!target.Any(t => ids.Contains(t.Id)))
+        {
+            // nada em comum (outra busca, primeira carga): recria de uma vez
+            foreach (var old in target) detach?.Invoke(old);
+            target.Clear();
+            foreach (var c in source) { var vm = new LeadCardVm(c); attach?.Invoke(vm); target.Add(vm); }
+            return;
+        }
+        for (var i = target.Count - 1; i >= 0; i--)
+            if (!ids.Contains(target[i].Id)) { detach?.Invoke(target[i]); target.RemoveAt(i); }
+        for (var i = 0; i < source.Count; i++)
+        {
+            var card = source[i];
+            if (i >= target.Count || target[i].Id != card.Id)
+            {
+                var j = -1;
+                for (var k = i + 1; k < target.Count; k++) if (target[k].Id == card.Id) { j = k; break; }
+                if (j < 0) { var vm = new LeadCardVm(card); attach?.Invoke(vm); target.Insert(i, vm); continue; }
+                target.Move(j, i);
+            }
+            if (target[i].Model != card)
+            {
+                var old = target[i];
+                var vm = new LeadCardVm(card);
+                detach?.Invoke(old); attach?.Invoke(vm);
+                target[i] = vm;
+            }
+        }
+    }
+}
+
 public record Stat(string Key, int Value);
 
 public record IdOption(Guid? Id, string Name);
@@ -109,6 +150,8 @@ public partial class KanbanColumnVm : ObservableObject
     public string Color { get; init; } = "#888";
     public ObservableCollection<LeadCardVm> Cards { get; } = new();
     [ObservableProperty] private int _count;
+    /// <summary>Aviso quando a coluna tem mais leads do que os carregados na tela.</summary>
+    [ObservableProperty] private string _more = "";
 }
 
 public partial class KanbanViewModel : ViewModelBase
@@ -124,7 +167,11 @@ public partial class KanbanViewModel : ViewModelBase
         _s = s;
         Chat = new ChatPopupViewModel(s);
         Chat.LeadUpdated += () => _ = Refresh();
-        s.Realtime.LeadChanged += id => Dispatcher.UIThread.Post(() => { _ = Refresh(); });
+        // Em campanha chegam muitos eventos por minuto: junta tudo numa atualização a cada 2 s e só com o Kanban na tela
+        s.Realtime.LeadChanged += _ => Dispatcher.UIThread.Post(() =>
+        {
+            if (IsActive) Schedule("realtime", TimeSpan.FromSeconds(2), RefreshCore, restart: false);
+        });
     }
 
     /// <summary>Clique no card: abre a conversa em popup, sem sair do Kanban.</summary>
@@ -162,22 +209,13 @@ public partial class KanbanViewModel : ViewModelBase
         await RefreshCore();
     });
 
-    [RelayCommand]
-    public Task Refresh() => Run(async () =>
-    {
-        var board = await _s.Api.KanbanAsync();
-        Columns.Clear();
-        foreach (var col in board)
-        {
-            var vm = new KanbanColumnVm { Stage = col.Stage, Title = col.Title, Color = Ui.StageColor(col.Stage) };
-            foreach (var c in col.Cards.Where(c => Filter.Length == 0 || c.Name.Contains(Filter, StringComparison.OrdinalIgnoreCase) || c.Phone.Contains(Filter)))
-                vm.Cards.Add(new LeadCardVm(c));
-            vm.Count = vm.Cards.Count;
-            Columns.Add(vm);
-        }
-    });
+    /// <summary>Cards carregados por coluna. O resto aparece pela busca (o navegador travava desenhando milhares de cards).</summary>
+    public const int CardsPerColumn = 200;
 
-    partial void OnFilterChanged(string value) => _ = Refresh();
+    [RelayCommand]
+    public Task Refresh() => Run(RefreshCore);
+
+    partial void OnFilterChanged(string value) => Schedule("filter", TimeSpan.FromMilliseconds(400), Refresh, restart: true);
 
     /// <summary>Chamado pelo arrastar-e-soltar. "Negócio fechado" pede confirmação comercial explícita.</summary>
     public Task MoveAsync(Guid leadId, KanbanStage to, bool confirmed = false) => Run(async () =>
@@ -203,14 +241,19 @@ public partial class KanbanViewModel : ViewModelBase
 
     private async Task RefreshCore()
     {
-        var board = await _s.Api.KanbanAsync();
-        Columns.Clear();
-        foreach (var col in board)
+        var board = await _s.Api.KanbanAsync(Filter, CardsPerColumn);
+        if (!board.Select(c => c.Stage).SequenceEqual(Columns.Select(c => c.Stage)) || board.Where((c, i) => c.Title != Columns[i].Title).Any())
         {
-            var vm = new KanbanColumnVm { Stage = col.Stage, Title = col.Title, Color = Ui.StageColor(col.Stage) };
-            foreach (var c in col.Cards) vm.Cards.Add(new LeadCardVm(c));
-            vm.Count = vm.Cards.Count;
-            Columns.Add(vm);
+            Columns.Clear();
+            foreach (var col in board) Columns.Add(new KanbanColumnVm { Stage = col.Stage, Title = col.Title, Color = Ui.StageColor(col.Stage) });
+        }
+        for (var i = 0; i < board.Count; i++)
+        {
+            var col = board[i]; var vm = Columns[i];
+            CardSync.Sync(vm.Cards, col.Cards);
+            var total = Math.Max(col.Total, col.Cards.Count);
+            vm.Count = total;
+            vm.More = total > col.Cards.Count ? $"Mostrando {col.Cards.Count} de {total}. Use a busca para achar os outros." : "";
         }
     }
 }
@@ -250,13 +293,21 @@ public partial class ConversationsViewModel : ViewModelBase
     public string SuggestionText => Detail?.SuggestedStage is { } st ? $"IA sugere mover para: {Ui.Stage(st)}" + (Detail.SuggestedStageReason is { Length: > 0 } r ? $" ({r})" : "") : "";
     public bool SuggestsClosing => Detail?.SuggestedStage == KanbanStage.NegocioFechado;
 
+    private bool _selectedChanged;
+
     public ConversationsViewModel(AppSession s)
     {
         _s = s;
-        s.Realtime.MessageAdded += id => Dispatcher.UIThread.Post(async () =>
+        // Junta as mensagens que chegam em sequência numa atualização a cada 2 s, só com a tela aberta
+        s.Realtime.MessageAdded += id => Dispatcher.UIThread.Post(() =>
         {
-            await LoadContacts();
-            if (Selected?.Id == id) await LoadSelected();
+            if (!IsActive) return;
+            if (Selected?.Id == id) _selectedChanged = true;
+            Schedule("realtime", TimeSpan.FromSeconds(2), () => Run(async () =>
+            {
+                await LoadContacts();
+                if (_selectedChanged) { _selectedChanged = false; await LoadSelected(); }
+            }), restart: false);
         });
     }
 
@@ -283,13 +334,13 @@ public partial class ConversationsViewModel : ViewModelBase
     {
         var list = await _s.Api.ConversationsAsync(Search);
         var sel = Selected?.Id;
-        Contacts.Clear();
-        foreach (var c in list) Contacts.Add(new LeadCardVm(c));
-        if (sel is not null) _selected = Contacts.FirstOrDefault(c => c.Id == sel);
-        OnPropertyChanged(nameof(Selected));
+        CardSync.Sync(Contacts, list);
+        // o item selecionado pode ter sido trocado por uma versão atualizada: reaponta sem recarregar a conversa
+        var now = sel is null ? null : Contacts.FirstOrDefault(c => c.Id == sel);
+        if (!ReferenceEquals(now, Selected)) { _selected = now; OnPropertyChanged(nameof(Selected)); }
     }
 
-    partial void OnSearchChanged(string value) => _ = Run(LoadContacts);
+    partial void OnSearchChanged(string value) => Schedule("search", TimeSpan.FromMilliseconds(400), () => Run(LoadContacts), restart: true);
     partial void OnSelectedChanged(LeadCardVm? value) { if (value is not null) _ = Run(LoadSelected); }
 
     private async Task LoadSelected()
@@ -503,16 +554,19 @@ public partial class LeadsViewModel(AppSession s) : ViewModelBase
 
     private void Fill(IEnumerable<LeadCard> list)
     {
-        foreach (var l in Leads) l.PropertyChanged -= OnCardChanged;
-        Leads.Clear();
-        foreach (var l in list) { var vm = new LeadCardVm(l); vm.PropertyChanged += OnCardChanged; Leads.Add(vm); }
+        // recarregar a lista desfaz a seleção em lote (como antes)
+        _syncingChecks = true;
+        foreach (var l in Leads) l.IsChecked = false;
+        _syncingChecks = false;
+        CardSync.Sync(Leads, list as IReadOnlyList<LeadCard> ?? list.ToList(),
+            attach: vm => vm.PropertyChanged += OnCardChanged, detach: vm => vm.PropertyChanged -= OnCardChanged);
         Total = Leads.Count;
         UpdateChecked();
     }
 
     public override Task OnActivatedAsync() => Refresh();
 
-    partial void OnSearchChanged(string value) => _ = Refresh();
+    partial void OnSearchChanged(string value) => Schedule("search", TimeSpan.FromMilliseconds(400), Refresh, restart: true);
     partial void OnFilterIndexChanged(int value) => _ = Refresh();
 
     [RelayCommand]

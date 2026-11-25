@@ -50,7 +50,14 @@ public class ApiClient
     public Task<AgentsDashboardDto> AgentsDashboardAsync(DateTimeOffset? from, Guid? agentId, Guid? campaignId) =>
         Get<AgentsDashboardDto>("api/dashboard/agents?" + string.Join("&", new[] {
             from is { } f ? "from=" + Uri.EscapeDataString(f.ToString("O")) : null, agentId is { } a ? $"agentId={a}" : null, campaignId is { } c ? $"campaignId={c}" : null }.Where(x => x is not null)));
-    public Task<List<KanbanColumn>> KanbanAsync() => Get<List<KanbanColumn>>("api/kanban");
+    public Task<List<KanbanColumn>> KanbanAsync(string? q = null, int? perColumn = null) =>
+        Get<List<KanbanColumn>>("api/kanban" + Query(("q", string.IsNullOrWhiteSpace(q) ? null : q.Trim()), ("perColumn", perColumn?.ToString())));
+
+    private static string Query(params (string Key, string? Value)[] parts)
+    {
+        var set = parts.Where(p => p.Value is not null).Select(p => p.Key + "=" + Uri.EscapeDataString(p.Value!)).ToList();
+        return set.Count == 0 ? "" : "?" + string.Join("&", set);
+    }
     public Task<List<AutomationFlowDto>> AutomationsAsync() => Get<List<AutomationFlowDto>>("api/automations");
     public Task<AutomationFlowDto> CreateAutomationAsync(AutomationFlowUpsert f) => Post<AutomationFlowDto>("api/automations", f);
     public Task<AutomationFlowDto> UpdateAutomationAsync(Guid id, AutomationFlowUpsert f) => Send<AutomationFlowDto>(HttpMethod.Put, $"api/automations/{id}", f);

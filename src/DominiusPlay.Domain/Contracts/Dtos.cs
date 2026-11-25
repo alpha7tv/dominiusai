@@ -56,7 +56,8 @@ public sealed record BulkLeadResponse(int Affected, int Skipped, string Message)
 public sealed record MoveCardRequest(KanbanStage To, string? Reason, bool CommercialConfirmation);
 public sealed record MoveCardResponse(bool Applied, bool IsSuggestion, string? Message);
 
-public sealed record KanbanColumn(KanbanStage Stage, string Title, IReadOnlyList<LeadCard> Cards);
+/// <summary>Coluna do Kanban. Total = leads na etapa (Cards pode trazer só os primeiros, quando a tela pede um limite).</summary>
+public sealed record KanbanColumn(KanbanStage Stage, string Title, IReadOnlyList<LeadCard> Cards, int Total = 0);
 /// <summary>Indicadores dos agentes (período, agente, campanha). Entrega só conta o que o provedor confirmou.</summary>
 public sealed record AgentsDashboardDto(int Imported, int Eligible, int ActiveCampaigns, int Sent, int Delivered, int Replies, double ResponseRate,
     int Qualified, int Handoffs, int Proposals, int Sales, int OptOuts, int Errors, long AiTokens, IReadOnlyList<CampaignConversionDto> ByCampaign, string Note);

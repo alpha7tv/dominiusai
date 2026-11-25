@@ -262,22 +262,35 @@ public static class Api
         });
 
         // ---------- Kanban ----------
-        api.MapGet("/kanban", async (CrmDbContext db, SettingsStore settings, Guid? agentId, Guid? campaignId) =>
+        // perColumn: a tela do navegador pede só os primeiros cards de cada etapa (milhares de cards travavam a rolagem).
+        // q: busca por nome ou telefone feita no servidor, para achar leads fora desse limite.
+        api.MapGet("/kanban", async (CrmDbContext db, SettingsStore settings, Guid? agentId, Guid? campaignId, string? q, int? perColumn) =>
         {
-            var q = db.Leads.Include(l => l.AssignedUser).AsNoTracking();
-            if (agentId is { } aid) q = q.Where(l => l.AttendanceAgentId == aid);
-            if (campaignId is { } cid) q = q.Where(l => l.OriginCampaignId == cid);
-            var leads = await q.ToListAsync();
+            var query = db.Leads.Include(l => l.AssignedUser).AsNoTracking();
+            if (agentId is { } aid) query = query.Where(l => l.AttendanceAgentId == aid);
+            if (campaignId is { } cid) query = query.Where(l => l.OriginCampaignId == cid);
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                var digits = new string(q.Where(char.IsAsciiDigit).ToArray());
+                var lower = q.Trim().ToLower();
+                query = query.Where(l => l.Name.ToLower().Contains(lower) || (digits.Length >= 3 && l.Phone.Contains(digits)));
+            }
+            var leads = await query.ToListAsync();
+            var limit = perColumn is > 0 ? perColumn.Value : int.MaxValue;
             var agents = await db.AgentProfiles.AsNoTracking().ToDictionaryAsync(a => a.Id, a => a.Name);
             var camps = await db.Campaigns.AsNoTracking().ToDictionaryAsync(c => c.Id, c => c.Name);
             var stages = KanbanBoardConfig.Parse(await settings.GetAsync(KanbanBoardConfig.SettingKey));
-            return stages.Where(s => s.Visible || leads.Any(l => l.Stage == s.Stage)).Select(s => new KanbanColumn(s.Stage, s.Title,
-                leads.Where(l => l.Stage == s.Stage).OrderByDescending(l => l.Priority).ThenByDescending(l => l.LastInteractionAt ?? l.CreatedAt)
-                    .Select(l => l.ToCard() with
-                    {
-                        AgentName = l.AttendanceAgentId is { } a && agents.TryGetValue(a, out var an) ? an : null,
-                        CampaignName = l.OriginCampaignId is { } c && camps.TryGetValue(c, out var cn) ? cn : null,
-                    }).ToList()));
+            return stages.Where(s => s.Visible || leads.Any(l => l.Stage == s.Stage)).Select(s =>
+            {
+                var inStage = leads.Where(l => l.Stage == s.Stage).ToList();
+                return new KanbanColumn(s.Stage, s.Title,
+                    inStage.OrderByDescending(l => l.Priority).ThenByDescending(l => l.LastInteractionAt ?? l.CreatedAt).Take(limit)
+                        .Select(l => l.ToCard() with
+                        {
+                            AgentName = l.AttendanceAgentId is { } a && agents.TryGetValue(a, out var an) ? an : null,
+                            CampaignName = l.OriginCampaignId is { } c && camps.TryGetValue(c, out var cn) ? cn : null,
+                        }).ToList(), inStage.Count);
+            });
         });
 
         api.MapGet("/kanban/stages", async (SettingsStore settings) =>

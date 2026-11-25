@@ -26,6 +26,32 @@ public abstract partial class ViewModelBase : ObservableObject
     }
 
     public virtual Task OnActivatedAsync() => Task.CompletedTask;
+
+    /// <summary>Tela visível agora. Telas escondidas não recarregam a cada evento em tempo real (deixavam o navegador travado).</summary>
+    public bool IsActive { get; set; }
+
+    private readonly Dictionary<string, (DispatcherTimer Timer, Func<Task> Action)> _timers = new();
+
+    /// <summary>
+    /// Agenda uma ação depois de <paramref name="delay"/> e junta chamadas repetidas numa só.
+    /// restart=true: espera a pessoa parar de digitar (busca). restart=false: no máximo uma execução por intervalo (eventos em tempo real).
+    /// </summary>
+    protected void Schedule(string key, TimeSpan delay, Func<Task> action, bool restart)
+    {
+        if (!_timers.TryGetValue(key, out var entry))
+        {
+            var timer = new DispatcherTimer { Interval = delay };
+            timer.Tick += async (_, _) =>
+            {
+                timer.Stop();
+                try { await _timers[key].Action(); } catch { /* erros já aparecem pela própria ação (Run) */ }
+            };
+            entry = (timer, action);
+        }
+        _timers[key] = (entry.Timer, action);
+        if (restart) entry.Timer.Stop();
+        if (!entry.Timer.IsEnabled) entry.Timer.Start();
+    }
 }
 
 /// <summary>Contexto compartilhado entre as telas após o login.</summary>
@@ -131,6 +157,8 @@ public partial class MainWindowViewModel : ViewModelBase
             };
             _pages[key] = vm;
         }
+        if (Current is { } previous) previous.IsActive = false;
+        vm.IsActive = true;
         Current = vm;
         await vm.OnActivatedAsync();
     }
